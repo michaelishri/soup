@@ -1,0 +1,283 @@
+version: '3'
+
+vars:
+  ANDROID_SDK: '{{if .ANDROID_SDK_ROOT}}{{.ANDROID_SDK_ROOT}}{{else if .ANDROID_HOME}}{{.ANDROID_HOME}}{{else}}{{.HOME}}/Library/Android/sdk{{end}}'
+  ADB: '{{.ANDROID_SDK}}/platform-tools/adb'
+  AVDMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/avdmanager'
+  EMULATOR: '{{.ANDROID_SDK}}/emulator/emulator'
+  SDKMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/sdkmanager'
+  TV_AVD: '{{.TV_AVD | default "Soup_Google_TV_API_34"}}'
+  TV_DEVICE: '{{.TV_DEVICE | default "tv_1080p"}}'
+  TV_IMAGE: '{{.TV_IMAGE | default "system-images;android-34;google-tv;arm64-v8a"}}'
+  EMULATOR_SERIAL: '{{.EMULATOR_SERIAL | default "emulator-5554"}}'
+
+tasks:
+  default:
+    desc: List the available development tasks
+    cmds:
+      - task --list
+
+  setup:
+    aliases: [bootstrap]
+    desc: Initialize submodules and install dependencies for every package
+    cmds:
+      - task: deps:submodules
+      - task: deps:all
+
+  doctor:
+    desc: Print the versions and diagnostics for required development tools
+    cmds:
+      - task --version
+      - flutter --version
+      - flutter doctor -v
+      - dart --version
+      - go version
+      - java -version
+      - '"{{.ADB}}" version'
+      - '"{{.EMULATOR}}" -version'
+
+  deps:submodules:
+    desc: Initialize the pinned libtailscale Git submodule
+    cmds:
+      - git submodule update --init --recursive
+
+  deps:all:
+    desc: Install dependencies for the app and both Dart packages
+    cmds:
+      - task: deps:app
+      - task: deps:tailscale
+      - task: deps:jellyfin
+
+  deps:app:
+    desc: Install Flutter dependencies for the Android app
+    dir: apps/android
+    cmds:
+      - flutter pub get
+
+  deps:tailscale:
+    desc: Install Dart dependencies for the Tailscale FFI package
+    dir: packages/soup_tailscale
+    cmds:
+      - dart pub get
+
+  deps:jellyfin:
+    desc: Install Dart dependencies for the generated Jellyfin package
+    dir: packages/jellyfin_api
+    cmds:
+      - dart pub get
+
+  format:
+    desc: Format handwritten and generated Dart source and tests
+    cmds:
+      - >-
+        dart format
+        apps/android/lib apps/android/test
+        packages/soup_tailscale/lib packages/soup_tailscale/test
+        packages/jellyfin_api/lib packages/jellyfin_api/test
+
+  format:check:
+    desc: Check Dart formatting without changing files
+    cmds:
+      - >-
+        dart format --output=none --set-exit-if-changed
+        apps/android/lib apps/android/test
+        packages/soup_tailscale/lib packages/soup_tailscale/test
+        packages/jellyfin_api/lib packages/jellyfin_api/test
+
+  analyze:
+    desc: Run static analysis for the app and both packages
+    cmds:
+      - task: analyze:app
+      - task: analyze:tailscale
+      - task: analyze:jellyfin
+
+  analyze:app:
+    desc: Analyze the Flutter Android app
+    dir: apps/android
+    cmds:
+      - flutter analyze
+
+  analyze:tailscale:
+    desc: Analyze the Tailscale FFI package
+    dir: packages/soup_tailscale
+    cmds:
+      - flutter analyze
+
+  analyze:jellyfin:
+    desc: Analyze the generated Jellyfin Dart package
+    dir: packages/jellyfin_api
+    cmds:
+      - dart analyze
+
+  test:
+    aliases: [test:all]
+    desc: Run tests for the app and both packages
+    cmds:
+      - task: test:app
+      - task: test:tailscale
+      - task: test:jellyfin
+
+  test:app:
+    desc: Run Android app tests; pass extra flags after --
+    dir: apps/android
+    cmds:
+      - flutter test {{.CLI_ARGS}}
+
+  test:tailscale:
+    desc: Run Tailscale FFI package tests; pass extra flags after --
+    dir: packages/soup_tailscale
+    cmds:
+      - flutter test {{.CLI_ARGS}}
+
+  test:jellyfin:
+    desc: Run generated Jellyfin package tests with the workspace Flutter SDK
+    dir: packages/jellyfin_api
+    cmds:
+      - flutter test {{.CLI_ARGS}}
+
+  test:coverage:
+    desc: Run Android app tests and write an LCOV coverage report
+    dir: apps/android
+    cmds:
+      - flutter test --coverage {{.CLI_ARGS}}
+
+  qa:
+    aliases: [check, verify]
+    desc: Check formatting, analyze all code, and run all tests
+    cmds:
+      - task: format:check
+      - task: analyze
+      - task: test
+
+  ci:
+    desc: Run the full QA suite and build a debug APK
+    cmds:
+      - task: qa
+      - task: build:apk:debug
+
+  api:generate:
+    aliases: [generate]
+    desc: Regenerate the pinned Jellyfin 10.11 Dart API package
+    cmds:
+      - ./tool/generate_jellyfin_api.sh
+
+  api:check:
+    desc: Regenerate the Jellyfin API and fail if committed output is stale
+    cmds:
+      - task: api:generate
+      - git diff --exit-code -- packages/jellyfin_api
+
+  build:apk:debug:
+    aliases: [build]
+    desc: Build a debug APK, including libtailscale for Flutter-selected ABIs
+    dir: apps/android
+    cmds:
+      - flutter build apk --debug {{.CLI_ARGS}}
+
+  build:apk:release:
+    desc: Build a release APK using the prototype signing configuration
+    dir: apps/android
+    cmds:
+      - flutter build apk --release {{.CLI_ARGS}}
+
+  build:appbundle:
+    desc: Build a release Android App Bundle using the prototype signing configuration
+    dir: apps/android
+    cmds:
+      - flutter build appbundle --release {{.CLI_ARGS}}
+
+  app:run:
+    aliases: [run]
+    desc: Run Soup on a selected device; optionally pass DEVICE=<id>
+    dir: apps/android
+    cmds:
+      - 'flutter run {{if .DEVICE}}--device-id "{{.DEVICE}}"{{end}} {{.CLI_ARGS}}'
+
+  app:run:release:
+    desc: Run a release build on a selected device; optionally pass DEVICE=<id>
+    dir: apps/android
+    cmds:
+      - 'flutter run --release {{if .DEVICE}}--device-id "{{.DEVICE}}"{{end}} {{.CLI_ARGS}}'
+
+  app:install:debug:
+    desc: Build and install the debug APK; optionally pass DEVICE=<adb-serial>
+    deps: [build:apk:debug]
+    cmds:
+      - '"{{.ADB}}" {{if .DEVICE}}-s "{{.DEVICE}}"{{end}} install -r apps/android/build/app/outputs/flutter-apk/app-debug.apk'
+
+  app:logcat:
+    desc: Stream Android logs; optionally pass DEVICE=<adb-serial> and filters after --
+    cmds:
+      - '"{{.ADB}}" {{if .DEVICE}}-s "{{.DEVICE}}"{{end}} logcat {{.CLI_ARGS}}'
+
+  devices:
+    desc: List Flutter devices, Android devices, and configured AVDs
+    cmds:
+      - flutter devices
+      - '"{{.ADB}}" devices -l'
+      - '"{{.EMULATOR}}" -list-avds'
+
+  emulator:tv:images:
+    desc: List Google TV system images available from the Android SDK
+    cmds:
+      - '"{{.SDKMANAGER}}" --list | grep "google-tv"'
+
+  emulator:tv:install-image:
+    desc: Download the Google TV image selected by TV_IMAGE
+    status:
+      - 'test -f "{{.ANDROID_SDK}}/{{.TV_IMAGE | replace ";" "/"}}/system.img"'
+    cmds:
+      - 'yes | "{{.SDKMANAGER}}" "{{.TV_IMAGE}}"'
+
+  emulator:tv:create:
+    desc: Create the Google TV AVD selected by TV_AVD
+    deps: [emulator:tv:install-image]
+    status:
+      - 'test -f "{{.HOME}}/.android/avd/{{.TV_AVD}}.avd/config.ini"'
+    cmds:
+      - 'printf "no\n" | "{{.AVDMANAGER}}" create avd --name "{{.TV_AVD}}" --package "{{.TV_IMAGE}}" --device "{{.TV_DEVICE}}"'
+
+  emulator:tv:start:
+    desc: Boot the Google TV AVD with a window; runs until the emulator exits
+    deps: [emulator:tv:create]
+    cmds:
+      - '"{{.EMULATOR}}" -avd "{{.TV_AVD}}" {{.CLI_ARGS}}'
+
+  emulator:tv:start:headless:
+    desc: Boot the Google TV AVD without a window; runs until the emulator exits
+    deps: [emulator:tv:create]
+    cmds:
+      - '"{{.EMULATOR}}" -avd "{{.TV_AVD}}" -no-window -no-audio -gpu swiftshader_indirect {{.CLI_ARGS}}'
+
+  emulator:tv:wait:
+    desc: Wait until the selected Google TV emulator finishes booting
+    cmds:
+      - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" wait-for-device'
+      - >-
+        until [ "$("{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ];
+        do sleep 2;
+        done
+      - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" shell getprop ro.product.model'
+
+  emulator:tv:stop:
+    desc: Stop the Google TV emulator selected by EMULATOR_SERIAL
+    cmds:
+      - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" emu kill'
+
+  clean:
+    desc: Remove Flutter build outputs for the app and Tailscale package
+    cmds:
+      - task: clean:app
+      - task: clean:tailscale
+
+  clean:app:
+    desc: Remove Android app Flutter build outputs
+    dir: apps/android
+    cmds:
+      - flutter clean
+
+  clean:tailscale:
+    desc: Remove Tailscale package Flutter build outputs
+    dir: packages/soup_tailscale
+    cmds:
+      - flutter clean

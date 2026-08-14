@@ -27,6 +27,31 @@ Secrets are handled deliberately:
 
 ## Android development
 
+Development workflows are collected in the root `Taskfile.yml`. Install
+[Task](https://taskfile.dev/), then discover every available command with:
+
+```sh
+task --list
+```
+
+The common workflow is:
+
+```sh
+task setup       # Initialize libtailscale and install package dependencies.
+task qa          # Check formatting, analyze, and run every test suite.
+task build       # Build the debug APK.
+task run         # Run on the selected Flutter device.
+```
+
+Use `task devices` to find a device ID, then pass it as a Task variable when
+needed, for example `task run DEVICE=emulator-5554`. Google TV image setup,
+boot, wait, and shutdown commands are grouped under `emulator:tv:*`; the
+defaults create the API 34 ARM64 `Soup_Google_TV_API_34` AVD. Run
+`task --list` for descriptions of package-specific QA, release builds, API
+generation, coverage, logging, and cleanup commands.
+
+The equivalent commands without Task are:
+
 ```sh
 git submodule update --init --recursive
 cd apps/android
