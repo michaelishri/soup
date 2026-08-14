@@ -1,8 +1,19 @@
 import 'package:flutter/widgets.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:soup/src/app.dart';
+import 'package:soup/src/platform/android_network_interfaces.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(SoupApp(tailscaleClient: UnavailableTailscaleClient()));
+  final supportDirectory = await getApplicationSupportDirectory();
+  const networkInterfaces = AndroidNetworkInterfaces();
+  runApp(
+    SoupApp(
+      tailscaleClient: NativeTailscaleClient(
+        stateDirectory: '${supportDirectory.path}/tailscale',
+        networkInterfaces: networkInterfaces.getJson,
+      ),
+    ),
+  );
 }

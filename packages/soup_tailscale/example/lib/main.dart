@@ -12,14 +12,7 @@ class ExampleApp extends StatelessWidget {
     return MaterialApp(
       home: Scaffold(
         body: Center(
-          child: FutureBuilder<TailscaleStatus>(
-            future: client.currentStatus(),
-            builder: (context, snapshot) {
-              return Text(
-                'Tailscale phase: ${snapshot.data?.phase.name ?? 'loading'}',
-              );
-            },
-          ),
+          child: Text('Tailscale phase: ${client.status.phase.name}'),
         ),
       ),
     );

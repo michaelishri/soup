@@ -1,17 +1,23 @@
-# soup
+# Soup for Android
 
-A new Flutter project.
+Flutter prototype for Android mobile and Android TV. It embeds a Tailscale node
+inside the application and routes Jellyfin discovery and login over the node's
+authenticated loopback SOCKS5 proxy.
 
-## Getting Started
+## Run locally
 
-This project is a starting point for a Flutter application.
+From the repository root, initialize the pinned native source first:
 
-A few resources to get you started if this is your first Flutter project:
+```sh
+git submodule update --init --recursive
+cd apps/android
+flutter pub get
+flutter test
+flutter run
+```
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+The target device must run Android 12 (API 31) or newer. The same application
+supports touch input and Android TV D-pad focus traversal.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The current prototype stops at a verified Tailscale connection and Jellyfin
+login; library browsing and playback are deliberately outside this milestone.

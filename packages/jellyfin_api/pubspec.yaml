@@ -1,0 +1,16 @@
+#
+# AUTO-GENERATED FILE, DO NOT MODIFY!
+#
+
+name: 'jellyfin_api'
+version: '0.1.0'
+description: 'Generated Jellyfin 10.11 API subset for the Soup prototype.'
+environment:
+  sdk: '>=2.12.0 <4.0.0'
+dependencies:
+  collection: '>=1.17.0 <2.0.0'
+  http: '>=0.13.0 <2.0.0'
+  intl: any
+  meta: '>=1.1.8 <2.0.0'
+dev_dependencies:
+  test: ^1.31.0

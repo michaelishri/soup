@@ -1,0 +1,75 @@
+openapi: 3.0.1
+info:
+  title: Jellyfin 10.11 Prototype API
+  version: 10.11.1
+  description: >-
+    Prototype subset of the Jellyfin 10.11.1 OpenAPI contract. Endpoint names,
+    request bodies, and response fields are derived from Jellyfin's published
+    jellyfin-openapi-10.11.1.json snapshot.
+servers:
+  - url: http://localhost
+paths:
+  /System/Info/Public:
+    get:
+      tags: [System]
+      operationId: getPublicSystemInfo
+      responses:
+        '200':
+          description: Public server information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSystemInfo'
+  /Users/AuthenticateByName:
+    post:
+      tags: [Authentication]
+      operationId: authenticateUserByName
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthenticateUserByName'
+      responses:
+        '200':
+          description: Successful user authentication.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResult'
+components:
+  schemas:
+    PublicSystemInfo:
+      type: object
+      properties:
+        ServerName:
+          type: string
+        Version:
+          type: string
+        Id:
+          type: string
+    AuthenticateUserByName:
+      type: object
+      required: [Username, Pw]
+      properties:
+        Username:
+          type: string
+        Pw:
+          type: string
+          format: password
+    AuthenticationResult:
+      type: object
+      properties:
+        User:
+          $ref: '#/components/schemas/UserDto'
+        AccessToken:
+          type: string
+        ServerId:
+          type: string
+    UserDto:
+      type: object
+      properties:
+        Id:
+          type: string
+        Name:
+          type: string

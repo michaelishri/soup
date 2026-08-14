@@ -13,10 +13,16 @@ class ConnectivityScreen extends StatefulWidget {
 
 class _ConnectivityScreenState extends State<ConnectivityScreen> {
   final _authKeyController = TextEditingController();
+  final _serverController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void dispose() {
     _authKeyController.dispose();
+    _serverController.dispose();
+    _usernameController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -24,6 +30,18 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     final authKey = _authKeyController.text;
     _authKeyController.clear();
     await widget.viewModel.connect(authKey);
+  }
+
+  Future<void> _checkServer() =>
+      widget.viewModel.checkServer(_serverController.text);
+
+  Future<void> _signIn() async {
+    final password = _passwordController.text;
+    _passwordController.clear();
+    await widget.viewModel.signIn(
+      username: _usernameController.text,
+      password: password,
+    );
   }
 
   @override
@@ -35,8 +53,14 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         final introduction = _IntroductionCard(status: widget.viewModel.status);
         final setup = _SetupCard(
           authKeyController: _authKeyController,
+          serverController: _serverController,
+          usernameController: _usernameController,
+          passwordController: _passwordController,
+          viewModel: widget.viewModel,
           busy: widget.viewModel.isBusy,
           onConnect: _connect,
+          onCheckServer: _checkServer,
+          onSignIn: _signIn,
         );
 
         return Scaffold(
@@ -162,13 +186,25 @@ class _IntroductionCard extends StatelessWidget {
 class _SetupCard extends StatelessWidget {
   const _SetupCard({
     required this.authKeyController,
+    required this.serverController,
+    required this.usernameController,
+    required this.passwordController,
+    required this.viewModel,
     required this.busy,
     required this.onConnect,
+    required this.onCheckServer,
+    required this.onSignIn,
   });
 
   final TextEditingController authKeyController;
+  final TextEditingController serverController;
+  final TextEditingController usernameController;
+  final TextEditingController passwordController;
+  final ConnectivityViewModel viewModel;
   final bool busy;
   final VoidCallback onConnect;
+  final VoidCallback onCheckServer;
+  final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
@@ -176,54 +212,215 @@ class _SetupCard extends StatelessWidget {
       color: const Color(0xFF101C2E),
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Connect Soup to your tailnet',
-              style: Theme.of(context).textTheme.titleLarge,
+        child: SingleChildScrollView(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: Column(
+              key: ValueKey(viewModel.phase),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ..._phaseContent(context),
+                if (viewModel.error case final error?) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    error,
+                    key: const ValueKey('setup-error'),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            const SizedBox(height: 12),
-            const Text(
-              'Enter a one-time auth key. Soup uses it once and does not save it.',
-            ),
-            const SizedBox(height: 24),
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(1),
-              child: TextField(
-                key: const ValueKey('auth-key-field'),
-                controller: authKeyController,
-                obscureText: true,
-                enableSuggestions: false,
-                autocorrect: false,
-                textInputAction: TextInputAction.done,
-                onSubmitted: busy ? null : (_) => onConnect(),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'One-time auth key',
-                  hintText: 'tskey-auth-…',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(2),
-              child: FilledButton.icon(
-                key: const ValueKey('connect-button'),
-                onPressed: busy ? null : onConnect,
-                icon: busy
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.lock_outline),
-                label: Text(busy ? 'Connecting…' : 'Connect securely'),
-              ),
-            ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  List<Widget> _phaseContent(BuildContext context) => switch (viewModel.phase) {
+    SetupPhase.tailscale => [
+      Text(
+        'Connect Soup to your tailnet',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'Enter a one-time auth key. Soup uses it once and does not save it.',
+      ),
+      const SizedBox(height: 24),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(1),
+        child: TextField(
+          key: const ValueKey('auth-key-field'),
+          controller: authKeyController,
+          obscureText: true,
+          enableSuggestions: false,
+          autocorrect: false,
+          textInputAction: TextInputAction.done,
+          onSubmitted: busy ? null : (_) => onConnect(),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'One-time auth key',
+            hintText: 'tskey-auth-…',
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      _ActionButton(
+        order: 2,
+        keyValue: 'connect-button',
+        busy: busy,
+        onPressed: onConnect,
+        icon: Icons.lock_outline,
+        label: 'Connect securely',
+      ),
+    ],
+    SetupPhase.server => [
+      Text(
+        'Find your Jellyfin server',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      const Text(
+        'Use its Tailscale name or IP. Soup sends this check through its private proxy.',
+      ),
+      const SizedBox(height: 24),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(1),
+        child: TextField(
+          key: const ValueKey('server-url-field'),
+          controller: serverController,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          textInputAction: TextInputAction.done,
+          onSubmitted: busy ? null : (_) => onCheckServer(),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Jellyfin server',
+            hintText: 'http://jellyfin:8096',
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      _ActionButton(
+        order: 2,
+        keyValue: 'check-server-button',
+        busy: busy,
+        onPressed: onCheckServer,
+        icon: Icons.dns_outlined,
+        label: 'Check server',
+      ),
+    ],
+    SetupPhase.credentials => [
+      Text(
+        'Sign in to ${viewModel.serverInfo?.name ?? 'Jellyfin'}',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      Text('Server ${viewModel.serverInfo?.version ?? ''} is ready.'),
+      const SizedBox(height: 24),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(1),
+        child: TextField(
+          key: const ValueKey('username-field'),
+          controller: usernameController,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Username',
+          ),
+        ),
+      ),
+      const SizedBox(height: 14),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(2),
+        child: TextField(
+          key: const ValueKey('password-field'),
+          controller: passwordController,
+          obscureText: true,
+          enableSuggestions: false,
+          autocorrect: false,
+          textInputAction: TextInputAction.done,
+          onSubmitted: busy ? null : (_) => onSignIn(),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Password',
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      _ActionButton(
+        order: 3,
+        keyValue: 'sign-in-button',
+        busy: busy,
+        onPressed: onSignIn,
+        icon: Icons.login,
+        label: 'Sign in',
+      ),
+    ],
+    SetupPhase.ready => [
+      Icon(
+        Icons.check_circle,
+        size: 42,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Ready for your library',
+        style: Theme.of(context).textTheme.titleLarge,
+      ),
+      const SizedBox(height: 12),
+      Text('Signed in as ${viewModel.session?.userName ?? 'Jellyfin user'}'),
+      const SizedBox(height: 4),
+      Text(viewModel.serverUrl?.toString() ?? ''),
+      const SizedBox(height: 20),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(1),
+        child: OutlinedButton.icon(
+          key: const ValueKey('sign-out-button'),
+          onPressed: busy ? null : viewModel.signOut,
+          icon: const Icon(Icons.logout),
+          label: const Text('Change server or account'),
+        ),
+      ),
+    ],
+  };
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.order,
+    required this.keyValue,
+    required this.busy,
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final double order;
+  final String keyValue;
+  final bool busy;
+  final VoidCallback onPressed;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(order),
+      child: FilledButton.icon(
+        key: ValueKey(keyValue),
+        onPressed: busy ? null : onPressed,
+        icon: busy
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon),
+        label: Text(busy ? 'Working…' : label),
       ),
     );
   }

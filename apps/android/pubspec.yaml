@@ -30,6 +30,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_secure_storage: ^10.3.1
+  http: ^1.6.0
+  jellyfin_api:
+    path: ../../packages/jellyfin_api
+  path_provider: ^2.1.6
+  socks5_proxy: ^2.1.1
   soup_tailscale:
     path: ../../packages/soup_tailscale
 
