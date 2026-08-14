@@ -1,0 +1,15 @@
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Generated output not covered by nested Flutter package ignores
+**/.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
