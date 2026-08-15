@@ -63,7 +63,37 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                   const SizedBox(height: 32),
                   Text('Layout', style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 12),
-                  _FruityCard(selected: _draft.preset == UiPreset.fruity),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 16,
+                    children: [
+                      _LayoutCard(
+                        key: const ValueKey('fruity-layout-choice'),
+                        title: 'Fruity',
+                        description:
+                            'Spacious, cinematic and focused on your artwork.',
+                        icon: Icons.auto_awesome,
+                        selected: _draft.preset == UiPreset.fruity,
+                        onSelected: () => setState(
+                          () =>
+                              _draft = _draft.copyWith(preset: UiPreset.fruity),
+                        ),
+                      ),
+                      _LayoutCard(
+                        key: const ValueKey('blockbuster-layout-choice'),
+                        title: 'Blockbuster',
+                        description:
+                            'Bold billboards, dense shelves and quick browsing.',
+                        icon: Icons.local_movies_outlined,
+                        selected: _draft.preset == UiPreset.blockbuster,
+                        onSelected: () => setState(
+                          () => _draft = _draft.copyWith(
+                            preset: UiPreset.blockbuster,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 28),
                   Text(
                     'Colour palette',
@@ -151,42 +181,62 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   }
 }
 
-class _FruityCard extends StatelessWidget {
-  const _FruityCard({required this.selected});
+class _LayoutCard extends StatelessWidget {
+  const _LayoutCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
 
+  final String title;
+  final String description;
+  final IconData icon;
   final bool selected;
+  final VoidCallback onSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Semantics(
       selected: selected,
-      label: 'Fruity layout',
-      child: Container(
-        key: const ValueKey('fruity-layout-choice'),
-        width: 360,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.primary, width: 3),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.auto_awesome, size: 34),
-            SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Fruity', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('Spacious, cinematic and focused on your artwork.'),
-                ],
-              ),
+      label: '$title layout',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onSelected,
+        child: Container(
+          width: 360,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? colors.primary : colors.outlineVariant,
+              width: selected ? 3 : 1,
             ),
-            Icon(Icons.check_circle),
-          ],
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 34),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(description),
+                  ],
+                ),
+              ),
+              if (selected) const Icon(Icons.check_circle),
+            ],
+          ),
         ),
       ),
     );

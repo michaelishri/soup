@@ -186,6 +186,76 @@ void main() {
     expect(saved?.palette, PaletteFamily.ocean);
     expect(saved?.brightness, AppearanceBrightness.light);
   });
+
+  testWidgets('renders Blockbuster with a latest-first billboard and TV rail', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final source = FakeLibrarySource(
+      const JellyfinHome(
+        libraries: [],
+        resume: [JellyfinItem(id: 'resume', name: 'Resume', type: 'Movie')],
+        latest: [JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie')],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: source,
+          session: session,
+          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('blockbuster-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('blockbuster-nav-home')), findsOneWidget);
+    expect(find.text('Latest'), findsWidgets);
+    expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
+  });
+
+  testWidgets('switches presets in place and keeps Settings selected', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    var appearance = AppearanceSettings.defaults;
+    final source = FakeLibrarySource(
+      const JellyfinHome(libraries: [], resume: [], latest: []),
+    );
+
+    await tester.pumpWidget(
+      StatefulBuilder(
+        builder: (context, setState) => MaterialApp(
+          home: LibraryScreen(
+            source: source,
+            session: session,
+            appearance: appearance,
+            onSaveAppearance: (value) async {
+              setState(() => appearance = value);
+            },
+            onSignOut: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('fruity-nav-settings')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('settings-layout-blockbuster')));
+    await tester.tap(find.byKey(const ValueKey('apply-appearance')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('blockbuster-rail')), findsOneWidget);
+    expect(find.byKey(const ValueKey('blockbuster-settings')), findsOneWidget);
+  });
 }
 
 class FakeLibrarySource implements JellyfinLibrarySource {

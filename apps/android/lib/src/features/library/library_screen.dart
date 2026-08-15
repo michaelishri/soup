@@ -85,6 +85,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 840;
+    final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
+    final content = ListenableBuilder(
+      listenable: _viewModel,
+      builder: (context, _) => _content(),
+    );
     return Scaffold(
       body: SafeArea(
         child: Shortcuts(
@@ -97,22 +102,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
           },
           child: FocusTraversalGroup(
             policy: OrderedTraversalPolicy(),
-            child: Column(
-              children: [
-                if (wide)
-                  _FruityTopNavigation(
-                    destination: _destination,
-                    userName: widget.session.userName,
-                    onSelected: (value) => setState(() => _destination = value),
+            child: blockbuster && wide
+                ? Row(
+                    children: [
+                      _BlockbusterRail(
+                        destination: _destination,
+                        onSelected: (value) =>
+                            setState(() => _destination = value),
+                      ),
+                      Expanded(child: content),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      if (wide)
+                        _FruityTopNavigation(
+                          destination: _destination,
+                          userName: widget.session.userName,
+                          onSelected: (value) =>
+                              setState(() => _destination = value),
+                        ),
+                      Expanded(child: content),
+                    ],
                   ),
-                Expanded(
-                  child: ListenableBuilder(
-                    listenable: _viewModel,
-                    builder: (context, _) => _content(),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -125,7 +137,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
               destinations: const [
                 NavigationDestination(
-                  key: ValueKey('fruity-mobile-home'),
+                  key: ValueKey('mobile-nav-home'),
                   icon: Icon(Icons.home_outlined),
                   selectedIcon: Icon(Icons.home),
                   label: 'Home',
@@ -184,13 +196,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
         onAction: _viewModel.load,
       );
     }
-    final hero = home.resume.firstOrNull ?? home.latest.firstOrNull;
+    final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
+    final hero = blockbuster
+        ? home.latest.firstOrNull ?? home.resume.firstOrNull
+        : home.resume.firstOrNull ?? home.latest.firstOrNull;
     return CustomScrollView(
       key: const ValueKey('library-home'),
       slivers: [
         if (hero != null)
           SliverToBoxAdapter(
             child: _FruityHero(
+              blockbuster: blockbuster,
               item: hero,
               userName: widget.session.userName,
               image: _viewModel.image(hero, type: 'Backdrop', maxWidth: 1600),
@@ -210,6 +226,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         if (home.resume.isNotEmpty)
           _LibrarySection(
+            blockbuster: blockbuster,
             title: 'Continue Watching',
             items: home.resume,
             landscape: true,
@@ -220,6 +237,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         if (home.latest.isNotEmpty)
           _LibrarySection(
+            blockbuster: blockbuster,
             title: 'Latest Media',
             items: home.latest,
             image: _viewModel.image,
@@ -229,6 +247,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         if (home.libraries.isNotEmpty)
           _LibrarySection(
+            blockbuster: blockbuster,
             title: 'My Media',
             items: home.libraries,
             landscape: true,
@@ -243,6 +262,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _libraryDestination(JellyfinHome home, {required bool television}) {
+    final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     final items = home.libraries.where((item) {
       final type = item.collectionType?.toLowerCase();
       final name = item.name.toLowerCase();
@@ -261,7 +281,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       );
     }
     return CustomScrollView(
-      key: ValueKey('fruity-${title.toLowerCase()}'),
+      key: ValueKey(
+        '${blockbuster ? 'blockbuster' : 'fruity'}-${title.toLowerCase()}',
+      ),
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(40, 40, 40, 20),
@@ -282,6 +304,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             itemBuilder: (context, index) => FocusTraversalOrder(
               order: NumericFocusOrder(100 + index.toDouble()),
               child: _LibraryTile(
+                blockbuster: blockbuster,
                 item: items[index],
                 image: _viewModel.image(items[index], maxWidth: 720),
                 autofocus: index == 0,
@@ -295,8 +318,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _settings() {
+    final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     return ListView(
-      key: const ValueKey('fruity-settings'),
+      key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-settings'),
       padding: const EdgeInsets.fromLTRB(40, 40, 40, 56),
       children: [
         Text('Settings', style: Theme.of(context).textTheme.displaySmall),
@@ -310,7 +334,36 @@ class _LibraryScreenState extends State<LibraryScreen> {
         const SizedBox(height: 18),
         Text('Layout', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
-        const _FruitySettingTile(),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _LayoutSettingTile(
+              key: const ValueKey('settings-layout-fruity'),
+              title: 'Fruity',
+              subtitle: 'Spacious and cinematic',
+              icon: Icons.auto_awesome,
+              selected: _appearanceDraft.preset == UiPreset.fruity,
+              onSelected: () => setState(
+                () => _appearanceDraft = _appearanceDraft.copyWith(
+                  preset: UiPreset.fruity,
+                ),
+              ),
+            ),
+            _LayoutSettingTile(
+              key: const ValueKey('settings-layout-blockbuster'),
+              title: 'Blockbuster',
+              subtitle: 'Bold and browse-focused',
+              icon: Icons.local_movies_outlined,
+              selected: _appearanceDraft.preset == UiPreset.blockbuster,
+              onSelected: () => setState(
+                () => _appearanceDraft = _appearanceDraft.copyWith(
+                  preset: UiPreset.blockbuster,
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 28),
         Text('Colour palette', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
@@ -407,6 +460,156 @@ class _LibraryScreenState extends State<LibraryScreen> {
     PaletteFamily.grove => const Color(0xFF2E7D32),
     PaletteFamily.mono => const Color(0xFF6B7280),
   };
+}
+
+class _BlockbusterRail extends StatefulWidget {
+  const _BlockbusterRail({required this.destination, required this.onSelected});
+
+  final _FruityDestination destination;
+  final ValueChanged<_FruityDestination> onSelected;
+
+  @override
+  State<_BlockbusterRail> createState() => _BlockbusterRailState();
+}
+
+class _BlockbusterRailState extends State<_BlockbusterRail> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return AnimatedContainer(
+      key: const ValueKey('blockbuster-rail'),
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      width: _expanded ? 220 : 78,
+      color: colors.surfaceContainerLowest,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: _expanded
+                ? Row(
+                    children: [
+                      Icon(Icons.soup_kitchen, color: colors.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Soup',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  )
+                : Icon(Icons.soup_kitchen, color: colors.primary),
+          ),
+          const SizedBox(height: 24),
+          _BlockbusterRailItem(
+            key: const ValueKey('blockbuster-nav-home'),
+            order: 1,
+            icon: Icons.home_rounded,
+            label: 'Home',
+            expanded: _expanded,
+            selected: widget.destination == _FruityDestination.home,
+            onFocus: _expand,
+            onPressed: () => widget.onSelected(_FruityDestination.home),
+          ),
+          _BlockbusterRailItem(
+            key: const ValueKey('blockbuster-nav-tv'),
+            order: 2,
+            icon: Icons.tv_rounded,
+            label: 'TV',
+            expanded: _expanded,
+            selected: widget.destination == _FruityDestination.tv,
+            onFocus: _expand,
+            onPressed: () => widget.onSelected(_FruityDestination.tv),
+          ),
+          _BlockbusterRailItem(
+            key: const ValueKey('blockbuster-nav-movies'),
+            order: 3,
+            icon: Icons.movie_rounded,
+            label: 'Movies',
+            expanded: _expanded,
+            selected: widget.destination == _FruityDestination.movies,
+            onFocus: _expand,
+            onPressed: () => widget.onSelected(_FruityDestination.movies),
+          ),
+          const Spacer(),
+          _BlockbusterRailItem(
+            key: const ValueKey('blockbuster-nav-settings'),
+            order: 4,
+            icon: Icons.settings_rounded,
+            label: 'Settings',
+            expanded: _expanded,
+            selected: widget.destination == _FruityDestination.settings,
+            onFocus: _expand,
+            onPressed: () => widget.onSelected(_FruityDestination.settings),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _expand() {
+    if (!_expanded) setState(() => _expanded = true);
+  }
+}
+
+class _BlockbusterRailItem extends StatelessWidget {
+  const _BlockbusterRailItem({
+    required this.order,
+    required this.icon,
+    required this.label,
+    required this.expanded,
+    required this.selected,
+    required this.onFocus,
+    required this.onPressed,
+    super.key,
+  });
+
+  final double order;
+  final IconData icon;
+  final String label;
+  final bool expanded;
+  final bool selected;
+  final VoidCallback onFocus;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(order),
+      child: Focus(
+        onFocusChange: (focused) {
+          if (focused) onFocus();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: expanded
+              ? FilledButton.tonalIcon(
+                  onPressed: onPressed,
+                  icon: Icon(icon),
+                  label: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(label),
+                  ),
+                  style: selected
+                      ? null
+                      : FilledButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                        ),
+                )
+              : IconButton(
+                  tooltip: label,
+                  isSelected: selected,
+                  onPressed: onPressed,
+                  icon: Icon(icon),
+                ),
+        ),
+      ),
+    );
+  }
 }
 
 class _FruityTopNavigation extends StatelessWidget {
@@ -516,12 +719,14 @@ class _TopNavItem extends StatelessWidget {
 
 class _FruityHero extends StatelessWidget {
   const _FruityHero({
+    required this.blockbuster,
     required this.item,
     required this.userName,
     required this.image,
     required this.onOpen,
   });
 
+  final bool blockbuster;
   final JellyfinItem item;
   final String userName;
   final Future<Uint8List?> image;
@@ -533,7 +738,7 @@ class _FruityHero extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
     return SizedBox(
-      height: wide ? 390 : 330,
+      height: wide ? (blockbuster ? 430 : 390) : 330,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -550,8 +755,12 @@ class _FruityHero extends StatelessWidget {
           DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+                begin: blockbuster
+                    ? Alignment.centerRight
+                    : Alignment.topCenter,
+                end: blockbuster
+                    ? Alignment.centerLeft
+                    : Alignment.bottomCenter,
                 colors: [
                   tokens?.heroScrimStart ?? Colors.transparent,
                   theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
@@ -572,8 +781,8 @@ class _FruityHero extends StatelessWidget {
                   children: [
                     Text(
                       item.playbackPositionTicks > 0
-                          ? 'UP NEXT FOR ${userName.toUpperCase()}'
-                          : 'FEATURED FOR ${userName.toUpperCase()}',
+                          ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
+                          : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: theme.colorScheme.primary,
                         letterSpacing: 1.2,
@@ -603,7 +812,7 @@ class _FruityHero extends StatelessWidget {
                       autofocus: true,
                       onPressed: onOpen,
                       icon: const Icon(Icons.info_outline),
-                      label: const Text('View details'),
+                      label: Text(blockbuster ? 'More info' : 'View details'),
                     ),
                   ],
                 ),
@@ -618,6 +827,7 @@ class _FruityHero extends StatelessWidget {
 
 class _LibrarySection extends StatelessWidget {
   const _LibrarySection({
+    required this.blockbuster,
     required this.title,
     required this.items,
     required this.image,
@@ -627,6 +837,7 @@ class _LibrarySection extends StatelessWidget {
     this.landscape = false,
   });
 
+  final bool blockbuster;
   final String title;
   final List<JellyfinItem> items;
   final Future<Uint8List?> Function(
@@ -643,10 +854,12 @@ class _LibrarySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width < 600;
-    final width = landscape ? (phone ? 210.0 : 270.0) : (phone ? 140.0 : 166.0);
+    final width = landscape
+        ? (phone ? 210.0 : (blockbuster ? 240.0 : 270.0))
+        : (phone ? 140.0 : (blockbuster ? 148.0 : 166.0));
     final artHeight = landscape
-        ? (phone ? 118.0 : 152.0)
-        : (phone ? 196.0 : 232.0);
+        ? (phone ? 118.0 : (blockbuster ? 135.0 : 152.0))
+        : (phone ? 196.0 : (blockbuster ? 207.0 : 232.0));
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.only(bottom: 26),
@@ -676,6 +889,7 @@ class _LibrarySection extends StatelessWidget {
                       sectionOrder * 100 + index.toDouble(),
                     ),
                     child: _MediaCard(
+                      blockbuster: blockbuster,
                       key: ValueKey('media-card-${item.id}'),
                       item: item,
                       width: width,
@@ -697,6 +911,7 @@ class _LibrarySection extends StatelessWidget {
 
 class _MediaCard extends StatefulWidget {
   const _MediaCard({
+    required this.blockbuster,
     required this.item,
     required this.width,
     required this.artHeight,
@@ -706,6 +921,7 @@ class _MediaCard extends StatefulWidget {
     super.key,
   });
 
+  final bool blockbuster;
   final JellyfinItem item;
   final double width;
   final double artHeight;
@@ -756,7 +972,9 @@ class _MediaCardState extends State<_MediaCard> {
                   height: widget.artHeight,
                   decoration: BoxDecoration(
                     color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(
+                      widget.blockbuster ? 6 : 16,
+                    ),
                     border: Border.all(
                       color: _focused ? colors.primary : Colors.transparent,
                       width: 3,
@@ -823,12 +1041,14 @@ class _MediaCardState extends State<_MediaCard> {
 
 class _LibraryTile extends StatelessWidget {
   const _LibraryTile({
+    required this.blockbuster,
     required this.item,
     required this.image,
     required this.autofocus,
     required this.onPressed,
   });
 
+  final bool blockbuster;
   final JellyfinItem item;
   final Future<Uint8List?> image;
   final bool autofocus;
@@ -837,6 +1057,7 @@ class _LibraryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _MediaCard(
+      blockbuster: blockbuster,
       item: item,
       width: double.infinity,
       artHeight: 166,
@@ -847,26 +1068,46 @@ class _LibraryTile extends StatelessWidget {
   }
 }
 
-class _FruitySettingTile extends StatelessWidget {
-  const _FruitySettingTile();
+class _LayoutSettingTile extends StatelessWidget {
+  const _LayoutSettingTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onSelected,
+    super.key,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 420),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colors.primary, width: 2),
-      ),
-      child: const ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(Icons.auto_awesome),
-        title: Text('Fruity'),
-        subtitle: Text('Spacious and cinematic'),
-        trailing: Icon(Icons.check_circle),
+    return InkWell(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 360,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: colors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(icon),
+          title: Text(title),
+          subtitle: Text(subtitle),
+          trailing: selected ? const Icon(Icons.check_circle) : null,
+        ),
       ),
     );
   }

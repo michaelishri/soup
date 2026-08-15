@@ -53,4 +53,27 @@ void main() {
     expect(find.byKey(const ValueKey('appearance-continue')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('offers and saves the Blockbuster layout', (tester) async {
+    AppearanceSettings? selected;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: SoupTheme.onboarding,
+        home: AppearanceScreen(
+          initialSettings: AppearanceSettings.defaults,
+          saving: false,
+          onContinue: (value) async => selected = value,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('blockbuster-layout-choice')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('appearance-continue')),
+    );
+    await tester.tap(find.byKey(const ValueKey('appearance-continue')));
+    await tester.pump();
+
+    expect(selected?.preset, UiPreset.blockbuster);
+  });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -233,13 +234,23 @@ class _ItemDetails extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 840;
+        final blockbuster =
+            Theme.of(context).extension<AuthenticatedThemeTokens>()?.preset ==
+            UiPreset.blockbuster;
         return SingleChildScrollView(
           key: const ValueKey('item-details'),
-          padding: EdgeInsets.fromLTRB(wide ? 96 : 28, 96, wide ? 72 : 28, 48),
+          padding: EdgeInsets.fromLTRB(
+            wide ? (blockbuster ? 72 : 96) : 28,
+            wide && blockbuster ? 150 : 96,
+            wide ? 72 : 28,
+            48,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (wide)
+              if (wide && blockbuster)
+                _Metadata(item: item, onPlay: onPlay)
+              else if (wide)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

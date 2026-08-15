@@ -42,9 +42,12 @@ class SoupTheme {
             const Color(0xFFF7F7F5),
           );
     final tokens = AuthenticatedThemeTokens(
+      preset: settings.preset,
       heroScrimStart: dark ? const Color(0x16000000) : const Color(0x0AFFFFFF),
       heroScrimEnd: dark ? const Color(0xF207090D) : const Color(0xE6F7F7F5),
-      playbackChrome: const Color(0xE6000000),
+      playbackChrome: settings.preset == UiPreset.blockbuster
+          ? const Color(0xF2000000)
+          : const Color(0xD9000000),
       focusGlow: colors.primary.withValues(alpha: dark ? 0.36 : 0.26),
     );
     return ThemeData(
@@ -61,12 +64,14 @@ class SoupTheme {
 class AuthenticatedThemeTokens
     extends ThemeExtension<AuthenticatedThemeTokens> {
   const AuthenticatedThemeTokens({
+    required this.preset,
     required this.heroScrimStart,
     required this.heroScrimEnd,
     required this.playbackChrome,
     required this.focusGlow,
   });
 
+  final UiPreset preset;
   final Color heroScrimStart;
   final Color heroScrimEnd;
   final Color playbackChrome;
@@ -74,12 +79,14 @@ class AuthenticatedThemeTokens
 
   @override
   AuthenticatedThemeTokens copyWith({
+    UiPreset? preset,
     Color? heroScrimStart,
     Color? heroScrimEnd,
     Color? playbackChrome,
     Color? focusGlow,
   }) {
     return AuthenticatedThemeTokens(
+      preset: preset ?? this.preset,
       heroScrimStart: heroScrimStart ?? this.heroScrimStart,
       heroScrimEnd: heroScrimEnd ?? this.heroScrimEnd,
       playbackChrome: playbackChrome ?? this.playbackChrome,
@@ -94,6 +101,7 @@ class AuthenticatedThemeTokens
   ) {
     if (other == null) return this;
     return AuthenticatedThemeTokens(
+      preset: t < 0.5 ? preset : other.preset,
       heroScrimStart: Color.lerp(heroScrimStart, other.heroScrimStart, t)!,
       heroScrimEnd: Color.lerp(heroScrimEnd, other.heroScrimEnd, t)!,
       playbackChrome: Color.lerp(playbackChrome, other.playbackChrome, t)!,
