@@ -541,20 +541,34 @@ class _PlaybackError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final chrome =
+        theme.extension<AuthenticatedThemeTokens>()?.playbackChrome ??
+        const Color(0xE6000000);
     return ColoredBox(
-      color: const Color(0xE6000000),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 620),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 56),
-              const SizedBox(height: 16),
-              Text(error, textAlign: TextAlign.center),
-              const SizedBox(height: 20),
-              FilledButton(onPressed: onRetry, child: const Text('Try again')),
-            ],
+      color: chrome,
+      child: DefaultTextStyle.merge(
+        style: TextStyle(color: theme.colorScheme.onInverseSurface),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 620),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 56,
+                  color: theme.colorScheme.onInverseSurface,
+                ),
+                const SizedBox(height: 16),
+                Text(error, textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: onRetry,
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

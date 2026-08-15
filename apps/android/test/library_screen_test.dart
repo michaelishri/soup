@@ -256,6 +256,50 @@ void main() {
     expect(find.byKey(const ValueKey('blockbuster-rail')), findsOneWidget);
     expect(find.byKey(const ValueKey('blockbuster-settings')), findsOneWidget);
   });
+
+  testWidgets('fits both presets at 1080p with enlarged text', (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final source = FakeLibrarySource(
+      const JellyfinHome(
+        libraries: [
+          JellyfinItem(
+            id: 'movies',
+            name: 'Movies',
+            type: 'CollectionFolder',
+            collectionType: 'movies',
+          ),
+        ],
+        resume: [JellyfinItem(id: 'resume', name: 'Resume', type: 'Movie')],
+        latest: [JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie')],
+      ),
+    );
+
+    for (final preset in UiPreset.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.3)),
+            child: child!,
+          ),
+          home: LibraryScreen(
+            key: ValueKey('1080p-${preset.name}'),
+            source: source,
+            session: session,
+            appearance: AppearanceSettings(preset: preset),
+            onSignOut: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('library-home')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
 }
 
 class FakeLibrarySource implements JellyfinLibrarySource {

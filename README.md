@@ -24,6 +24,25 @@ provides explicit clipboard actions for the auth key and server address, while
 connection and sign-in errors remain pinned above the scrollable form so they
 stay readable at constrained heights.
 
+## Customisable interface
+
+After the first successful Jellyfin sign-in, Soup asks how the authenticated
+experience should look. The choice is stored for the device and can be changed
+later from Settings without reconnecting or changing accounts.
+
+- **Fruity** is a spacious, artwork-led interface inspired by Apple TV. On TV,
+  its top navigation is Home, TV, Movies, and Settings; phones use the same
+  destinations in compact bottom navigation.
+- **Blockbuster** is a denser, browse-led interface inspired by Netflix. It uses
+  a billboard home and an expanding navigation rail on Android TV.
+- Both layouts support Soup, Ocean, Grove, and Mono palettes, each with an
+  explicit light and dark version.
+
+Onboarding and sign-in always use Soup's fixed setup design. Appearance choices
+apply only after authentication. The current customisation boundary is layout,
+palette, and brightness; custom row ordering, typography, density, and a freeform
+layout builder are intentionally deferred.
+
 Secrets are handled deliberately:
 
 - The Tailscale auth key is submitted once to the native node and is never
