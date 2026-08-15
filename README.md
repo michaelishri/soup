@@ -18,6 +18,8 @@ Secrets are handled deliberately:
 
 - The Tailscale auth key is submitted once to the native node and is never
   persisted by Soup.
+- The masked auth-key field has an explicit clipboard paste action for TV use;
+  clipboard contents are not logged or persisted by Soup.
 - The Jellyfin password is cleared immediately after submission and is never
   persisted.
 - The Jellyfin access token and Soup device ID are stored with Android-backed

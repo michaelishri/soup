@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -32,6 +33,35 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     await widget.viewModel.connect(authKey);
   }
 
+  Future<void> _pasteAuthKey() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted) return;
+
+      final authKey = data?.text?.trim() ?? '';
+      if (authKey.isEmpty) {
+        _showClipboardMessage('Clipboard does not contain an auth key.');
+        return;
+      }
+
+      _authKeyController.value = TextEditingValue(
+        text: authKey,
+        selection: TextSelection.collapsed(offset: authKey.length),
+      );
+      _showClipboardMessage('Auth key pasted.');
+    } on PlatformException {
+      if (mounted) {
+        _showClipboardMessage('Unable to read the clipboard.');
+      }
+    }
+  }
+
+  void _showClipboardMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _checkServer() =>
       widget.viewModel.checkServer(_serverController.text);
 
@@ -59,6 +89,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           viewModel: widget.viewModel,
           busy: widget.viewModel.isBusy,
           onConnect: _connect,
+          onPasteAuthKey: _pasteAuthKey,
           onCheckServer: _checkServer,
           onSignIn: _signIn,
         );
@@ -192,6 +223,7 @@ class _SetupCard extends StatelessWidget {
     required this.viewModel,
     required this.busy,
     required this.onConnect,
+    required this.onPasteAuthKey,
     required this.onCheckServer,
     required this.onSignIn,
   });
@@ -203,6 +235,7 @@ class _SetupCard extends StatelessWidget {
   final ConnectivityViewModel viewModel;
   final bool busy;
   final VoidCallback onConnect;
+  final VoidCallback onPasteAuthKey;
   final VoidCallback onCheckServer;
   final VoidCallback onSignIn;
 
@@ -268,9 +301,19 @@ class _SetupCard extends StatelessWidget {
           ),
         ),
       ),
+      const SizedBox(height: 12),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(2),
+        child: OutlinedButton.icon(
+          key: const ValueKey('paste-auth-key-button'),
+          onPressed: busy ? null : onPasteAuthKey,
+          icon: const Icon(Icons.content_paste),
+          label: const Text('Paste auth key'),
+        ),
+      ),
       const SizedBox(height: 16),
       _ActionButton(
-        order: 2,
+        order: 3,
         keyValue: 'connect-button',
         busy: busy,
         onPressed: onConnect,

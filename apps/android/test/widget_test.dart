@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -38,6 +39,79 @@ void main() {
 
     expect(find.byKey(const ValueKey('wide-layout')), findsOneWidget);
     expect(find.byKey(const ValueKey('root-focus-traversal')), findsOneWidget);
+    expect(find.byKey(const ValueKey('paste-auth-key-button')), findsOneWidget);
+  });
+
+  testWidgets('pastes and trims an auth key without exposing it', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? <String, dynamic>{'text': '  tskey-auth-from-clipboard\n'}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final client = FakeTailscaleClient();
+    addTearDown(client.dispose);
+    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('auth-key-field')),
+    );
+    expect(field.controller?.text, 'tskey-auth-from-clipboard');
+    expect(field.obscureText, isTrue);
+    expect(find.text('Auth key pasted.'), findsOneWidget);
+  });
+
+  testWidgets('reports when the clipboard contains no auth key', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? <String, dynamic>{'text': '  \n'}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+
+    final client = FakeTailscaleClient();
+    addTearDown(client.dispose);
+    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('auth-key-field')),
+    );
+    expect(field.controller?.text, isEmpty);
+    expect(
+      find.text('Clipboard does not contain an auth key.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('connects without retaining the one-time auth key in the field', (
