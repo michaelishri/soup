@@ -220,16 +220,31 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
-      78,
+      64,
     );
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
 
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
-      220,
+      238,
     );
     expect(find.text('Home'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
+      64,
+    );
+    expect(find.text('Home'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
+      238,
+    );
   });
 
   testWidgets('switches presets in place and keeps Settings selected', (
