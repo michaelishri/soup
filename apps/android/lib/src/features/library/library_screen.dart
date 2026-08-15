@@ -784,6 +784,9 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
               onTap: widget.onPressed,
               borderRadius: BorderRadius.circular(2),
               child: AnimatedContainer(
+                key: ValueKey(
+                  'blockbuster-nav-${widget.label.toLowerCase()}-surface',
+                ),
                 duration: MediaQuery.disableAnimationsOf(context)
                     ? Duration.zero
                     : const Duration(milliseconds: 140),
@@ -791,12 +794,7 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
                 padding: EdgeInsets.symmetric(
                   horizontal: widget.expanded ? 12 : 2,
                 ),
-                decoration: BoxDecoration(
-                  color: _focused
-                      ? Colors.white.withValues(alpha: 0.14)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                decoration: const BoxDecoration(color: Colors.transparent),
                 child: Row(
                   mainAxisAlignment: widget.expanded
                       ? MainAxisAlignment.start
@@ -817,7 +815,7 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
                           widget.label,
                           style: TextStyle(
                             color: Colors.white,
-                            fontWeight: widget.selected
+                            fontWeight: _focused
                                 ? FontWeight.w700
                                 : FontWeight.w500,
                           ),

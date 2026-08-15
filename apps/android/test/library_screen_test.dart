@@ -241,6 +241,28 @@ void main() {
       300,
     );
     expect(find.text('Home'), findsOneWidget);
+    final homeSurface = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('blockbuster-nav-home-surface')),
+    );
+    expect(
+      (homeSurface.decoration! as BoxDecoration).color,
+      Colors.transparent,
+    );
+    expect(
+      tester.widget<Text>(find.text('Home')).style?.fontWeight,
+      FontWeight.w700,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.text('Home')).style?.fontWeight,
+      FontWeight.w500,
+    );
+    expect(
+      tester.widget<Text>(find.text('TV')).style?.fontWeight,
+      FontWeight.w700,
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
