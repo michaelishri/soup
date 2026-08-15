@@ -34,21 +34,41 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   Future<void> _pasteAuthKey() async {
+    await _pasteText(
+      controller: _authKeyController,
+      emptyMessage: 'Clipboard does not contain an auth key.',
+      successMessage: 'Auth key pasted.',
+    );
+  }
+
+  Future<void> _pasteServerUrl() async {
+    await _pasteText(
+      controller: _serverController,
+      emptyMessage: 'Clipboard does not contain a server address.',
+      successMessage: 'Server address pasted.',
+    );
+  }
+
+  Future<void> _pasteText({
+    required TextEditingController controller,
+    required String emptyMessage,
+    required String successMessage,
+  }) async {
     try {
       final data = await Clipboard.getData(Clipboard.kTextPlain);
       if (!mounted) return;
 
-      final authKey = data?.text?.trim() ?? '';
-      if (authKey.isEmpty) {
-        _showClipboardMessage('Clipboard does not contain an auth key.');
+      final text = data?.text?.trim() ?? '';
+      if (text.isEmpty) {
+        _showClipboardMessage(emptyMessage);
         return;
       }
 
-      _authKeyController.value = TextEditingValue(
-        text: authKey,
-        selection: TextSelection.collapsed(offset: authKey.length),
+      controller.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
       );
-      _showClipboardMessage('Auth key pasted.');
+      _showClipboardMessage(successMessage);
     } on PlatformException {
       if (mounted) {
         _showClipboardMessage('Unable to read the clipboard.');
@@ -62,10 +82,13 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _checkServer() =>
-      widget.viewModel.checkServer(_serverController.text);
+  Future<void> _checkServer() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await widget.viewModel.checkServer(_serverController.text);
+  }
 
   Future<void> _signIn() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final password = _passwordController.text;
     _passwordController.clear();
     await widget.viewModel.signIn(
@@ -90,6 +113,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           busy: widget.viewModel.isBusy,
           onConnect: _connect,
           onPasteAuthKey: _pasteAuthKey,
+          onPasteServerUrl: _pasteServerUrl,
           onCheckServer: _checkServer,
           onSignIn: _signIn,
         );
@@ -224,6 +248,7 @@ class _SetupCard extends StatelessWidget {
     required this.busy,
     required this.onConnect,
     required this.onPasteAuthKey,
+    required this.onPasteServerUrl,
     required this.onCheckServer,
     required this.onSignIn,
   });
@@ -236,38 +261,49 @@ class _SetupCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onConnect;
   final VoidCallback onPasteAuthKey;
+  final VoidCallback onPasteServerUrl;
   final VoidCallback onCheckServer;
   final VoidCallback onSignIn;
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      key: const ValueKey('setup-card'),
       color: const Color(0xFF101C2E),
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: SingleChildScrollView(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: Column(
-              key: ValueKey(viewModel.phase),
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ..._phaseContent(context),
-                if (viewModel.error case final error?) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    error,
-                    key: const ValueKey('setup-error'),
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final phase = SingleChildScrollView(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Column(
+                  key: ValueKey(viewModel.phase),
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: _phaseContent(context),
+                ),
+              ),
+            );
+            final children = <Widget>[
+              if (viewModel.error case final error?) ...[
+                _ErrorBanner(message: error),
+                const SizedBox(height: 16),
               ],
-            ),
-          ),
+              if (constraints.hasBoundedHeight)
+                Expanded(child: phase)
+              else
+                phase,
+            ];
+            return Column(
+              mainAxisSize: constraints.hasBoundedHeight
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children,
+            );
+          },
         ),
       ),
     );
@@ -347,9 +383,19 @@ class _SetupCard extends StatelessWidget {
           ),
         ),
       ),
+      const SizedBox(height: 12),
+      FocusTraversalOrder(
+        order: const NumericFocusOrder(2),
+        child: OutlinedButton.icon(
+          key: const ValueKey('paste-server-url-button'),
+          onPressed: busy ? null : onPasteServerUrl,
+          icon: const Icon(Icons.content_paste),
+          label: const Text('Paste server address'),
+        ),
+      ),
       const SizedBox(height: 16),
       _ActionButton(
-        order: 2,
+        order: 3,
         keyValue: 'check-server-button',
         busy: busy,
         onPressed: onCheckServer,
@@ -431,6 +477,43 @@ class _SetupCard extends StatelessWidget {
       ),
     ],
   };
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        key: const ValueKey('setup-error'),
+        decoration: BoxDecoration(
+          color: colors.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.error_outline, color: colors.onErrorContainer),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: colors.onErrorContainer),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ActionButton extends StatelessWidget {

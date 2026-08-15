@@ -114,6 +114,58 @@ void main() {
     );
   });
 
+  testWidgets(
+    'pastes a server address and preserves it for an empty clipboard',
+    (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      var clipboardText = '  http://100.64.44.52:8097/\n';
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async => call.method == 'Clipboard.getData'
+            ? <String, dynamic>{'text': clipboardText}
+            : null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+
+      final client = FakeTailscaleClient();
+      addTearDown(client.dispose);
+      await tester.pumpWidget(SoupApp(tailscaleClient: client));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const ValueKey('auth-key-field')),
+        'tskey-auth-test',
+      );
+      await tester.tap(find.byKey(const ValueKey('connect-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('paste-server-url-button')));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(
+        find.byKey(const ValueKey('server-url-field')),
+      );
+      expect(field.controller?.text, 'http://100.64.44.52:8097/');
+      expect(find.text('Server address pasted.'), findsOneWidget);
+
+      clipboardText = ' \n ';
+      await tester.tap(find.byKey(const ValueKey('paste-server-url-button')));
+      await tester.pumpAndSettle();
+
+      expect(field.controller?.text, 'http://100.64.44.52:8097/');
+      expect(
+        find.text('Clipboard does not contain a server address.'),
+        findsOneWidget,
+      );
+    },
+  );
+
   testWidgets('connects without retaining the one-time auth key in the field', (
     tester,
   ) async {
@@ -208,6 +260,71 @@ void main() {
     expect(passwordField.controller?.text, isEmpty);
     expect(submittedPassword, contains('not-stored'));
     expect(store.session?.accessToken, 'token');
+  });
+
+  testWidgets('keeps a Jellyfin sign-in error inside the TV setup card', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    final client = FakeTailscaleClient();
+    final httpClient = MockClient((request) async {
+      if (request.url.path.endsWith('/System/Info/Public')) {
+        return http.Response(
+          '{"ServerName":"Living Room","Version":"10.11.2","Id":"server-1"}',
+          200,
+        );
+      }
+      return http.Response('', 401);
+    });
+    addTearDown(client.dispose);
+    addTearDown(httpClient.close);
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        jellyfinClientFactory: FakeJellyfinClientFactory(httpClient),
+        sessionStore: MemorySessionStore(),
+      ),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('auth-key-field')),
+      'tskey-auth-test',
+    );
+    await tester.tap(find.byKey(const ValueKey('connect-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('server-url-field')),
+      'http://jellyfin:8096',
+    );
+    await tester.tap(find.byKey(const ValueKey('check-server-button')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('username-field')),
+      'Michael',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('password-field')),
+      'incorrect',
+    );
+    final passwordField = tester.widget<TextField>(
+      find.byKey(const ValueKey('password-field')),
+    );
+    await tester.tap(find.byKey(const ValueKey('sign-in-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Could not sign in. Check your username and password.'),
+      findsOneWidget,
+    );
+    expect(passwordField.controller?.text, isEmpty);
+    final errorRect = tester.getRect(find.byKey(const ValueKey('setup-error')));
+    final cardRect = tester.getRect(find.byKey(const ValueKey('setup-card')));
+    expect(errorRect.top, greaterThanOrEqualTo(cardRect.top));
+    expect(errorRect.bottom, lessThanOrEqualTo(cardRect.bottom));
   });
 }
 

@@ -12,7 +12,9 @@ The Android prototype includes the complete setup path: an embedded Tailscale
 node, an authenticated app-local SOCKS5 proxy, Jellyfin 10.11 discovery, and
 username/password sign-in. The UI depends on a substitutable `TailscaleClient`
 boundary and adapts between touch-sized phone layouts and D-pad-friendly TV
-layouts.
+layouts. TV setup provides explicit clipboard actions for the auth key and
+server address, while connection and sign-in errors remain pinned above the
+scrollable form so they stay readable at constrained heights.
 
 Secrets are handled deliberately:
 
