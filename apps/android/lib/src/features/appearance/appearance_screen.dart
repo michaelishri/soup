@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 
 class AppearanceScreen extends StatefulWidget {
@@ -44,7 +45,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                   Row(
                     children: [
                       Icon(
-                        Icons.soup_kitchen,
+                        PhosphorIconsRegular.cookingPot,
                         color: Theme.of(context).colorScheme.primary,
                         size: 34,
                       ),
@@ -72,7 +73,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                         title: 'Fruity',
                         description:
                             'Spacious, cinematic and focused on your artwork.',
-                        icon: Icons.auto_awesome,
+                        icon: PhosphorIconsRegular.sparkle,
                         selected: _draft.preset == UiPreset.fruity,
                         onSelected: () => setState(
                           () =>
@@ -84,7 +85,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                         title: 'Blockbuster',
                         description:
                             'Bold billboards, dense shelves and quick browsing.',
-                        icon: Icons.local_movies_outlined,
+                        icon: PhosphorIconsRegular.filmStrip,
                         selected: _draft.preset == UiPreset.blockbuster,
                         onSelected: () => setState(
                           () => _draft = _draft.copyWith(
@@ -125,12 +126,12 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                     segments: const [
                       ButtonSegment(
                         value: AppearanceBrightness.light,
-                        icon: Icon(Icons.light_mode_outlined),
+                        icon: Icon(PhosphorIconsRegular.sun),
                         label: Text('Light'),
                       ),
                       ButtonSegment(
                         value: AppearanceBrightness.dark,
-                        icon: Icon(Icons.dark_mode_outlined),
+                        icon: Icon(PhosphorIconsRegular.moon),
                         label: Text('Dark'),
                       ),
                     ],
@@ -167,7 +168,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                               dimension: 18,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Icon(Icons.arrow_forward),
+                          : const Icon(PhosphorIconsRegular.arrowRight),
                       label: const Text('Continue'),
                     ),
                   ),
@@ -234,7 +235,7 @@ class _LayoutCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (selected) const Icon(Icons.check_circle),
+              if (selected) const Icon(PhosphorIconsFill.checkCircle),
             ],
           ),
         ),

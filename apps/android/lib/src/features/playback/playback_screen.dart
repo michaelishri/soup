@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -395,7 +396,7 @@ class _Controls extends StatelessWidget {
                   autofocus: true,
                   focusNode: backFocusNode,
                   onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back),
+                  icon: const Icon(PhosphorIconsRegular.arrowLeft),
                 ),
               ),
               const SizedBox(width: 16),
@@ -463,7 +464,9 @@ class _Controls extends StatelessWidget {
                               key: const ValueKey('rewind-button'),
                               tooltip: 'Back 10 seconds',
                               onPressed: onRewind,
-                              icon: const Icon(Icons.replay_10),
+                              icon: const Icon(
+                                PhosphorIconsRegular.arrowCounterClockwise,
+                              ),
                             ),
                           ),
                           SizedBox(width: compact ? 8 : 16),
@@ -475,7 +478,9 @@ class _Controls extends StatelessWidget {
                               onPressed: onToggle,
                               iconSize: 34,
                               icon: Icon(
-                                value.playing ? Icons.pause : Icons.play_arrow,
+                                value.playing
+                                    ? PhosphorIconsFill.pause
+                                    : PhosphorIconsFill.play,
                               ),
                             ),
                           ),
@@ -486,7 +491,9 @@ class _Controls extends StatelessWidget {
                               key: const ValueKey('forward-button'),
                               tooltip: 'Forward 30 seconds',
                               onPressed: onForward,
-                              icon: const Icon(Icons.forward_30),
+                              icon: const Icon(
+                                PhosphorIconsRegular.skipForward,
+                              ),
                             ),
                           ),
                           SizedBox(width: compact ? 8 : 16),
@@ -499,14 +506,18 @@ class _Controls extends StatelessWidget {
                                     onPressed: subtitleCount == 0
                                         ? null
                                         : onSubtitle,
-                                    icon: const Icon(Icons.subtitles),
+                                    icon: const Icon(
+                                      PhosphorIconsRegular.subtitles,
+                                    ),
                                   )
                                 : FilledButton.tonalIcon(
                                     key: const ValueKey('subtitle-button'),
                                     onPressed: subtitleCount == 0
                                         ? null
                                         : onSubtitle,
-                                    icon: const Icon(Icons.subtitles),
+                                    icon: const Icon(
+                                      PhosphorIconsRegular.subtitles,
+                                    ),
                                     label: Text(
                                       subtitle?.label ?? 'Subtitles off',
                                     ),
@@ -556,7 +567,7 @@ class _PlaybackError extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.error_outline,
+                  PhosphorIconsRegular.warningCircle,
                   size: 56,
                   color: theme.colorScheme.onInverseSurface,
                 ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -153,23 +154,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
               destinations: const [
                 NavigationDestination(
                   key: ValueKey('mobile-nav-home'),
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
+                  icon: Icon(PhosphorIconsRegular.house),
+                  selectedIcon: Icon(PhosphorIconsFill.house),
                   label: 'Home',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.tv_outlined),
-                  selectedIcon: Icon(Icons.tv),
+                  icon: Icon(PhosphorIconsRegular.television),
+                  selectedIcon: Icon(PhosphorIconsFill.television),
                   label: 'TV',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.movie_outlined),
-                  selectedIcon: Icon(Icons.movie),
+                  icon: Icon(PhosphorIconsRegular.filmSlate),
+                  selectedIcon: Icon(PhosphorIconsFill.filmSlate),
                   label: 'Movies',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.settings_outlined),
-                  selectedIcon: Icon(Icons.settings),
+                  icon: Icon(PhosphorIconsRegular.gear),
+                  selectedIcon: Icon(PhosphorIconsFill.gear),
                   label: 'Settings',
                 ),
               ],
@@ -207,7 +208,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
     if (_viewModel.error case final error?) {
       return _LibraryMessage(
-        icon: Icons.cloud_off,
+        icon: PhosphorIconsRegular.cloudSlash,
         title: 'Could not load your library',
         message: error,
         actionLabel: 'Try again',
@@ -228,7 +229,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Widget _home(JellyfinHome home) {
     if (home.libraries.isEmpty && home.resume.isEmpty && home.latest.isEmpty) {
       return _LibraryMessage(
-        icon: Icons.video_library_outlined,
+        icon: PhosphorIconsRegular.monitorPlay,
         title: 'Your library is empty',
         message: 'Add media in Jellyfin, then refresh this screen.',
         actionLabel: 'Refresh',
@@ -327,7 +328,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final title = television ? 'TV' : 'Movies';
     if (items.isEmpty) {
       return _LibraryMessage(
-        icon: television ? Icons.tv_off_outlined : Icons.movie_filter_outlined,
+        icon: television
+            ? PhosphorIconsRegular.television
+            : PhosphorIconsRegular.filmStrip,
         title: 'No $title library found',
         message: 'Add a $title library in Jellyfin, then refresh Soup.',
         actionLabel: 'Refresh',
@@ -410,7 +413,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               key: const ValueKey('settings-layout-fruity'),
               title: 'Fruity',
               subtitle: 'Spacious and cinematic',
-              icon: Icons.auto_awesome,
+              icon: PhosphorIconsRegular.sparkle,
               selected: _appearanceDraft.preset == UiPreset.fruity,
               onSelected: () => setState(
                 () => _appearanceDraft = _appearanceDraft.copyWith(
@@ -422,7 +425,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               key: const ValueKey('settings-layout-blockbuster'),
               title: 'Blockbuster',
               subtitle: 'Bold and browse-focused',
-              icon: Icons.local_movies_outlined,
+              icon: PhosphorIconsRegular.filmStrip,
               selected: _appearanceDraft.preset == UiPreset.blockbuster,
               onSelected: () => setState(
                 () => _appearanceDraft = _appearanceDraft.copyWith(
@@ -462,12 +465,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
             segments: const [
               ButtonSegment(
                 value: AppearanceBrightness.light,
-                icon: Icon(Icons.light_mode_outlined),
+                icon: Icon(PhosphorIconsRegular.sun),
                 label: Text('Light'),
               ),
               ButtonSegment(
                 value: AppearanceBrightness.dark,
-                icon: Icon(Icons.dark_mode_outlined),
+                icon: Icon(PhosphorIconsRegular.moon),
                 label: Text('Dark'),
               ),
             ],
@@ -494,19 +497,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.check),
+                  : const Icon(PhosphorIconsBold.check),
               label: const Text('Apply appearance'),
             ),
             OutlinedButton.icon(
               key: const ValueKey('refresh-library-button'),
               onPressed: _viewModel.loading ? null : _viewModel.load,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(PhosphorIconsRegular.arrowsClockwise),
               label: const Text('Refresh library'),
             ),
             OutlinedButton.icon(
               key: const ValueKey('library-sign-out-button'),
               onPressed: widget.onSignOut,
-              icon: const Icon(Icons.logout),
+              icon: const Icon(PhosphorIconsRegular.signOut),
               label: const Text('Change server or account'),
             ),
           ],
@@ -628,7 +631,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                             : MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.soup_kitchen,
+                            PhosphorIconsRegular.cookingPot,
                             color: colors.primary,
                             size: 24,
                           ),
@@ -646,7 +649,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                     _BlockbusterRailItem(
                       key: const ValueKey('blockbuster-nav-home'),
                       order: 1,
-                      icon: Icons.home_rounded,
+                      icon: PhosphorIconsRegular.house,
                       label: 'Home',
                       focusNode: _destinationNodes[_FruityDestination.home]!,
                       expanded: showLabels,
@@ -657,7 +660,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                     _BlockbusterRailItem(
                       key: const ValueKey('blockbuster-nav-tv'),
                       order: 2,
-                      icon: Icons.tv_rounded,
+                      icon: PhosphorIconsRegular.television,
                       label: 'TV',
                       focusNode: _destinationNodes[_FruityDestination.tv]!,
                       expanded: showLabels,
@@ -667,7 +670,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                     _BlockbusterRailItem(
                       key: const ValueKey('blockbuster-nav-movies'),
                       order: 3,
-                      icon: Icons.movie_rounded,
+                      icon: PhosphorIconsRegular.filmSlate,
                       label: 'Movies',
                       focusNode: _destinationNodes[_FruityDestination.movies]!,
                       expanded: showLabels,
@@ -679,7 +682,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                     _BlockbusterRailItem(
                       key: const ValueKey('blockbuster-nav-settings'),
                       order: 4,
-                      icon: Icons.settings_rounded,
+                      icon: PhosphorIconsRegular.gear,
                       label: 'Settings',
                       focusNode:
                           _destinationNodes[_FruityDestination.settings]!,
@@ -852,7 +855,11 @@ class _FruityTopNavigation extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
         child: Row(
           children: [
-            Icon(Icons.soup_kitchen, color: colors.primary, size: 30),
+            Icon(
+              PhosphorIconsRegular.cookingPot,
+              color: colors.primary,
+              size: 30,
+            ),
             const SizedBox(width: 10),
             Text('Soup', style: Theme.of(context).textTheme.titleLarge),
             const Spacer(),
@@ -862,7 +869,7 @@ class _FruityTopNavigation extends StatelessWidget {
               selected: destination == _FruityDestination.home,
               tooltip: 'Home',
               onPressed: () => onSelected(_FruityDestination.home),
-              child: const Icon(Icons.home_rounded),
+              child: const Icon(PhosphorIconsRegular.house),
             ),
             const SizedBox(width: 8),
             _TopNavItem(
@@ -1117,7 +1124,7 @@ class _FruityHero extends StatelessWidget {
                         key: const ValueKey('fruity-hero-open'),
                         autofocus: true,
                         onPressed: onOpen,
-                        icon: const Icon(Icons.info_outline),
+                        icon: const Icon(PhosphorIconsRegular.info),
                         label: const Text('View details'),
                       ),
                   ],
@@ -1192,7 +1199,7 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.info_outline,
+                  PhosphorIconsRegular.info,
                   size: 20,
                   color: _focused ? Colors.black : Colors.white,
                 ),
@@ -1417,8 +1424,8 @@ class _MediaCardState extends State<_MediaCard> {
                       return Center(
                         child: Icon(
                           widget.item.type == 'CollectionFolder'
-                              ? Icons.video_library_outlined
-                              : Icons.movie_outlined,
+                              ? PhosphorIconsRegular.monitorPlay
+                              : PhosphorIconsRegular.filmSlate,
                           size: 42,
                           color: colors.onSurfaceVariant,
                         ),
@@ -1519,7 +1526,7 @@ class _LayoutSettingTile extends StatelessWidget {
           leading: Icon(icon),
           title: Text(title),
           subtitle: Text(subtitle),
-          trailing: selected ? const Icon(Icons.check_circle) : null,
+          trailing: selected ? const Icon(PhosphorIconsFill.checkCircle) : null,
         ),
       ),
     );
@@ -1559,7 +1566,7 @@ class _LibraryMessage extends StatelessWidget {
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: onAction,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(PhosphorIconsRegular.arrowsClockwise),
                 label: Text(actionLabel),
               ),
             ],

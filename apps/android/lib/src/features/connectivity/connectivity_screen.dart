@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -175,7 +176,10 @@ class _BrandHeader extends StatelessWidget {
             ),
             child: const Padding(
               padding: EdgeInsets.all(10),
-              child: Icon(Icons.soup_kitchen, color: Color(0xFF08111F)),
+              child: Icon(
+                PhosphorIconsRegular.cookingPot,
+                color: Color(0xFF08111F),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -343,7 +347,7 @@ class _SetupCard extends StatelessWidget {
         child: OutlinedButton.icon(
           key: const ValueKey('paste-auth-key-button'),
           onPressed: busy ? null : onPasteAuthKey,
-          icon: const Icon(Icons.content_paste),
+          icon: const Icon(PhosphorIconsRegular.clipboardText),
           label: const Text('Paste auth key'),
         ),
       ),
@@ -353,7 +357,7 @@ class _SetupCard extends StatelessWidget {
         keyValue: 'connect-button',
         busy: busy,
         onPressed: onConnect,
-        icon: Icons.lock_outline,
+        icon: PhosphorIconsRegular.lock,
         label: 'Connect securely',
       ),
     ],
@@ -389,7 +393,7 @@ class _SetupCard extends StatelessWidget {
         child: OutlinedButton.icon(
           key: const ValueKey('paste-server-url-button'),
           onPressed: busy ? null : onPasteServerUrl,
-          icon: const Icon(Icons.content_paste),
+          icon: const Icon(PhosphorIconsRegular.clipboardText),
           label: const Text('Paste server address'),
         ),
       ),
@@ -399,7 +403,7 @@ class _SetupCard extends StatelessWidget {
         keyValue: 'check-server-button',
         busy: busy,
         onPressed: onCheckServer,
-        icon: Icons.dns_outlined,
+        icon: PhosphorIconsRegular.database,
         label: 'Check server',
       ),
     ],
@@ -446,13 +450,13 @@ class _SetupCard extends StatelessWidget {
         keyValue: 'sign-in-button',
         busy: busy,
         onPressed: onSignIn,
-        icon: Icons.login,
+        icon: PhosphorIconsRegular.signIn,
         label: 'Sign in',
       ),
     ],
     SetupPhase.ready => [
       Icon(
-        Icons.check_circle,
+        PhosphorIconsFill.checkCircle,
         size: 42,
         color: Theme.of(context).colorScheme.primary,
       ),
@@ -471,7 +475,7 @@ class _SetupCard extends StatelessWidget {
         child: OutlinedButton.icon(
           key: const ValueKey('sign-out-button'),
           onPressed: busy ? null : viewModel.signOut,
-          icon: const Icon(Icons.logout),
+          icon: const Icon(PhosphorIconsRegular.signOut),
           label: const Text('Change server or account'),
         ),
       ),
@@ -500,7 +504,10 @@ class _ErrorBanner extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.error_outline, color: colors.onErrorContainer),
+              Icon(
+                PhosphorIconsRegular.warningCircle,
+                color: colors.onErrorContainer,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -562,9 +569,9 @@ extension on TailscaleStatus {
   };
 
   IconData get icon => switch (phase) {
-    TailscaleConnectionPhase.disconnected => Icons.cloud_off_outlined,
-    TailscaleConnectionPhase.connecting => Icons.sync,
-    TailscaleConnectionPhase.connected => Icons.cloud_done_outlined,
-    TailscaleConnectionPhase.failed => Icons.error_outline,
+    TailscaleConnectionPhase.disconnected => PhosphorIconsRegular.cloudSlash,
+    TailscaleConnectionPhase.connecting => PhosphorIconsRegular.arrowsClockwise,
+    TailscaleConnectionPhase.connected => PhosphorIconsRegular.cloudCheck,
+    TailscaleConnectionPhase.failed => PhosphorIconsRegular.warningCircle,
   };
 }

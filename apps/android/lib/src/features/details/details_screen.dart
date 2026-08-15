@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
@@ -149,7 +150,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                         key: const ValueKey('details-back-button'),
                         tooltip: 'Back',
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.arrow_back),
+                        icon: const Icon(PhosphorIconsRegular.arrowLeft),
                       ),
                     ),
                   ),
@@ -345,8 +346,8 @@ class _Metadata extends StatelessWidget {
                 onPressed: () => onPlay(item),
                 icon: Icon(
                   item.playbackPositionTicks > 0
-                      ? Icons.replay
-                      : Icons.play_arrow,
+                      ? PhosphorIconsRegular.arrowCounterClockwise
+                      : PhosphorIconsFill.play,
                 ),
                 label: Text(item.playbackPositionTicks > 0 ? 'Resume' : 'Play'),
               ),
@@ -432,8 +433,8 @@ class _EpisodeList extends StatelessWidget {
                       const SizedBox(width: 12),
                       Icon(
                         episodes[index].playbackPositionTicks > 0
-                            ? Icons.replay
-                            : Icons.play_arrow,
+                            ? PhosphorIconsRegular.arrowCounterClockwise
+                            : PhosphorIconsFill.play,
                       ),
                     ],
                   ),
@@ -597,7 +598,9 @@ class _Poster extends StatelessWidget {
             builder: (context, snapshot) {
               final bytes = snapshot.data;
               return bytes == null
-                  ? const Center(child: Icon(Icons.movie_outlined, size: 44))
+                  ? const Center(
+                      child: Icon(PhosphorIconsRegular.filmSlate, size: 44),
+                    )
                   : Image.memory(bytes, fit: BoxFit.cover);
             },
           ),
@@ -619,7 +622,7 @@ class _DetailsError extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 52),
+          const Icon(PhosphorIconsRegular.warningCircle, size: 52),
           const SizedBox(height: 16),
           Text(error, textAlign: TextAlign.center),
           const SizedBox(height: 20),

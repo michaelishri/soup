@@ -35,6 +35,7 @@ dependencies:
   jellyfin_api:
     path: ../../packages/jellyfin_api
   path_provider: ^2.1.6
+  phosphoricons_flutter: ^1.0.0
   shared_preferences: ^2.5.3
   socks5_proxy: ^2.1.1
   soup_tailscale:
