@@ -285,6 +285,59 @@ void main() {
     expect(find.byKey(const ValueKey('blockbuster-settings')), findsOneWidget);
   });
 
+  testWidgets('restores the full Blockbuster hero when focus returns upward', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final source = FakeLibrarySource(
+      const JellyfinHome(
+        libraries: [
+          JellyfinItem(
+            id: 'movies',
+            name: 'Movies',
+            type: 'CollectionFolder',
+            collectionType: 'movies',
+          ),
+        ],
+        resume: [JellyfinItem(id: 'resume', name: 'Resume', type: 'Movie')],
+        latest: [JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie')],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: source,
+          session: session,
+          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final homeScroll = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('library-home')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    homeScroll.position.jumpTo(homeScroll.position.maxScrollExtent);
+    await tester.pump();
+    expect(homeScroll.position.pixels, greaterThan(0));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+
+    expect(homeScroll.position.pixels, 0);
+  });
+
   testWidgets('fits both presets at 1080p with enlarged text', (tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;

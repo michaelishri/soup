@@ -33,6 +33,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late final LibraryViewModel _viewModel;
   final _blockbusterRailKey = GlobalKey<_BlockbusterRailState>();
   late final FocusScopeNode _blockbusterContentScopeNode;
+  late final ScrollController _homeScrollController;
   late AppearanceSettings _appearanceDraft;
   _FruityDestination _destination = _FruityDestination.home;
   bool _savingAppearance = false;
@@ -43,6 +44,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _blockbusterContentScopeNode = FocusScopeNode(
       debugLabel: 'blockbuster-content',
     );
+    _homeScrollController = ScrollController(debugLabel: 'library-home-scroll');
     _appearanceDraft = widget.appearance;
     _viewModel = LibraryViewModel(
       source: widget.source,
@@ -60,6 +62,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   void dispose() {
+    _homeScrollController.dispose();
     _blockbusterContentScopeNode.dispose();
     _viewModel.dispose();
     super.dispose();
@@ -239,6 +242,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         : home.resume.firstOrNull ?? home.latest.firstOrNull;
     return CustomScrollView(
       key: const ValueKey('library-home'),
+      controller: _homeScrollController,
       slivers: [
         if (hero != null)
           SliverToBoxAdapter(
@@ -248,6 +252,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               userName: widget.session.userName,
               image: _viewModel.image(hero, type: 'Backdrop', maxWidth: 1600),
               onOpen: () => _open(hero),
+              onHeroFocused: blockbuster ? _restoreFullHero : null,
             ),
           )
         else
@@ -296,6 +301,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
         const SliverToBoxAdapter(child: SizedBox(height: 36)),
       ],
     );
+  }
+
+  void _restoreFullHero() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_homeScrollController.hasClients) return;
+      _homeScrollController.animateTo(
+        0,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   Widget _libraryDestination(JellyfinHome home, {required bool television}) {
@@ -960,6 +978,7 @@ class _FruityHero extends StatelessWidget {
     required this.userName,
     required this.image,
     required this.onOpen,
+    this.onHeroFocused,
   });
 
   final bool blockbuster;
@@ -967,6 +986,7 @@ class _FruityHero extends StatelessWidget {
   final String userName;
   final Future<Uint8List?> image;
   final VoidCallback onOpen;
+  final VoidCallback? onHeroFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -1047,6 +1067,7 @@ class _FruityHero extends StatelessWidget {
                       _BlockbusterHeroAction(
                         key: const ValueKey('fruity-hero-open'),
                         onPressed: onOpen,
+                        onFocused: onHeroFocused,
                       )
                     else
                       FilledButton.icon(
@@ -1068,9 +1089,14 @@ class _FruityHero extends StatelessWidget {
 }
 
 class _BlockbusterHeroAction extends StatefulWidget {
-  const _BlockbusterHeroAction({required this.onPressed, super.key});
+  const _BlockbusterHeroAction({
+    required this.onPressed,
+    this.onFocused,
+    super.key,
+  });
 
   final VoidCallback onPressed;
+  final VoidCallback? onFocused;
 
   @override
   State<_BlockbusterHeroAction> createState() => _BlockbusterHeroActionState();
@@ -1084,6 +1110,9 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return FocusableActionDetector(
       autofocus: true,
+      onFocusChange: (focused) {
+        if (focused) widget.onFocused?.call();
+      },
       onShowFocusHighlight: (focused) => setState(() => _focused = focused),
       actions: {
         ActivateIntent: CallbackAction<ActivateIntent>(
