@@ -19,5 +19,7 @@ flutter run
 The target device must run Android 12 (API 31) or newer. The same application
 supports touch input and Android TV D-pad focus traversal.
 
-The current prototype stops at a verified Tailscale connection and Jellyfin
-login; library browsing and playback are deliberately outside this milestone.
+The current prototype includes the complete connection and sign-in flow plus an
+authenticated home screen for libraries, Continue Watching, and Latest Media.
+JSON and artwork are fetched through the embedded Tailscale connection, and the
+TV interface has explicit, ordered D-pad traversal.

@@ -12,7 +12,9 @@ The Android prototype includes the complete setup path: an embedded Tailscale
 node, an authenticated app-local SOCKS5 proxy, Jellyfin 10.11 discovery, and
 username/password sign-in. The UI depends on a substitutable `TailscaleClient`
 boundary and adapts between touch-sized phone layouts and D-pad-friendly TV
-layouts. TV setup provides explicit clipboard actions for the auth key and
+layouts. After sign-in, Soup restores the secure session and loads My Media,
+Continue Watching, and Latest Media, including artwork, through the same
+app-local Tailscale proxy. TV setup provides explicit clipboard actions for the auth key and
 server address, while connection and sign-in errors remain pinned above the
 scrollable form so they stay readable at constrained heights.
 
@@ -81,8 +83,9 @@ HTTPS server URLs are supported; HTTPS uses normal certificate validation.
 
 The narrow Dart API used by the prototype is generated from
 `tool/openapi/jellyfin-10.11-prototype.yaml`. That contract is derived from
-Jellyfin's published 10.11.1 OpenAPI snapshot and currently includes only the
-public system information and username authentication operations.
+Jellyfin's published 10.11.1 OpenAPI snapshot. Generated operations currently
+cover public system information and username authentication; the handwritten
+facade contains the authenticated library queries and stable app models.
 
 ```sh
 ./tool/generate_jellyfin_api.sh

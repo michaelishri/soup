@@ -211,11 +211,17 @@ void main() {
           200,
         );
       }
-      submittedPassword = (request.body);
-      return http.Response(
-        '{"AccessToken":"token","ServerId":"server-1","User":{"Id":"user-1","Name":"Michael"}}',
-        200,
-      );
+      if (request.url.path.endsWith('/Users/AuthenticateByName')) {
+        submittedPassword = (request.body);
+        return http.Response(
+          '{"AccessToken":"token","ServerId":"server-1","User":{"Id":"user-1","Name":"Michael"}}',
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/Items/Latest')) {
+        return http.Response('[]', 200);
+      }
+      return http.Response('{"Items":[]}', 200);
     });
     addTearDown(client.dispose);
     addTearDown(httpClient.close);
@@ -256,7 +262,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('sign-in-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ready for your library'), findsOneWidget);
+    expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.text('Welcome back, Michael'), findsOneWidget);
     expect(passwordField.controller?.text, isEmpty);
     expect(submittedPassword, contains('not-stored'));
     expect(store.session?.accessToken, 'token');

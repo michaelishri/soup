@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -54,7 +56,56 @@ class _SoupAppState extends State<SoupApp> {
         scaffoldBackgroundColor: const Color(0xFF08111F),
         useMaterial3: true,
       ),
-      home: ConnectivityScreen(viewModel: _viewModel),
+      home: ListenableBuilder(
+        listenable: _viewModel,
+        builder: (context, _) {
+          final session = _viewModel.session;
+          if (_viewModel.phase == SetupPhase.ready && session != null) {
+            return _AuthenticatedHome(
+              key: ValueKey('${session.serverId}:${session.userId}'),
+              viewModel: _viewModel,
+              session: session,
+            );
+          }
+          return ConnectivityScreen(viewModel: _viewModel);
+        },
+      ),
+    );
+  }
+}
+
+class _AuthenticatedHome extends StatelessWidget {
+  const _AuthenticatedHome({
+    required this.viewModel,
+    required this.session,
+    super.key,
+  });
+
+  final ConnectivityViewModel viewModel;
+  final JellyfinSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: viewModel.authenticatedApi(),
+      builder: (context, snapshot) {
+        final api = snapshot.data;
+        if (api != null) {
+          return LibraryScreen(
+            source: api,
+            session: session,
+            onSignOut: viewModel.signOut,
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text('Could not open your library. ${snapshot.error}'),
+            ),
+          );
+        }
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      },
     );
   }
 }

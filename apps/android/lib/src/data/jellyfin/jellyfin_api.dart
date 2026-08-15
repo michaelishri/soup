@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
 import 'package:jellyfin_api/api.dart' as generated;
 
@@ -47,6 +50,107 @@ class JellyfinSession {
   final String accessToken;
 }
 
+class JellyfinItem {
+  const JellyfinItem({
+    required this.id,
+    required this.name,
+    required this.type,
+    this.collectionType,
+    this.overview,
+    this.productionYear,
+    this.officialRating,
+    this.communityRating,
+    this.runTimeTicks,
+    this.playbackPositionTicks = 0,
+    this.playedPercentage,
+    this.played = false,
+    this.seriesName,
+    this.seasonName,
+    this.indexNumber,
+    this.parentIndexNumber,
+    this.primaryImageTag,
+    this.backdropImageTag,
+  });
+
+  factory JellyfinItem.fromJson(Map<String, Object?> json) {
+    final userData = json['UserData'] is Map<String, Object?>
+        ? json['UserData']! as Map<String, Object?>
+        : const <String, Object?>{};
+    final imageTags = json['ImageTags'] is Map<String, Object?>
+        ? json['ImageTags']! as Map<String, Object?>
+        : const <String, Object?>{};
+    final backdropTags = json['BackdropImageTags'];
+    return JellyfinItem(
+      id: json['Id'] as String? ?? '',
+      name: json['Name'] as String? ?? 'Untitled',
+      type: json['Type'] as String? ?? '',
+      collectionType: json['CollectionType'] as String?,
+      overview: json['Overview'] as String?,
+      productionYear: (json['ProductionYear'] as num?)?.toInt(),
+      officialRating: json['OfficialRating'] as String?,
+      communityRating: (json['CommunityRating'] as num?)?.toDouble(),
+      runTimeTicks: (json['RunTimeTicks'] as num?)?.toInt(),
+      playbackPositionTicks:
+          (userData['PlaybackPositionTicks'] as num?)?.toInt() ?? 0,
+      playedPercentage: (userData['PlayedPercentage'] as num?)?.toDouble(),
+      played: userData['Played'] as bool? ?? false,
+      seriesName: json['SeriesName'] as String?,
+      seasonName: json['SeasonName'] as String?,
+      indexNumber: (json['IndexNumber'] as num?)?.toInt(),
+      parentIndexNumber: (json['ParentIndexNumber'] as num?)?.toInt(),
+      primaryImageTag: imageTags['Primary'] as String?,
+      backdropImageTag: backdropTags is List && backdropTags.isNotEmpty
+          ? backdropTags.first as String?
+          : null,
+    );
+  }
+
+  final String id;
+  final String name;
+  final String type;
+  final String? collectionType;
+  final String? overview;
+  final int? productionYear;
+  final String? officialRating;
+  final double? communityRating;
+  final int? runTimeTicks;
+  final int playbackPositionTicks;
+  final double? playedPercentage;
+  final bool played;
+  final String? seriesName;
+  final String? seasonName;
+  final int? indexNumber;
+  final int? parentIndexNumber;
+  final String? primaryImageTag;
+  final String? backdropImageTag;
+
+  bool get isPlayable =>
+      type == 'Movie' || type == 'Episode' || type == 'Video';
+}
+
+class JellyfinHome {
+  const JellyfinHome({
+    required this.libraries,
+    required this.resume,
+    required this.latest,
+  });
+
+  final List<JellyfinItem> libraries;
+  final List<JellyfinItem> resume;
+  final List<JellyfinItem> latest;
+}
+
+abstract interface class JellyfinLibrarySource {
+  Future<JellyfinHome> getHome(JellyfinSession session);
+
+  Future<Uint8List?> getImage(
+    JellyfinSession session,
+    JellyfinItem item, {
+    String type,
+    int maxWidth,
+  });
+}
+
 class JellyfinApiException implements Exception {
   const JellyfinApiException(this.message);
 
@@ -56,7 +160,7 @@ class JellyfinApiException implements Exception {
   String toString() => message;
 }
 
-class JellyfinApi {
+class JellyfinApi implements JellyfinLibrarySource {
   JellyfinApi(
     this._client, {
     required this.deviceId,
@@ -148,6 +252,135 @@ class JellyfinApi {
     } on generated.ApiException catch (error) {
       throw _mapGeneratedError(error, operation: 'sign in');
     }
+  }
+
+  @override
+  Future<JellyfinHome> getHome(JellyfinSession session) async {
+    final fields = [
+      'Overview',
+      'PrimaryImageAspectRatio',
+      'ProductionYear',
+      'RunTimeTicks',
+      'OfficialRating',
+      'CommunityRating',
+    ].join(',');
+    final responses = await Future.wait([
+      _getJson(
+        session,
+        'Users/${session.userId}/Views',
+        query: const {'IncludeExternalContent': 'false'},
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Resume',
+        query: {
+          'Limit': '12',
+          'MediaTypes': 'Video',
+          'Fields': fields,
+          'EnableImageTypes': 'Primary,Backdrop,Thumb',
+        },
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Latest',
+        query: {
+          'Limit': '18',
+          'Fields': fields,
+          'EnableImageTypes': 'Primary,Backdrop,Thumb',
+          'ImageTypeLimit': '1',
+        },
+      ),
+    ]);
+    return JellyfinHome(
+      libraries: _itemsFromResponse(responses[0]),
+      resume: _itemsFromResponse(responses[1]),
+      latest: _itemsFromResponse(responses[2]),
+    );
+  }
+
+  @override
+  Future<Uint8List?> getImage(
+    JellyfinSession session,
+    JellyfinItem item, {
+    String type = 'Primary',
+    int maxWidth = 480,
+  }) async {
+    final tag = type == 'Backdrop'
+        ? item.backdropImageTag
+        : item.primaryImageTag;
+    if (tag == null || tag.isEmpty || item.id.isEmpty) return null;
+    final response = await _client
+        .get(
+          _sessionUri(
+            session,
+            'Items/${item.id}/Images/$type',
+            query: {'tag': tag, 'maxWidth': '$maxWidth', 'quality': '85'},
+          ),
+          headers: _sessionHeaders(session),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode == 404) return null;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not load artwork. Jellyfin returned HTTP ${response.statusCode}.',
+      );
+    }
+    return response.bodyBytes;
+  }
+
+  Future<Object?> _getJson(
+    JellyfinSession session,
+    String path, {
+    Map<String, String>? query,
+  }) async {
+    final response = await _client
+        .get(
+          _sessionUri(session, path, query: query),
+          headers: _sessionHeaders(session),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode == 401) {
+      throw const JellyfinApiException(
+        'Your Jellyfin session has expired. Sign in again.',
+      );
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not load your library. Jellyfin returned HTTP ${response.statusCode}.',
+      );
+    }
+    try {
+      return jsonDecode(response.body);
+    } on FormatException {
+      throw const JellyfinApiException(
+        'Jellyfin returned an unreadable library response.',
+      );
+    }
+  }
+
+  Uri _sessionUri(
+    JellyfinSession session,
+    String path, {
+    Map<String, String>? query,
+  }) {
+    return session.serverUrl.resolve(path).replace(queryParameters: query);
+  }
+
+  Map<String, String> _sessionHeaders(JellyfinSession session) => {
+    'Accept': 'application/json',
+    'X-Emby-Token': session.accessToken,
+    'Authorization':
+        'MediaBrowser Client="$clientName", Device="Soup Android", DeviceId="$deviceId", Version="$clientVersion", Token="${session.accessToken}"',
+  };
+
+  static List<JellyfinItem> _itemsFromResponse(Object? value) {
+    final rawItems = value is Map<String, Object?> ? value['Items'] : value;
+    if (rawItems is! List) return const [];
+    return rawItems
+        .whereType<Map<String, Object?>>()
+        .map(JellyfinItem.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList(growable: false);
   }
 
   generated.ApiClient _generatedClient(Uri serverUrl) {

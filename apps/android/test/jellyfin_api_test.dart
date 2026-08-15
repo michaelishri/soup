@@ -86,4 +86,80 @@ void main() {
       throwsA(isA<JellyfinApiException>()),
     );
   });
+
+  test('loads authenticated home rows through the session client', () async {
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      if (request.url.path.endsWith('/Views')) {
+        return http.Response(
+          '{"Items":[{"Id":"library","Name":"Movies","Type":"CollectionFolder","CollectionType":"movies"}]}',
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/Items/Resume')) {
+        return http.Response(
+          '{"Items":[{"Id":"resume","Name":"Film","Type":"Movie","UserData":{"PlaybackPositionTicks":120,"PlayedPercentage":25}}]}',
+          200,
+        );
+      }
+      return http.Response(
+        '[{"Id":"latest","Name":"Episode","Type":"Episode","SeriesName":"Show"}]',
+        200,
+      );
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin/jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'secret-token',
+    );
+
+    final home = await api.getHome(session);
+
+    expect(home.libraries.single.name, 'Movies');
+    expect(home.resume.single.playedPercentage, 25);
+    expect(home.latest.single.seriesName, 'Show');
+    expect(requests, hasLength(3));
+    expect(
+      requests.every(
+        (request) => request.headers['x-emby-token'] == 'secret-token',
+      ),
+      isTrue,
+    );
+    expect(requests.first.url.path, '/jellyfin/Users/user/Views');
+  });
+
+  test('loads artwork with authentication and sizing', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response.bytes([1, 2, 3], 200);
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'token',
+    );
+    const item = JellyfinItem(
+      id: 'item',
+      name: 'Movie',
+      type: 'Movie',
+      primaryImageTag: 'tag',
+    );
+
+    final bytes = await api.getImage(session, item, maxWidth: 320);
+
+    expect(bytes, [1, 2, 3]);
+    expect(captured.url.path, '/Items/item/Images/Primary');
+    expect(captured.url.queryParameters['maxWidth'], '320');
+    expect(captured.headers['x-emby-token'], 'token');
+  });
 }

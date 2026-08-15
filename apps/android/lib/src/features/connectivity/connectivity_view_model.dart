@@ -92,7 +92,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     _setBusy(true);
     try {
       final url = JellyfinApi.parseServerUrl(value);
-      final api = await _api();
+      final api = await authenticatedApi();
       _serverInfo = await api.getPublicSystemInfo(url);
       _serverUrl = url;
       _phase = SetupPhase.credentials;
@@ -116,7 +116,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     _error = null;
     _setBusy(true);
     try {
-      final api = await _api();
+      final api = await authenticatedApi();
       final session = await api.authenticate(
         serverUrl: _serverUrl!,
         username: username.trim(),
@@ -141,7 +141,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<JellyfinApi> _api() async {
+  Future<JellyfinApi> authenticatedApi() async {
     final proxy = _status.proxy;
     if (proxy == null) {
       throw const JellyfinApiException('Connect to Tailscale first.');
