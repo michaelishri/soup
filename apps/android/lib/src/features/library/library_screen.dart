@@ -7,6 +7,8 @@ import 'package:soup/src/features/library/library_view_model.dart';
 
 enum _FruityDestination { home, tv, movies, settings }
 
+const _blockbusterContentInset = 104.0;
+
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
     required this.source,
@@ -106,16 +108,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: blockbuster && wide
               ? Stack(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 64),
-                      child: FocusScope(
-                        node: _blockbusterContentScopeNode,
-                        child: Focus(
-                          canRequestFocus: false,
-                          skipTraversal: true,
-                          onKeyEvent: _handleBlockbusterContentKeyEvent,
-                          child: content,
-                        ),
+                    FocusScope(
+                      node: _blockbusterContentScopeNode,
+                      child: Focus(
+                        canRequestFocus: false,
+                        skipTraversal: true,
+                        onKeyEvent: _handleBlockbusterContentKeyEvent,
+                        child: content,
                       ),
                     ),
                     Align(
@@ -341,13 +340,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(40, 40, 40, 20),
+          padding: EdgeInsets.fromLTRB(
+            blockbuster ? _blockbusterContentInset : 40,
+            40,
+            40,
+            20,
+          ),
           sliver: SliverToBoxAdapter(
             child: Text(title, style: Theme.of(context).textTheme.displaySmall),
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(40, 0, 40, 40),
+          padding: EdgeInsets.fromLTRB(
+            blockbuster ? _blockbusterContentInset : 40,
+            0,
+            40,
+            40,
+          ),
           sliver: SliverGrid.builder(
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 360,
@@ -376,7 +385,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     return ListView(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-settings'),
-      padding: const EdgeInsets.fromLTRB(40, 16, 40, 24),
+      padding: EdgeInsets.fromLTRB(
+        blockbuster ? _blockbusterContentInset : 40,
+        16,
+        40,
+        24,
+      ),
       children: [
         Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
         Text(
@@ -577,91 +591,106 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
               : const Duration(milliseconds: 150),
           curve: Curves.easeOutCubic,
           onEnd: _finishExitToContent,
-          width: _expanded ? 238 : 64,
+          width: _expanded ? 300 : 64,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                colors.surfaceContainerLowest,
-                colors.surfaceContainerLowest.withValues(alpha: 0.98),
-                colors.surfaceContainerLowest.withValues(alpha: 0.78),
-              ],
-              stops: const [0, 0.76, 1],
+              colors: _expanded
+                  ? [
+                      Colors.black.withValues(alpha: 0.92),
+                      Colors.black.withValues(alpha: 0.88),
+                      Colors.black.withValues(alpha: 0.72),
+                      Colors.black.withValues(alpha: 0.36),
+                      Colors.transparent,
+                    ]
+                  : [
+                      Colors.black.withValues(alpha: 0.58),
+                      Colors.black.withValues(alpha: 0.52),
+                      Colors.black.withValues(alpha: 0.34),
+                      Colors.black.withValues(alpha: 0.14),
+                      Colors.transparent,
+                    ],
+              stops: const [0, 0.18, 0.48, 0.75, 1],
             ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final showLabels = constraints.maxWidth > 140;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      mainAxisAlignment: showLabels
-                          ? MainAxisAlignment.start
-                          : MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.soup_kitchen,
-                          color: colors.primary,
-                          size: 24,
-                        ),
-                        if (showLabels) ...[
-                          const SizedBox(width: 12),
-                          Text(
-                            'Soup',
-                            style: Theme.of(context).textTheme.titleLarge,
+              final showLabels = constraints.maxWidth > 180;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(8, 14, showLabels ? 72 : 8, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: showLabels
+                            ? MainAxisAlignment.start
+                            : MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.soup_kitchen,
+                            color: colors.primary,
+                            size: 24,
                           ),
+                          if (showLabels) ...[
+                            const SizedBox(width: 12),
+                            Text(
+                              'Soup',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                  _BlockbusterRailItem(
-                    key: const ValueKey('blockbuster-nav-home'),
-                    order: 1,
-                    icon: Icons.home_rounded,
-                    label: 'Home',
-                    focusNode: _destinationNodes[_FruityDestination.home]!,
-                    expanded: showLabels,
-                    selected: widget.destination == _FruityDestination.home,
-                    onPressed: () => widget.onSelected(_FruityDestination.home),
-                  ),
-                  _BlockbusterRailItem(
-                    key: const ValueKey('blockbuster-nav-tv'),
-                    order: 2,
-                    icon: Icons.tv_rounded,
-                    label: 'TV',
-                    focusNode: _destinationNodes[_FruityDestination.tv]!,
-                    expanded: showLabels,
-                    selected: widget.destination == _FruityDestination.tv,
-                    onPressed: () => widget.onSelected(_FruityDestination.tv),
-                  ),
-                  _BlockbusterRailItem(
-                    key: const ValueKey('blockbuster-nav-movies'),
-                    order: 3,
-                    icon: Icons.movie_rounded,
-                    label: 'Movies',
-                    focusNode: _destinationNodes[_FruityDestination.movies]!,
-                    expanded: showLabels,
-                    selected: widget.destination == _FruityDestination.movies,
-                    onPressed: () =>
-                        widget.onSelected(_FruityDestination.movies),
-                  ),
-                  const Spacer(),
-                  _BlockbusterRailItem(
-                    key: const ValueKey('blockbuster-nav-settings'),
-                    order: 4,
-                    icon: Icons.settings_rounded,
-                    label: 'Settings',
-                    focusNode: _destinationNodes[_FruityDestination.settings]!,
-                    expanded: showLabels,
-                    selected: widget.destination == _FruityDestination.settings,
-                    onPressed: () =>
-                        widget.onSelected(_FruityDestination.settings),
-                  ),
-                ],
+                    const SizedBox(height: 28),
+                    _BlockbusterRailItem(
+                      key: const ValueKey('blockbuster-nav-home'),
+                      order: 1,
+                      icon: Icons.home_rounded,
+                      label: 'Home',
+                      focusNode: _destinationNodes[_FruityDestination.home]!,
+                      expanded: showLabels,
+                      selected: widget.destination == _FruityDestination.home,
+                      onPressed: () =>
+                          widget.onSelected(_FruityDestination.home),
+                    ),
+                    _BlockbusterRailItem(
+                      key: const ValueKey('blockbuster-nav-tv'),
+                      order: 2,
+                      icon: Icons.tv_rounded,
+                      label: 'TV',
+                      focusNode: _destinationNodes[_FruityDestination.tv]!,
+                      expanded: showLabels,
+                      selected: widget.destination == _FruityDestination.tv,
+                      onPressed: () => widget.onSelected(_FruityDestination.tv),
+                    ),
+                    _BlockbusterRailItem(
+                      key: const ValueKey('blockbuster-nav-movies'),
+                      order: 3,
+                      icon: Icons.movie_rounded,
+                      label: 'Movies',
+                      focusNode: _destinationNodes[_FruityDestination.movies]!,
+                      expanded: showLabels,
+                      selected: widget.destination == _FruityDestination.movies,
+                      onPressed: () =>
+                          widget.onSelected(_FruityDestination.movies),
+                    ),
+                    const Spacer(),
+                    _BlockbusterRailItem(
+                      key: const ValueKey('blockbuster-nav-settings'),
+                      order: 4,
+                      icon: Icons.settings_rounded,
+                      label: 'Settings',
+                      focusNode:
+                          _destinationNodes[_FruityDestination.settings]!,
+                      expanded: showLabels,
+                      selected:
+                          widget.destination == _FruityDestination.settings,
+                      onPressed: () =>
+                          widget.onSelected(_FruityDestination.settings),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -994,6 +1023,7 @@ class _FruityHero extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
     return SizedBox(
+      key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
       height: wide ? 300 : 330,
       child: Stack(
         fit: StackFit.expand,
@@ -1017,18 +1047,31 @@ class _FruityHero extends StatelessWidget {
                 end: blockbuster
                     ? Alignment.centerLeft
                     : Alignment.bottomCenter,
-                colors: [
-                  tokens?.heroScrimStart ?? Colors.transparent,
-                  theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
-                  theme.scaffoldBackgroundColor,
-                ],
+                colors: blockbuster
+                    ? [
+                        Colors.transparent,
+                        theme.scaffoldBackgroundColor.withValues(alpha: 0.1),
+                        theme.scaffoldBackgroundColor.withValues(alpha: 0.58),
+                      ]
+                    : [
+                        tokens?.heroScrimStart ?? Colors.transparent,
+                        theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
+                        theme.scaffoldBackgroundColor,
+                      ],
               ),
             ),
           ),
           Align(
             alignment: Alignment.bottomLeft,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(wide ? 44 : 24, 24, 24, 30),
+              padding: EdgeInsets.fromLTRB(
+                blockbuster && wide
+                    ? _blockbusterContentInset
+                    : (wide ? 44 : 24),
+                24,
+                24,
+                30,
+              ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 620),
                 child: Column(
@@ -1212,7 +1255,14 @@ class _LibrarySection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: phone ? 20 : 40),
+              padding: EdgeInsets.fromLTRB(
+                blockbuster && !phone
+                    ? _blockbusterContentInset
+                    : (phone ? 20 : 40),
+                0,
+                phone ? 20 : 40,
+                0,
+              ),
               child: Text(
                 title,
                 style: blockbuster
@@ -1228,9 +1278,13 @@ class _LibrarySection extends StatelessWidget {
               height: artHeight + 64,
               child: ListView.separated(
                 key: ValueKey('library-row-${title.toLowerCase()}'),
-                padding: EdgeInsets.symmetric(
-                  horizontal: phone ? 20 : 40,
-                  vertical: 6,
+                padding: EdgeInsets.fromLTRB(
+                  blockbuster && !phone
+                      ? _blockbusterContentInset
+                      : (phone ? 20 : 40),
+                  6,
+                  phone ? 20 : 40,
+                  6,
                 ),
                 scrollDirection: Axis.horizontal,
                 itemCount: items.length,

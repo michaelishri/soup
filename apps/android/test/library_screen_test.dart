@@ -222,12 +222,23 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
       64,
     );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('blockbuster-hero'))).dx,
+      0,
+    );
+    final collapsedRail = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('blockbuster-rail')),
+    );
+    final collapsedGradient =
+        (collapsedRail.decoration! as BoxDecoration).gradient!
+            as LinearGradient;
+    expect(collapsedGradient.colors.last.a, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
 
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
-      238,
+      300,
     );
     expect(find.text('Home'), findsOneWidget);
 
@@ -243,7 +254,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
-      238,
+      300,
     );
   });
 
