@@ -1,5 +1,6 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -92,40 +93,37 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     return Scaffold(
       body: SafeArea(
-        child: Shortcuts(
-          shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(LogicalKeyboardKey.arrowRight): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowDown): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft):
-                PreviousFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowUp): PreviousFocusIntent(),
-          },
-          child: FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: blockbuster && wide
-                ? Row(
-                    children: [
-                      _BlockbusterRail(
+        child: FocusTraversalGroup(
+          policy: ReadingOrderTraversalPolicy(),
+          child: blockbuster && wide
+              ? Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(left: 78),
+                      child: content,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _BlockbusterRail(
                         destination: _destination,
                         onSelected: (value) =>
                             setState(() => _destination = value),
                       ),
-                      Expanded(child: content),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      if (wide)
-                        _FruityTopNavigation(
-                          destination: _destination,
-                          userName: widget.session.userName,
-                          onSelected: (value) =>
-                              setState(() => _destination = value),
-                        ),
-                      Expanded(child: content),
-                    ],
-                  ),
-          ),
+                    ),
+                  ],
+                )
+              : Column(
+                  children: [
+                    if (wide)
+                      _FruityTopNavigation(
+                        destination: _destination,
+                        userName: widget.session.userName,
+                        onSelected: (value) =>
+                            setState(() => _destination = value),
+                      ),
+                    Expanded(child: content),
+                  ],
+                ),
         ),
       ),
       bottomNavigationBar: wide
@@ -321,19 +319,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     return ListView(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-settings'),
-      padding: const EdgeInsets.fromLTRB(40, 40, 40, 56),
+      padding: const EdgeInsets.fromLTRB(40, 16, 40, 24),
       children: [
-        Text('Settings', style: Theme.of(context).textTheme.displaySmall),
-        const SizedBox(height: 8),
+        Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
         Text(
           'Signed in as ${widget.session.userName}',
-          style: Theme.of(context).textTheme.bodyLarge,
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: 36),
-        Text('Appearance', style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 18),
+        const SizedBox(height: 12),
+        Text('Appearance', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
         Text('Layout', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
         Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -364,9 +361,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 28),
-        Text('Colour palette', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
+        Text('Colour palette', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -385,9 +382,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
           ],
         ),
-        const SizedBox(height: 28),
-        Text('Brightness', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 10),
+        Text('Brightness', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
         Align(
           alignment: Alignment.centerLeft,
           child: SegmentedButton<AppearanceBrightness>(
@@ -411,7 +408,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 12),
         Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -478,11 +475,8 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return AnimatedContainer(
+    return Container(
       key: const ValueKey('blockbuster-rail'),
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : const Duration(milliseconds: 180),
       width: _expanded ? 220 : 78,
       color: colors.surfaceContainerLowest,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
@@ -556,7 +550,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
   }
 }
 
-class _BlockbusterRailItem extends StatelessWidget {
+class _BlockbusterRailItem extends StatefulWidget {
   const _BlockbusterRailItem({
     required this.order,
     required this.icon,
@@ -577,35 +571,92 @@ class _BlockbusterRailItem extends StatelessWidget {
   final VoidCallback onPressed;
 
   @override
+  State<_BlockbusterRailItem> createState() => _BlockbusterRailItemState();
+}
+
+class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return FocusTraversalOrder(
-      order: NumericFocusOrder(order),
-      child: Focus(
-        onFocusChange: (focused) {
-          if (focused) onFocus();
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: expanded
-              ? FilledButton.tonalIcon(
-                  onPressed: onPressed,
-                  icon: Icon(icon),
-                  label: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(label),
-                  ),
-                  style: selected
-                      ? null
-                      : FilledButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                        ),
-                )
-              : IconButton(
-                  tooltip: label,
-                  isSelected: selected,
-                  onPressed: onPressed,
-                  icon: Icon(icon),
+      order: NumericFocusOrder(widget.order),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: FocusableActionDetector(
+          onFocusChange: (focused) {
+            setState(() => _focused = focused);
+            if (focused) widget.onFocus();
+          },
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                widget.onPressed();
+                return null;
+              },
+            ),
+          },
+          child: Semantics(
+            button: true,
+            selected: widget.selected,
+            label: widget.label,
+            child: InkWell(
+              onTap: widget.onPressed,
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 140),
+                height: 52,
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.expanded ? 14 : 4,
                 ),
+                decoration: BoxDecoration(
+                  color: _focused
+                      ? colors.primary
+                      : widget.selected
+                      ? colors.primaryContainer.withValues(alpha: 0.62)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _focused
+                        ? colors.onPrimary
+                        : widget.selected
+                        ? colors.primary
+                        : Colors.transparent,
+                    width: _focused ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: widget.expanded
+                      ? MainAxisAlignment.start
+                      : MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      widget.icon,
+                      size: 24,
+                      color: _focused ? colors.onPrimary : null,
+                    ),
+                    if (widget.expanded) ...[
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          widget.label,
+                          style: TextStyle(
+                            color: _focused ? colors.onPrimary : null,
+                            fontWeight: widget.selected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -687,7 +738,7 @@ class _FruityTopNavigation extends StatelessWidget {
   }
 }
 
-class _TopNavItem extends StatelessWidget {
+class _TopNavItem extends StatefulWidget {
   const _TopNavItem({
     required this.order,
     required this.selected,
@@ -704,14 +755,77 @@ class _TopNavItem extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_TopNavItem> createState() => _TopNavItemState();
+}
+
+class _TopNavItemState extends State<_TopNavItem> {
+  bool _focused = false;
+
+  @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return FocusTraversalOrder(
-      order: NumericFocusOrder(order),
+      order: NumericFocusOrder(widget.order),
       child: Tooltip(
-        message: tooltip,
-        child: selected
-            ? FilledButton.tonal(onPressed: onPressed, child: child)
-            : TextButton(onPressed: onPressed, child: child),
+        message: widget.tooltip,
+        child: FocusableActionDetector(
+          onShowFocusHighlight: (focused) => setState(() => _focused = focused),
+          actions: {
+            ActivateIntent: CallbackAction<ActivateIntent>(
+              onInvoke: (_) {
+                widget.onPressed();
+                return null;
+              },
+            ),
+          },
+          child: Semantics(
+            button: true,
+            selected: widget.selected,
+            label: widget.tooltip,
+            child: InkWell(
+              onTap: widget.onPressed,
+              borderRadius: BorderRadius.circular(999),
+              child: AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 140),
+                constraints: const BoxConstraints(minWidth: 56, minHeight: 50),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _focused
+                      ? colors.primary
+                      : widget.selected
+                      ? colors.primaryContainer.withValues(alpha: 0.72)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: _focused
+                        ? colors.onPrimary
+                        : widget.selected
+                        ? colors.primary
+                        : Colors.transparent,
+                    width: _focused ? 2 : 1,
+                  ),
+                ),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(
+                    color: _focused ? colors.onPrimary : null,
+                    fontWeight: widget.selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
+                  child: IconTheme.merge(
+                    data: IconThemeData(
+                      color: _focused ? colors.onPrimary : null,
+                    ),
+                    child: widget.child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -738,7 +852,7 @@ class _FruityHero extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
     return SizedBox(
-      height: wide ? (blockbuster ? 430 : 390) : 330,
+      height: wide ? 300 : 330,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -772,7 +886,7 @@ class _FruityHero extends StatelessWidget {
           Align(
             alignment: Alignment.bottomLeft,
             child: Padding(
-              padding: EdgeInsets.fromLTRB(wide ? 52 : 24, 24, 24, 40),
+              padding: EdgeInsets.fromLTRB(wide ? 44 : 24, 24, 24, 30),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 620),
                 child: Column(
@@ -795,7 +909,7 @@ class _FruityHero extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: wide
-                          ? theme.textTheme.displayMedium
+                          ? theme.textTheme.displaySmall
                           : theme.textTheme.headlineLarge,
                     ),
                     if (item.overview case final overview?) ...[
@@ -1091,8 +1205,8 @@ class _LayoutSettingTile extends StatelessWidget {
       onTap: onSelected,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        width: 360,
-        padding: const EdgeInsets.all(18),
+        width: 320,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: colors.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(18),
@@ -1103,6 +1217,8 @@ class _LayoutSettingTile extends StatelessWidget {
         ),
         child: ListTile(
           contentPadding: EdgeInsets.zero,
+          dense: true,
+          minVerticalPadding: 0,
           leading: Icon(icon),
           title: Text(title),
           subtitle: Text(subtitle),

@@ -217,6 +217,19 @@ void main() {
     expect(find.byKey(const ValueKey('blockbuster-nav-home')), findsOneWidget);
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
+      78,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
+      220,
+    );
+    expect(find.text('Home'), findsOneWidget);
   });
 
   testWidgets('switches presets in place and keeps Settings selected', (
