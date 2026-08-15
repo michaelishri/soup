@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/data/playback/playback_bridge.dart';
 import 'package:soup/src/features/playback/video_controller.dart';
 
@@ -369,13 +370,18 @@ class _Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     final durationMs = value.duration.inMilliseconds;
     final positionMs = value.position.inMilliseconds.clamp(0, durationMs);
+    final chrome =
+        Theme.of(
+          context,
+        ).extension<AuthenticatedThemeTokens>()?.playbackChrome ??
+        const Color(0xE6000000);
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(24, 18, 28, 36),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xD9000000), Colors.transparent],
+              colors: [chrome, Colors.transparent],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -414,9 +420,9 @@ class _Controls extends StatelessWidget {
         const Spacer(),
         Container(
           padding: const EdgeInsets.fromLTRB(40, 46, 40, 24),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.transparent, Color(0xE6000000)],
+              colors: [Colors.transparent, chrome],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),

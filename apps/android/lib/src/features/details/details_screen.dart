@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
 
 typedef PlayItem = void Function(JellyfinItem item, Duration startAt);
 
@@ -168,6 +169,10 @@ class _Backdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = theme.extension<AuthenticatedThemeTokens>();
+    final start = tokens?.heroScrimStart ?? Colors.transparent;
+    final end = tokens?.heroScrimEnd ?? theme.scaffoldBackgroundColor;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -183,10 +188,10 @@ class _Backdrop extends StatelessWidget {
                   );
           },
         ),
-        const DecoratedBox(
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF08111F), Color(0xD908111F), Color(0xF208111F)],
+              colors: [start, end.withValues(alpha: 0.85), end],
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
             ),

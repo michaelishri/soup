@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:soup/src/app.dart';
+import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/data/appearance/appearance_store.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
@@ -19,7 +21,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     addTearDown(client.dispose);
-    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('compact-layout')), findsOneWidget);
@@ -34,7 +41,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     addTearDown(client.dispose);
-    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
     await tester.pump();
 
     expect(find.byKey(const ValueKey('wide-layout')), findsOneWidget);
@@ -63,7 +75,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     addTearDown(client.dispose);
-    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
@@ -98,7 +115,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     addTearDown(client.dispose);
-    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
@@ -136,7 +158,12 @@ void main() {
 
       final client = FakeTailscaleClient();
       addTearDown(client.dispose);
-      await tester.pumpWidget(SoupApp(tailscaleClient: client));
+      await tester.pumpWidget(
+        SoupApp(
+          tailscaleClient: client,
+          appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+        ),
+      );
       await tester.pump();
       await tester.enterText(
         find.byKey(const ValueKey('auth-key-field')),
@@ -175,7 +202,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     addTearDown(client.dispose);
-    await tester.pumpWidget(SoupApp(tailscaleClient: client));
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
     await tester.pump();
 
     await tester.enterText(
@@ -230,6 +262,7 @@ void main() {
         tailscaleClient: client,
         jellyfinClientFactory: FakeJellyfinClientFactory(httpClient),
         sessionStore: store,
+        appearanceStore: MemoryAppearanceStore(),
       ),
     );
     await tester.pump();
@@ -260,6 +293,11 @@ void main() {
       find.byKey(const ValueKey('password-field')),
     );
     await tester.tap(find.byKey(const ValueKey('sign-in-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Make Soup yours'), findsOneWidget);
+    expect(find.text('Fruity'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('appearance-continue')));
     await tester.pumpAndSettle();
 
     expect(find.text('Your library is empty'), findsOneWidget);
@@ -293,6 +331,7 @@ void main() {
         tailscaleClient: client,
         jellyfinClientFactory: FakeJellyfinClientFactory(httpClient),
         sessionStore: MemorySessionStore(),
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
       ),
     );
     await tester.pump();

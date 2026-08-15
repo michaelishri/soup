@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:soup/src/data/appearance/appearance_store.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/appearance/appearance_controller.dart';
+import 'package:soup/src/features/appearance/appearance_screen.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup/src/features/playback/playback_screen.dart';
@@ -14,12 +18,14 @@ class SoupApp extends StatefulWidget {
     required this.tailscaleClient,
     this.jellyfinClientFactory = const SocksJellyfinClientFactory(),
     this.sessionStore = const SecureSessionStore(),
+    this.appearanceStore,
     super.key,
   });
 
   final TailscaleClient tailscaleClient;
   final JellyfinClientFactory jellyfinClientFactory;
   final SessionStore sessionStore;
+  final AppearanceStore? appearanceStore;
 
   @override
   State<SoupApp> createState() => _SoupAppState();
@@ -27,6 +33,7 @@ class SoupApp extends StatefulWidget {
 
 class _SoupAppState extends State<SoupApp> {
   late final ConnectivityViewModel _viewModel;
+  late final AppearanceController _appearanceController;
 
   @override
   void initState() {
@@ -36,11 +43,15 @@ class _SoupAppState extends State<SoupApp> {
       jellyfinClientFactory: widget.jellyfinClientFactory,
       sessionStore: widget.sessionStore,
     )..initialize();
+    _appearanceController = AppearanceController(
+      widget.appearanceStore ?? SharedPreferencesAppearanceStore(),
+    )..initialize();
   }
 
   @override
   void dispose() {
     _viewModel.dispose();
+    _appearanceController.dispose();
     super.dispose();
   }
 
@@ -49,24 +60,33 @@ class _SoupAppState extends State<SoupApp> {
     return MaterialApp(
       title: 'Soup',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF7DD3FC),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF08111F),
-        useMaterial3: true,
-      ),
+      theme: SoupTheme.onboarding,
       home: ListenableBuilder(
-        listenable: _viewModel,
+        listenable: Listenable.merge([_viewModel, _appearanceController]),
         builder: (context, _) {
+          if (!_appearanceController.initialized) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
           final session = _viewModel.session;
           if (_viewModel.phase == SetupPhase.ready && session != null) {
-            return _AuthenticatedHome(
-              key: ValueKey('${session.serverId}:${session.userId}'),
-              viewModel: _viewModel,
-              session: session,
+            final appearance = _appearanceController.settings;
+            if (appearance == null) {
+              return AppearanceScreen(
+                initialSettings: _appearanceController.effectiveSettings,
+                saving: _appearanceController.saving,
+                error: _appearanceController.error,
+                onContinue: _appearanceController.save,
+              );
+            }
+            return Theme(
+              data: SoupTheme.authenticated(appearance),
+              child: _AuthenticatedHome(
+                key: ValueKey('${session.serverId}:${session.userId}'),
+                viewModel: _viewModel,
+                session: session,
+              ),
             );
           }
           return ConnectivityScreen(viewModel: _viewModel);
