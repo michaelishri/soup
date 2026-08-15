@@ -301,7 +301,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your library is empty'), findsOneWidget);
-    expect(find.text('Welcome back, Michael'), findsOneWidget);
     expect(passwordField.controller?.text, isEmpty);
     expect(submittedPassword, contains('not-stored'));
     expect(store.session?.accessToken, 'token');

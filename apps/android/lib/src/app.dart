@@ -57,41 +57,47 @@ class _SoupAppState extends State<SoupApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Soup',
-      debugShowCheckedModeBanner: false,
-      theme: SoupTheme.onboarding,
-      home: ListenableBuilder(
-        listenable: Listenable.merge([_viewModel, _appearanceController]),
-        builder: (context, _) {
-          if (!_appearanceController.initialized) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          final session = _viewModel.session;
-          if (_viewModel.phase == SetupPhase.ready && session != null) {
-            final appearance = _appearanceController.settings;
-            if (appearance == null) {
-              return AppearanceScreen(
-                initialSettings: _appearanceController.effectiveSettings,
-                saving: _appearanceController.saving,
-                error: _appearanceController.error,
-                onContinue: _appearanceController.save,
-              );
-            }
-            return Theme(
-              data: SoupTheme.authenticated(appearance),
-              child: _AuthenticatedHome(
-                key: ValueKey('${session.serverId}:${session.userId}'),
-                viewModel: _viewModel,
-                session: session,
-              ),
-            );
-          }
-          return ConnectivityScreen(viewModel: _viewModel);
-        },
-      ),
+    return ListenableBuilder(
+      listenable: Listenable.merge([_viewModel, _appearanceController]),
+      builder: (context, _) {
+        final session = _viewModel.session;
+        final authenticated =
+            _viewModel.phase == SetupPhase.ready && session != null;
+        final appearance = _appearanceController.settings;
+        return MaterialApp(
+          title: 'Soup',
+          debugShowCheckedModeBanner: false,
+          theme: authenticated && appearance != null
+              ? SoupTheme.authenticated(appearance)
+              : SoupTheme.onboarding,
+          home: Builder(
+            builder: (context) {
+              if (!_appearanceController.initialized) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              if (authenticated) {
+                if (appearance == null) {
+                  return AppearanceScreen(
+                    initialSettings: _appearanceController.effectiveSettings,
+                    saving: _appearanceController.saving,
+                    error: _appearanceController.error,
+                    onContinue: _appearanceController.save,
+                  );
+                }
+                return _AuthenticatedHome(
+                  key: ValueKey('${session.serverId}:${session.userId}'),
+                  viewModel: _viewModel,
+                  appearanceController: _appearanceController,
+                  session: session,
+                );
+              }
+              return ConnectivityScreen(viewModel: _viewModel);
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -100,11 +106,13 @@ class _AuthenticatedHome extends StatelessWidget {
   const _AuthenticatedHome({
     required this.viewModel,
     required this.session,
+    required this.appearanceController,
     super.key,
   });
 
   final ConnectivityViewModel viewModel;
   final JellyfinSession session;
+  final AppearanceController appearanceController;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +125,8 @@ class _AuthenticatedHome extends StatelessWidget {
             source: api,
             session: session,
             onSignOut: viewModel.signOut,
+            appearance: appearanceController.effectiveSettings,
+            onSaveAppearance: appearanceController.save,
             onOpenItem: (item) {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
