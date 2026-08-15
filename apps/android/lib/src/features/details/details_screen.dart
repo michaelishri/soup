@@ -523,7 +523,6 @@ class _DetailCard extends StatelessWidget {
       child: Semantics(
         label: item.name,
         button: true,
-        excludeSemantics: true,
         child: InkWell(
           key: ValueKey('detail-card-${item.id}'),
           autofocus: autofocus,

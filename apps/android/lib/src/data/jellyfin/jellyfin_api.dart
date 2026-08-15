@@ -140,6 +140,81 @@ class JellyfinHome {
   final List<JellyfinItem> latest;
 }
 
+class JellyfinSubtitleTrack {
+  const JellyfinSubtitleTrack({
+    required this.index,
+    required this.label,
+    required this.codec,
+    required this.isDefault,
+    required this.uri,
+  });
+
+  final int index;
+  final String label;
+  final String codec;
+  final bool isDefault;
+  final Uri uri;
+}
+
+enum JellyfinPlayMethod { directPlay, directStream, transcode }
+
+class JellyfinPlaybackPlan {
+  const JellyfinPlaybackPlan({
+    required this.itemId,
+    required this.mediaSourceId,
+    required this.playSessionId,
+    required this.directUri,
+    required this.directMethod,
+    required this.transcodeUri,
+    required this.subtitles,
+  });
+
+  final String itemId;
+  final String mediaSourceId;
+  final String playSessionId;
+  final Uri? directUri;
+  final JellyfinPlayMethod? directMethod;
+  final Uri? transcodeUri;
+  final List<JellyfinSubtitleTrack> subtitles;
+
+  bool get canFallback => directUri != null && transcodeUri != null;
+}
+
+abstract interface class JellyfinPlaybackSource {
+  Future<JellyfinPlaybackPlan> getPlaybackPlan(
+    JellyfinSession session,
+    JellyfinItem item, {
+    required Duration startAt,
+  });
+
+  Future<String> getSubtitle(
+    JellyfinSession session,
+    JellyfinSubtitleTrack subtitle,
+  );
+
+  Future<void> reportPlaybackStarted(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+  });
+
+  Future<void> reportPlaybackProgress(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+    required bool paused,
+  });
+
+  Future<void> reportPlaybackStopped(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+  });
+}
+
 abstract interface class JellyfinLibrarySource {
   Future<JellyfinHome> getHome(JellyfinSession session);
 
@@ -180,7 +255,11 @@ class JellyfinApiException implements Exception {
   String toString() => message;
 }
 
-class JellyfinApi implements JellyfinLibrarySource, JellyfinDetailsSource {
+class JellyfinApi
+    implements
+        JellyfinLibrarySource,
+        JellyfinDetailsSource,
+        JellyfinPlaybackSource {
   JellyfinApi(
     this._client, {
     required this.deviceId,
@@ -422,6 +501,254 @@ class JellyfinApi implements JellyfinLibrarySource, JellyfinDetailsSource {
     return _itemsFromResponse(value);
   }
 
+  @override
+  Future<JellyfinPlaybackPlan> getPlaybackPlan(
+    JellyfinSession session,
+    JellyfinItem item, {
+    required Duration startAt,
+  }) async {
+    final response = await _client
+        .post(
+          _sessionUri(session, 'Items/${item.id}/PlaybackInfo'),
+          headers: {
+            ..._sessionHeaders(session),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'UserId': session.userId,
+            'StartTimeTicks': _ticks(startAt),
+            'IsPlayback': true,
+            'AutoOpenLiveStream': true,
+            'EnableDirectPlay': true,
+            'EnableDirectStream': true,
+            'EnableTranscoding': true,
+            'AllowVideoStreamCopy': true,
+            'AllowAudioStreamCopy': true,
+            'MaxStreamingBitrate': 80000000,
+            'DeviceProfile': _androidDeviceProfile,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not prepare playback. Jellyfin returned HTTP ${response.statusCode}.',
+      );
+    }
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(response.body);
+    } on FormatException {
+      throw const JellyfinApiException(
+        'Jellyfin returned unreadable playback information.',
+      );
+    }
+    if (decoded is! Map<String, Object?>) {
+      throw const JellyfinApiException(
+        'Jellyfin returned incomplete playback information.',
+      );
+    }
+    final sources = decoded['MediaSources'];
+    if (sources is! List || sources.isEmpty || sources.first is! Map) {
+      throw const JellyfinApiException(
+        'Jellyfin did not provide a playable media source.',
+      );
+    }
+    final source = Map<String, Object?>.from(sources.first as Map);
+    final mediaSourceId = source['Id'] as String? ?? item.id;
+    final playSessionId = decoded['PlaySessionId'] as String? ?? '';
+    final container = source['Container'] as String? ?? 'mp4';
+    final supportsDirectPlay = source['SupportsDirectPlay'] as bool? ?? false;
+    final supportsDirectStream =
+        source['SupportsDirectStream'] as bool? ?? false;
+    final directStreamUrl = source['DirectStreamUrl'] as String?;
+    final transcodingUrl = source['TranscodingUrl'] as String?;
+
+    Uri? directUri;
+    JellyfinPlayMethod? directMethod;
+    if (supportsDirectPlay) {
+      directUri = _sessionUri(
+        session,
+        'Videos/${item.id}/stream.$container',
+        query: {
+          'Static': 'true',
+          'MediaSourceId': mediaSourceId,
+          'PlaySessionId': playSessionId,
+          'DeviceId': deviceId,
+        },
+      );
+      directMethod = JellyfinPlayMethod.directPlay;
+    } else if (supportsDirectStream && directStreamUrl != null) {
+      directUri = _resolvePlaybackUri(session, directStreamUrl);
+      directMethod = JellyfinPlayMethod.directStream;
+    }
+    final transcodeUri = transcodingUrl == null
+        ? null
+        : _resolvePlaybackUri(session, transcodingUrl);
+    if (directUri == null && transcodeUri == null) {
+      throw const JellyfinApiException(
+        'This item has no Android-compatible playback source.',
+      );
+    }
+
+    final streams = source['MediaStreams'];
+    final subtitles = <JellyfinSubtitleTrack>[];
+    if (streams is List) {
+      for (final raw in streams.whereType<Map>()) {
+        final stream = Map<String, Object?>.from(raw);
+        if (stream['Type'] != 'Subtitle') continue;
+        final index = (stream['Index'] as num?)?.toInt();
+        if (index == null) continue;
+        final codec = (stream['Codec'] as String? ?? '').toLowerCase();
+        if (!const {
+          'vtt',
+          'webvtt',
+          'srt',
+          'subrip',
+          'ass',
+          'ssa',
+        }.contains(codec)) {
+          continue;
+        }
+        final deliveryUrl = stream['DeliveryUrl'] as String?;
+        final uri = deliveryUrl == null
+            ? _sessionUri(
+                session,
+                'Videos/${item.id}/$mediaSourceId/Subtitles/$index/Stream.vtt',
+              )
+            : _resolvePlaybackUri(session, deliveryUrl);
+        subtitles.add(
+          JellyfinSubtitleTrack(
+            index: index,
+            label:
+                stream['DisplayTitle'] as String? ??
+                stream['Title'] as String? ??
+                stream['Language'] as String? ??
+                'Subtitle ${index + 1}',
+            codec: codec,
+            isDefault: stream['IsDefault'] as bool? ?? false,
+            uri: uri,
+          ),
+        );
+      }
+    }
+    return JellyfinPlaybackPlan(
+      itemId: item.id,
+      mediaSourceId: mediaSourceId,
+      playSessionId: playSessionId,
+      directUri: directUri,
+      directMethod: directMethod,
+      transcodeUri: transcodeUri,
+      subtitles: subtitles,
+    );
+  }
+
+  @override
+  Future<String> getSubtitle(
+    JellyfinSession session,
+    JellyfinSubtitleTrack subtitle,
+  ) async {
+    final response = await _client
+        .get(subtitle.uri, headers: _sessionHeaders(session))
+        .timeout(const Duration(seconds: 90));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not load subtitles. Jellyfin returned HTTP ${response.statusCode}.',
+      );
+    }
+    return response.body;
+  }
+
+  @override
+  Future<void> reportPlaybackStarted(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+  }) => _reportPlayback(
+    session,
+    'Sessions/Playing',
+    plan,
+    method: method,
+    position: position,
+    paused: false,
+  );
+
+  @override
+  Future<void> reportPlaybackProgress(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+    required bool paused,
+  }) => _reportPlayback(
+    session,
+    'Sessions/Playing/Progress',
+    plan,
+    method: method,
+    position: position,
+    paused: paused,
+  );
+
+  @override
+  Future<void> reportPlaybackStopped(
+    JellyfinSession session,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+  }) => _reportPlayback(
+    session,
+    'Sessions/Playing/Stopped',
+    plan,
+    method: method,
+    position: position,
+    paused: false,
+  );
+
+  Future<void> _reportPlayback(
+    JellyfinSession session,
+    String path,
+    JellyfinPlaybackPlan plan, {
+    required JellyfinPlayMethod method,
+    required Duration position,
+    required bool paused,
+  }) async {
+    final response = await _client
+        .post(
+          _sessionUri(session, path),
+          headers: {
+            ..._sessionHeaders(session),
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'ItemId': plan.itemId,
+            'MediaSourceId': plan.mediaSourceId,
+            'PlaySessionId': plan.playSessionId,
+            'PositionTicks': _ticks(position),
+            'IsPaused': paused,
+            'CanSeek': true,
+            'PlayMethod': switch (method) {
+              JellyfinPlayMethod.directPlay => 'DirectPlay',
+              JellyfinPlayMethod.directStream => 'DirectStream',
+              JellyfinPlayMethod.transcode => 'Transcode',
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not report playback. Jellyfin returned HTTP ${response.statusCode}.',
+      );
+    }
+  }
+
+  http.Client get transport => _client;
+
+  Map<String, String> authenticatedHeaders(JellyfinSession session) =>
+      Map.unmodifiable(_sessionHeaders(session));
+
+  Uri resolvePlaybackUri(JellyfinSession session, String value) =>
+      _resolvePlaybackUri(session, value);
+
   Future<Object?> _getJson(
     JellyfinSession session,
     String path, {
@@ -460,6 +787,13 @@ class JellyfinApi implements JellyfinLibrarySource, JellyfinDetailsSource {
     return session.serverUrl.resolve(path).replace(queryParameters: query);
   }
 
+  Uri _resolvePlaybackUri(JellyfinSession session, String value) {
+    final uri = Uri.parse(value);
+    return uri.hasScheme
+        ? uri
+        : session.serverUrl.resolve(value.replaceFirst(RegExp(r'^/'), ''));
+  }
+
   Map<String, String> _sessionHeaders(JellyfinSession session) => {
     'Accept': 'application/json',
     'X-Emby-Token': session.accessToken,
@@ -480,6 +814,50 @@ class JellyfinApi implements JellyfinLibrarySource, JellyfinDetailsSource {
   static const _detailFields =
       'Overview,PrimaryImageAspectRatio,ProductionYear,RunTimeTicks,'
       'OfficialRating,CommunityRating,MediaSources,MediaStreams';
+
+  static int _ticks(Duration value) => value.inMicroseconds * 10;
+
+  static const _androidDeviceProfile = <String, Object?>{
+    'Name': 'Soup Android',
+    'MaxStreamingBitrate': 80000000,
+    'MaxStaticBitrate': 100000000,
+    'MusicStreamingTranscodingBitrate': 384000,
+    'DirectPlayProfiles': [
+      {
+        'Container': 'mp4,m4v',
+        'Type': 'Video',
+        'VideoCodec': 'h264,hevc,vp9,av1',
+        'AudioCodec': 'aac,mp3,ac3,eac3,opus,flac',
+      },
+      {
+        'Container': 'webm',
+        'Type': 'Video',
+        'VideoCodec': 'vp8,vp9,av1',
+        'AudioCodec': 'vorbis,opus',
+      },
+    ],
+    'TranscodingProfiles': [
+      {
+        'Container': 'ts',
+        'Type': 'Video',
+        'VideoCodec': 'h264',
+        'AudioCodec': 'aac',
+        'Protocol': 'hls',
+        'Context': 'Streaming',
+        'EnableSubtitlesInManifest': false,
+        'MaxAudioChannels': '6',
+        'MinSegments': 1,
+        'SegmentLength': 6,
+        'BreakOnNonKeyFrames': true,
+      },
+    ],
+    'SubtitleProfiles': [
+      {'Format': 'vtt', 'Method': 'External'},
+      {'Format': 'srt', 'Method': 'External'},
+      {'Format': 'ass', 'Method': 'External'},
+      {'Format': 'ssa', 'Method': 'External'},
+    ],
+  };
 
   generated.ApiClient _generatedClient(Uri serverUrl) {
     final basePath = serverUrl.toString().replaceFirst(RegExp(r'/$'), '');

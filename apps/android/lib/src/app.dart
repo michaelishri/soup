@@ -6,6 +6,7 @@ import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
+import 'package:soup/src/features/playback/playback_screen.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -105,10 +106,13 @@ class _AuthenticatedHome extends StatelessWidget {
                     session: session,
                     item: item,
                     onPlay: (item, startAt) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            '${startAt > Duration.zero ? 'Resume' : 'Play'} ${item.name}',
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => PlaybackScreen(
+                            api: api,
+                            session: session,
+                            item: item,
+                            startAt: startAt,
                           ),
                         ),
                       );

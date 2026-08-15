@@ -24,4 +24,6 @@ authenticated home screen for libraries, Continue Watching, and Latest Media.
 JSON and artwork are fetched through the embedded Tailscale connection, and the
 TV interface has explicit, ordered D-pad traversal. Library folders open into
 poster grids; movie and episode details expose exact Play/Resume positions, and
-series provide season and episode navigation.
+series provide season and episode navigation. The player negotiates direct play
+or HLS transcoding, routes media through the embedded Tailscale connection,
+reports playback progress, and supports selectable subtitles.

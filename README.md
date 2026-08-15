@@ -16,9 +16,13 @@ layouts. After sign-in, Soup restores the secure session and loads My Media,
 Continue Watching, and Latest Media, including artwork, through the same
 app-local Tailscale proxy. Libraries open into browsable grids, and item details
 show artwork, metadata, overview, Play/Resume, plus season and episode navigation
-for series. TV setup provides explicit clipboard actions for the auth key and
-server address, while connection and sign-in errors remain pinned above the
-scrollable form so they stay readable at constrained heights.
+for series. Playback negotiates direct play with Jellyfin and falls back to HLS
+transcoding when required, with resume seeking, transport controls, progress
+reporting, and selectable WebVTT subtitles. Media remains on the embedded
+Tailscale path through an authenticated loopback playback bridge. TV setup
+provides explicit clipboard actions for the auth key and server address, while
+connection and sign-in errors remain pinned above the scrollable form so they
+stay readable at constrained heights.
 
 Secrets are handled deliberately:
 

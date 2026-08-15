@@ -220,4 +220,107 @@ void main() {
       '/Shows/series/Episodes',
     ]);
   });
+
+  test('resolves direct play, transcode fallback, and text subtitles', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        '{"PlaySessionId":"play-session","MediaSources":[{"Id":"source","Container":"mp4","SupportsDirectPlay":true,"SupportsDirectStream":true,"TranscodingUrl":"/Videos/movie/master.m3u8?token=value","MediaStreams":[{"Index":2,"Type":"Subtitle","Codec":"subrip","DisplayTitle":"English","IsDefault":true}]}]}',
+        200,
+      );
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin:8096/jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'token',
+    );
+    const movie = JellyfinItem(id: 'movie', name: 'Movie', type: 'Movie');
+
+    final plan = await api.getPlaybackPlan(
+      session,
+      movie,
+      startAt: const Duration(seconds: 12),
+    );
+
+    expect(captured.url.path, '/jellyfin/Items/movie/PlaybackInfo');
+    final body = jsonDecode(captured.body) as Map<String, dynamic>;
+    expect(body['StartTimeTicks'], 120000000);
+    expect(body['DeviceProfile']['DirectPlayProfiles'], isNotEmpty);
+    expect(body['DeviceProfile']['TranscodingProfiles'], isNotEmpty);
+    expect(plan.directMethod, JellyfinPlayMethod.directPlay);
+    expect(plan.directUri?.path, '/jellyfin/Videos/movie/stream.mp4');
+    expect(plan.transcodeUri?.path, '/jellyfin/Videos/movie/master.m3u8');
+    expect(plan.subtitles.single.label, 'English');
+    expect(
+      plan.subtitles.single.uri.path,
+      '/jellyfin/Videos/movie/source/Subtitles/2/Stream.vtt',
+    );
+  });
+
+  test('uses a transcode-only source and reports playback progress', () async {
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      if (request.url.path.endsWith('/PlaybackInfo')) {
+        return http.Response(
+          '{"PlaySessionId":"play","MediaSources":[{"Id":"source","Container":"mkv","SupportsDirectPlay":false,"SupportsDirectStream":false,"TranscodingUrl":"/Videos/movie/master.m3u8"}]}',
+          200,
+        );
+      }
+      return http.Response('', 204);
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'token',
+    );
+    const movie = JellyfinItem(id: 'movie', name: 'Movie', type: 'Movie');
+
+    final plan = await api.getPlaybackPlan(
+      session,
+      movie,
+      startAt: Duration.zero,
+    );
+    await api.reportPlaybackStarted(
+      session,
+      plan,
+      method: JellyfinPlayMethod.transcode,
+      position: Duration.zero,
+    );
+    await api.reportPlaybackProgress(
+      session,
+      plan,
+      method: JellyfinPlayMethod.transcode,
+      position: const Duration(seconds: 42),
+      paused: true,
+    );
+    await api.reportPlaybackStopped(
+      session,
+      plan,
+      method: JellyfinPlayMethod.transcode,
+      position: const Duration(seconds: 43),
+    );
+
+    expect(plan.directUri, isNull);
+    expect(plan.transcodeUri, isNotNull);
+    expect(requests.map((request) => request.url.path), [
+      '/Items/movie/PlaybackInfo',
+      '/Sessions/Playing',
+      '/Sessions/Playing/Progress',
+      '/Sessions/Playing/Stopped',
+    ]);
+    final progress = jsonDecode(requests[2].body) as Map<String, dynamic>;
+    expect(progress['PositionTicks'], 420000000);
+    expect(progress['IsPaused'], isTrue);
+    expect(progress['PlayMethod'], 'Transcode');
+  });
 }
