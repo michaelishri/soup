@@ -6,9 +6,9 @@ vars:
   AVDMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/avdmanager'
   EMULATOR: '{{.ANDROID_SDK}}/emulator/emulator'
   SDKMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/sdkmanager'
-  TV_AVD: '{{.TV_AVD | default "Soup_Google_TV_API_34"}}'
+  TV_AVD: '{{.TV_AVD | default "Soup_Android_TV_API_34"}}'
   TV_DEVICE: '{{.TV_DEVICE | default "tv_1080p"}}'
-  TV_IMAGE: '{{.TV_IMAGE | default "system-images;android-34;google-tv;arm64-v8a"}}'
+  TV_IMAGE: '{{.TV_IMAGE | default "system-images;android-34;android-tv;arm64-v8a"}}'
   EMULATOR_SERIAL: '{{.EMULATOR_SERIAL | default "emulator-5554"}}'
 
 tasks:
@@ -218,39 +218,50 @@ tasks:
       - '"{{.EMULATOR}}" -list-avds'
 
   emulator:tv:images:
-    desc: List Google TV system images available from the Android SDK
+    desc: List Android TV and Google TV system images available from the SDK
     cmds:
-      - '"{{.SDKMANAGER}}" --list | grep "google-tv"'
+      - '"{{.SDKMANAGER}}" --list | grep -E "android-tv|google-tv"'
 
   emulator:tv:install-image:
-    desc: Download the Google TV image selected by TV_IMAGE
+    desc: Download the TV system image selected by TV_IMAGE
     status:
       - 'test -f "{{.ANDROID_SDK}}/{{.TV_IMAGE | replace ";" "/"}}/system.img"'
     cmds:
       - 'yes | "{{.SDKMANAGER}}" "{{.TV_IMAGE}}"'
 
   emulator:tv:create:
-    desc: Create the Google TV AVD selected by TV_AVD
+    desc: Create the Android TV AVD selected by TV_AVD
     deps: [emulator:tv:install-image]
     status:
       - 'test -f "{{.HOME}}/.android/avd/{{.TV_AVD}}.avd/config.ini"'
     cmds:
       - 'printf "no\n" | "{{.AVDMANAGER}}" create avd --name "{{.TV_AVD}}" --package "{{.TV_IMAGE}}" --device "{{.TV_DEVICE}}"'
 
-  emulator:tv:start:
-    desc: Boot the Google TV AVD with a window; runs until the emulator exits
+  emulator:tv:configure:
+    desc: Enable host keyboard input for the Android TV AVD
     deps: [emulator:tv:create]
+    status:
+      - 'grep -Eq "^hw.keyboard *= *yes$" "{{.HOME}}/.android/avd/{{.TV_AVD}}.avd/config.ini"'
+    cmds:
+      - >-
+        perl -0pi -e
+        'if (!s/^hw\.keyboard\s*=.*/hw.keyboard = yes/m) { $_ .= "\nhw.keyboard = yes\n" }'
+        "{{.HOME}}/.android/avd/{{.TV_AVD}}.avd/config.ini"
+
+  emulator:tv:start:
+    desc: Boot the keyboard-enabled Android TV AVD; runs until it exits
+    deps: [emulator:tv:configure]
     cmds:
       - '"{{.EMULATOR}}" -avd "{{.TV_AVD}}" {{.CLI_ARGS}}'
 
   emulator:tv:start:headless:
-    desc: Boot the Google TV AVD without a window; runs until the emulator exits
-    deps: [emulator:tv:create]
+    desc: Boot Android TV headlessly with keyboard input enabled
+    deps: [emulator:tv:configure]
     cmds:
       - '"{{.EMULATOR}}" -avd "{{.TV_AVD}}" -no-window -no-audio -gpu swiftshader_indirect {{.CLI_ARGS}}'
 
   emulator:tv:wait:
-    desc: Wait until the selected Google TV emulator finishes booting
+    desc: Wait until the selected Android TV emulator finishes booting
     cmds:
       - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" wait-for-device'
       - >-
@@ -260,7 +271,7 @@ tasks:
       - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" shell getprop ro.product.model'
 
   emulator:tv:stop:
-    desc: Stop the Google TV emulator selected by EMULATOR_SERIAL
+    desc: Stop the Android TV emulator selected by EMULATOR_SERIAL
     cmds:
       - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" emu kill'
 

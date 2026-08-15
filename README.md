@@ -44,10 +44,12 @@ task run         # Run on the selected Flutter device.
 ```
 
 Use `task devices` to find a device ID, then pass it as a Task variable when
-needed, for example `task run DEVICE=emulator-5554`. Google TV image setup,
-boot, wait, and shutdown commands are grouped under `emulator:tv:*`; the
-defaults create the API 34 ARM64 `Soup_Google_TV_API_34` AVD. Run
-`task --list` for descriptions of package-specific QA, release builds, API
+needed, for example `task run DEVICE=emulator-5554`. Android TV image setup,
+keyboard configuration, boot, wait, and shutdown commands are grouped under
+`emulator:tv:*`; the defaults create the API 34 ARM64
+`Soup_Android_TV_API_34` AVD. This development image boots without Google TV
+account onboarding, and the Taskfile explicitly enables host keyboard input.
+Run `task --list` for descriptions of package-specific QA, release builds, API
 generation, coverage, logging, and cleanup commands.
 
 The equivalent commands without Task are:
