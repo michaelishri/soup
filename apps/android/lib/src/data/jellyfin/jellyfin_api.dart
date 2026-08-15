@@ -151,6 +151,26 @@ abstract interface class JellyfinLibrarySource {
   });
 }
 
+abstract interface class JellyfinDetailsSource {
+  Future<JellyfinItem> getItem(JellyfinSession session, String itemId);
+
+  Future<List<JellyfinItem>> getLibraryItems(
+    JellyfinSession session,
+    String libraryId,
+  );
+
+  Future<List<JellyfinItem>> getSeasons(
+    JellyfinSession session,
+    String seriesId,
+  );
+
+  Future<List<JellyfinItem>> getEpisodes(
+    JellyfinSession session,
+    String seriesId, {
+    required String seasonId,
+  });
+}
+
 class JellyfinApiException implements Exception {
   const JellyfinApiException(this.message);
 
@@ -160,7 +180,7 @@ class JellyfinApiException implements Exception {
   String toString() => message;
 }
 
-class JellyfinApi implements JellyfinLibrarySource {
+class JellyfinApi implements JellyfinLibrarySource, JellyfinDetailsSource {
   JellyfinApi(
     this._client, {
     required this.deviceId,
@@ -328,6 +348,80 @@ class JellyfinApi implements JellyfinLibrarySource {
     return response.bodyBytes;
   }
 
+  @override
+  Future<JellyfinItem> getItem(JellyfinSession session, String itemId) async {
+    final value = await _getJson(
+      session,
+      'Users/${session.userId}/Items/$itemId',
+      query: {'Fields': _detailFields},
+    );
+    if (value is! Map<String, Object?>) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an unreadable item response.',
+      );
+    }
+    return JellyfinItem.fromJson(value);
+  }
+
+  @override
+  Future<List<JellyfinItem>> getLibraryItems(
+    JellyfinSession session,
+    String libraryId,
+  ) async {
+    final value = await _getJson(
+      session,
+      'Users/${session.userId}/Items',
+      query: {
+        'ParentId': libraryId,
+        'Recursive': 'true',
+        'IncludeItemTypes': 'Movie,Series',
+        'SortBy': 'SortName',
+        'SortOrder': 'Ascending',
+        'Fields': _detailFields,
+        'EnableImages': 'true',
+        'EnableImageTypes': 'Primary,Backdrop,Thumb',
+        'ImageTypeLimit': '1',
+      },
+    );
+    return _itemsFromResponse(value);
+  }
+
+  @override
+  Future<List<JellyfinItem>> getSeasons(
+    JellyfinSession session,
+    String seriesId,
+  ) async {
+    final value = await _getJson(
+      session,
+      'Shows/$seriesId/Seasons',
+      query: {
+        'UserId': session.userId,
+        'Fields': _detailFields,
+        'EnableImages': 'true',
+      },
+    );
+    return _itemsFromResponse(value);
+  }
+
+  @override
+  Future<List<JellyfinItem>> getEpisodes(
+    JellyfinSession session,
+    String seriesId, {
+    required String seasonId,
+  }) async {
+    final value = await _getJson(
+      session,
+      'Shows/$seriesId/Episodes',
+      query: {
+        'UserId': session.userId,
+        'SeasonId': seasonId,
+        'Fields': _detailFields,
+        'EnableImages': 'true',
+      },
+    );
+    return _itemsFromResponse(value);
+  }
+
   Future<Object?> _getJson(
     JellyfinSession session,
     String path, {
@@ -382,6 +476,10 @@ class JellyfinApi implements JellyfinLibrarySource {
         .where((item) => item.id.isNotEmpty)
         .toList(growable: false);
   }
+
+  static const _detailFields =
+      'Overview,PrimaryImageAspectRatio,ProductionYear,RunTimeTicks,'
+      'OfficialRating,CommunityRating,MediaSources,MediaStreams';
 
   generated.ApiClient _generatedClient(Uri serverUrl) {
     final basePath = serverUrl.toString().replaceFirst(RegExp(r'/$'), '');

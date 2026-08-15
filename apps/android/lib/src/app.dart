@@ -4,6 +4,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -95,6 +96,27 @@ class _AuthenticatedHome extends StatelessWidget {
             source: api,
             session: session,
             onSignOut: viewModel.signOut,
+            onOpenItem: (item) {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => DetailsScreen(
+                    source: api,
+                    artworkSource: api,
+                    session: session,
+                    item: item,
+                    onPlay: (item, startAt) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '${startAt > Duration.zero ? 'Resume' : 'Play'} ${item.name}',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            },
           );
         }
         if (snapshot.hasError) {

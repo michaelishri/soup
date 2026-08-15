@@ -22,4 +22,6 @@ supports touch input and Android TV D-pad focus traversal.
 The current prototype includes the complete connection and sign-in flow plus an
 authenticated home screen for libraries, Continue Watching, and Latest Media.
 JSON and artwork are fetched through the embedded Tailscale connection, and the
-TV interface has explicit, ordered D-pad traversal.
+TV interface has explicit, ordered D-pad traversal. Library folders open into
+poster grids; movie and episode details expose exact Play/Resume positions, and
+series provide season and episode navigation.

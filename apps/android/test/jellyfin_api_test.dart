@@ -162,4 +162,62 @@ void main() {
     expect(captured.url.queryParameters['maxWidth'], '320');
     expect(captured.headers['x-emby-token'], 'token');
   });
+
+  test('loads details, library contents, seasons, and episodes', () async {
+    final paths = <String>[];
+    final client = MockClient((request) async {
+      paths.add(request.url.path);
+      if (request.url.path == '/Users/user/Items/movie') {
+        return http.Response(
+          '{"Id":"movie","Name":"Movie","Type":"Movie","Overview":"Plot"}',
+          200,
+        );
+      }
+      if (request.url.path == '/Users/user/Items') {
+        return http.Response(
+          '{"Items":[{"Id":"series","Name":"Show","Type":"Series"}]}',
+          200,
+        );
+      }
+      if (request.url.path.endsWith('/Seasons')) {
+        return http.Response(
+          '{"Items":[{"Id":"season","Name":"Season 1","Type":"Season"}]}',
+          200,
+        );
+      }
+      return http.Response(
+        '{"Items":[{"Id":"episode","Name":"Pilot","Type":"Episode","IndexNumber":1}]}',
+        200,
+      );
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'token',
+    );
+
+    final movie = await api.getItem(session, 'movie');
+    final contents = await api.getLibraryItems(session, 'library');
+    final seasons = await api.getSeasons(session, 'series');
+    final episodes = await api.getEpisodes(
+      session,
+      'series',
+      seasonId: 'season',
+    );
+
+    expect(movie.overview, 'Plot');
+    expect(contents.single.type, 'Series');
+    expect(seasons.single.id, 'season');
+    expect(episodes.single.indexNumber, 1);
+    expect(paths, [
+      '/Users/user/Items/movie',
+      '/Users/user/Items',
+      '/Shows/series/Seasons',
+      '/Shows/series/Episodes',
+    ]);
+  });
 }
