@@ -240,6 +240,13 @@ void main() {
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
 
+    final moreInfoSurface = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('blockbuster-hero-more-info-surface')),
+    );
+    final moreInfoDecoration = moreInfoSurface.decoration! as BoxDecoration;
+    expect(moreInfoDecoration.color, const Color(0xB36D6D6E));
+    expect(moreInfoDecoration.border, isNull);
+
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
       64,

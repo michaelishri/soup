@@ -1235,22 +1235,15 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
         child: GestureDetector(
           onTap: widget.onPressed,
           child: AnimatedContainer(
+            key: const ValueKey('blockbuster-hero-more-info-surface'),
             duration: reduceMotion
                 ? Duration.zero
                 : const Duration(milliseconds: 120),
             height: 42,
             padding: const EdgeInsets.symmetric(horizontal: 15),
             decoration: BoxDecoration(
-              color: _focused
-                  ? Colors.white
-                  : Colors.black.withValues(alpha: 0.58),
+              color: _focused ? Colors.white : const Color(0xB36D6D6E),
               borderRadius: BorderRadius.circular(3),
-              border: Border.all(
-                color: _focused
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.42),
-                width: _focused ? 2 : 1,
-              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
