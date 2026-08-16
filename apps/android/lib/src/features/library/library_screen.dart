@@ -1300,25 +1300,6 @@ class _LibrarySection extends StatelessWidget {
   final int sectionOrder;
   final bool landscape;
 
-  void _restoreLeadingInset(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.mounted) return;
-      final position = Scrollable.maybeOf(context)?.position;
-      if (position == null ||
-          !position.hasPixels ||
-          position.pixels <= position.minScrollExtent) {
-        return;
-      }
-      position.animateTo(
-        position.minScrollExtent,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width < 600;
@@ -1356,19 +1337,10 @@ class _LibrarySection extends StatelessWidget {
             const SizedBox(height: 12),
             SizedBox(
               height: artHeight + 64,
-              child: ListView.separated(
+              child: _BlockbusterHorizontalCardRow(
                 key: ValueKey('library-row-${title.toLowerCase()}'),
-                padding: EdgeInsets.fromLTRB(
-                  blockbuster && !phone
-                      ? _blockbusterContentInset
-                      : (phone ? 20 : 40),
-                  6,
-                  phone ? 20 : 40,
-                  6,
-                ),
-                scrollDirection: Axis.horizontal,
+                restoreLeadingInset: blockbuster && !phone,
                 itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 18),
                 itemBuilder: (context, index) {
                   final item = items[index];
                   return FocusTraversalOrder(
@@ -1383,9 +1355,6 @@ class _LibrarySection extends StatelessWidget {
                       artHeight: artHeight,
                       image: image(item, maxWidth: landscape ? 720 : 480),
                       autofocus: autofocusFirst && index == 0,
-                      onFocused: index == 0 && blockbuster && !phone
-                          ? () => _restoreLeadingInset(context)
-                          : null,
                       onPressed: () => onOpen(item),
                     ),
                   );
@@ -1399,6 +1368,66 @@ class _LibrarySection extends StatelessWidget {
   }
 }
 
+class _BlockbusterHorizontalCardRow extends StatelessWidget {
+  const _BlockbusterHorizontalCardRow({
+    required this.restoreLeadingInset,
+    required this.itemCount,
+    required this.itemBuilder,
+    super.key,
+  });
+
+  final bool restoreLeadingInset;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  void _restoreLeadingInset(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      final position = Scrollable.maybeOf(context)?.position;
+      if (position == null ||
+          !position.hasPixels ||
+          position.pixels <= position.minScrollExtent) {
+        return;
+      }
+      position.animateTo(
+        position.minScrollExtent,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = MediaQuery.sizeOf(context).width < 600;
+    return ListView.separated(
+      padding: EdgeInsets.fromLTRB(
+        restoreLeadingInset ? _blockbusterContentInset : (phone ? 20 : 40),
+        6,
+        phone ? 20 : 40,
+        6,
+      ),
+      scrollDirection: Axis.horizontal,
+      itemCount: itemCount,
+      separatorBuilder: (_, _) => const SizedBox(width: 18),
+      itemBuilder: (context, index) {
+        final child = itemBuilder(context, index);
+        if (index != 0 || !restoreLeadingInset) return child;
+        return Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onFocusChange: (focused) {
+            if (focused) _restoreLeadingInset(context);
+          },
+          child: child,
+        );
+      },
+    );
+  }
+}
+
 class _MediaCard extends StatefulWidget {
   const _MediaCard({
     required this.blockbuster,
@@ -1408,7 +1437,6 @@ class _MediaCard extends StatefulWidget {
     required this.image,
     required this.autofocus,
     required this.onPressed,
-    this.onFocused,
     super.key,
   });
 
@@ -1419,7 +1447,6 @@ class _MediaCard extends StatefulWidget {
   final Future<Uint8List?> image;
   final bool autofocus;
   final VoidCallback onPressed;
-  final VoidCallback? onFocused;
 
   @override
   State<_MediaCard> createState() => _MediaCardState();
@@ -1438,10 +1465,7 @@ class _MediaCardState extends State<_MediaCard> {
       width: widget.width,
       child: FocusableActionDetector(
         autofocus: widget.autofocus,
-        onShowFocusHighlight: (focused) {
-          setState(() => _focused = focused);
-          if (focused) widget.onFocused?.call();
-        },
+        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {
