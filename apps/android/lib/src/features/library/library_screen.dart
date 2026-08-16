@@ -1300,6 +1300,25 @@ class _LibrarySection extends StatelessWidget {
   final int sectionOrder;
   final bool landscape;
 
+  void _restoreLeadingInset(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      final position = Scrollable.maybeOf(context)?.position;
+      if (position == null ||
+          !position.hasPixels ||
+          position.pixels <= position.minScrollExtent) {
+        return;
+      }
+      position.animateTo(
+        position.minScrollExtent,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width < 600;
@@ -1364,6 +1383,9 @@ class _LibrarySection extends StatelessWidget {
                       artHeight: artHeight,
                       image: image(item, maxWidth: landscape ? 720 : 480),
                       autofocus: autofocusFirst && index == 0,
+                      onFocused: index == 0 && blockbuster && !phone
+                          ? () => _restoreLeadingInset(context)
+                          : null,
                       onPressed: () => onOpen(item),
                     ),
                   );
@@ -1386,6 +1408,7 @@ class _MediaCard extends StatefulWidget {
     required this.image,
     required this.autofocus,
     required this.onPressed,
+    this.onFocused,
     super.key,
   });
 
@@ -1396,6 +1419,7 @@ class _MediaCard extends StatefulWidget {
   final Future<Uint8List?> image;
   final bool autofocus;
   final VoidCallback onPressed;
+  final VoidCallback? onFocused;
 
   @override
   State<_MediaCard> createState() => _MediaCardState();
@@ -1414,7 +1438,10 @@ class _MediaCardState extends State<_MediaCard> {
       width: widget.width,
       child: FocusableActionDetector(
         autofocus: widget.autofocus,
-        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
+        onShowFocusHighlight: (focused) {
+          setState(() => _focused = focused);
+          if (focused) widget.onFocused?.call();
+        },
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(
             onInvoke: (_) {

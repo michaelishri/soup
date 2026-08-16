@@ -428,6 +428,66 @@ void main() {
     expect(homeScroll.position.pixels, 0);
   });
 
+  testWidgets(
+    'restores the Blockbuster latest-media rail inset when focus returns to its first card',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final latest = List.generate(
+        10,
+        (index) => JellyfinItem(
+          id: 'latest-$index',
+          name: 'Latest $index',
+          type: 'Movie',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LibraryScreen(
+            source: FakeLibrarySource(
+              JellyfinHome(
+                libraries: const [],
+                resume: const [],
+                latest: latest,
+              ),
+            ),
+            session: session,
+            appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+            onSignOut: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final firstCard = find.byKey(const ValueKey('media-card-latest-0'));
+      expect(tester.getTopLeft(firstCard).dx, 104);
+      final latestRow = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('library-row-latest media')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+
+      for (var index = 0; index < 8; index++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pumpAndSettle();
+      }
+      expect(latestRow.position.pixels, greaterThan(0));
+
+      for (var index = 0; index < 8; index++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+        await tester.pumpAndSettle();
+      }
+
+      expect(latestRow.position.pixels, 0);
+      expect(tester.getTopLeft(firstCard).dx, 104);
+    },
+  );
+
   testWidgets('disables Blockbuster rail focus motion when requested', (
     tester,
   ) async {
