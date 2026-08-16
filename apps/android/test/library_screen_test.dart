@@ -257,6 +257,10 @@ void main() {
       0,
     );
     expect(
+      tester.getSize(find.byKey(const ValueKey('blockbuster-hero'))).height,
+      closeTo(518.4, 0.1),
+    );
+    expect(
       tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,
       360,
     );

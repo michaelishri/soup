@@ -1073,12 +1073,16 @@ class _FruityHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 840;
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= 840;
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
+    final heroHeight = blockbuster && wide
+        ? (size.height * 0.72).clamp(460.0, 760.0).toDouble()
+        : (wide ? 300.0 : 330.0);
     return SizedBox(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
-      height: wide ? 300 : 330,
+      height: heroHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1115,6 +1119,21 @@ class _FruityHero extends StatelessWidget {
               ),
             ),
           ),
+          if (blockbuster)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    theme.scaffoldBackgroundColor.withValues(alpha: 0.12),
+                    theme.scaffoldBackgroundColor.withValues(alpha: 0.9),
+                  ],
+                  stops: const [0.38, 0.7, 1],
+                ),
+              ),
+            ),
           Align(
             alignment: Alignment.bottomLeft,
             child: Padding(
