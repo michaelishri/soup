@@ -579,7 +579,6 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Focus(
       canRequestFocus: false,
@@ -630,10 +629,14 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                             ? MainAxisAlignment.start
                             : MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            PhosphorIconsRegular.cookingPot,
-                            color: colors.primary,
-                            size: 24,
+                          Image.asset(
+                            'assets/branding/soup-sidebar-mark.png',
+                            key: const ValueKey('blockbuster-brand-mark'),
+                            width: 34,
+                            height: 34,
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.high,
+                            semanticLabel: 'Soup',
                           ),
                           if (showLabels) ...[
                             const SizedBox(width: 12),

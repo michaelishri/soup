@@ -216,6 +216,15 @@ void main() {
 
     expect(find.byKey(const ValueKey('blockbuster-rail')), findsOneWidget);
     expect(find.byKey(const ValueKey('blockbuster-nav-home')), findsOneWidget);
+    final brandMark = tester.widget<Image>(
+      find.byKey(const ValueKey('blockbuster-brand-mark')),
+    );
+    expect(
+      (brandMark.image as AssetImage).assetName,
+      'assets/branding/soup-sidebar-mark.png',
+    );
+    expect(brandMark.width, 34);
+    expect(brandMark.height, 34);
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
 
