@@ -237,6 +237,7 @@ void main() {
           .size,
       20,
     );
+    expect(find.text('Search'), findsNothing);
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
 
@@ -273,6 +274,7 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
       300,
     );
+    expect(find.text('Search'), findsOneWidget);
     expect(find.text('Home'), findsOneWidget);
     final homeSurface = tester.widget<AnimatedContainer>(
       find.byKey(const ValueKey('blockbuster-nav-home-surface')),
@@ -302,6 +304,28 @@ void main() {
           .widget<Icon>(find.byKey(const ValueKey('blockbuster-nav-home-icon')))
           .size,
       20,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.text('Search')).style?.fontWeight,
+      FontWeight.w800,
+    );
+    expect(
+      tester
+          .widget<Icon>(
+            find.byKey(const ValueKey('blockbuster-nav-search-icon')),
+          )
+          .icon,
+      PhosphorIconsBold.magnifyingGlass,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(
+      tester.widget<Text>(find.text('Home')).style?.fontWeight,
+      FontWeight.w800,
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);

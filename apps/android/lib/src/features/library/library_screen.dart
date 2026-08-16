@@ -551,6 +551,7 @@ class _BlockbusterRail extends StatefulWidget {
 
 class _BlockbusterRailState extends State<_BlockbusterRail> {
   late final FocusScopeNode _focusScopeNode;
+  late final FocusNode _searchNode;
   late final Map<_FruityDestination, FocusNode> _destinationNodes;
   bool _expanded = false;
   bool _exitAfterCollapse = false;
@@ -560,6 +561,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
     super.initState();
     _focusScopeNode = FocusScopeNode(debugLabel: 'blockbuster-navigation')
       ..addListener(_handleFocusChange);
+    _searchNode = FocusNode(debugLabel: 'blockbuster-search');
     _destinationNodes = {
       for (final destination in _FruityDestination.values)
         destination: FocusNode(debugLabel: 'blockbuster-${destination.name}'),
@@ -571,6 +573,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
     _focusScopeNode
       ..removeListener(_handleFocusChange)
       ..dispose();
+    _searchNode.dispose();
     for (final node in _destinationNodes.values) {
       node.dispose();
     }
@@ -625,32 +628,20 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(
+                      _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-search'),
-                        height: 44,
-                        child: Align(
-                          alignment: showLabels
-                              ? Alignment.centerLeft
-                              : Alignment.center,
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: showLabels ? 12 : 2,
-                            ),
-                            child: Semantics(
-                              label: 'Search',
-                              child: Icon(
-                                PhosphorIconsRegular.magnifyingGlass,
-                                key: ValueKey('blockbuster-nav-search-icon'),
-                                size: 20,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
+                        order: 1,
+                        icon: PhosphorIconsRegular.magnifyingGlass,
+                        focusedIcon: PhosphorIconsBold.magnifyingGlass,
+                        label: 'Search',
+                        focusNode: _searchNode,
+                        expanded: showLabels,
+                        selected: false,
+                        onPressed: () {},
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-home'),
-                        order: 1,
+                        order: 2,
                         icon: PhosphorIconsRegular.house,
                         focusedIcon: PhosphorIconsBold.house,
                         label: 'Home',
@@ -662,7 +653,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-tv'),
-                        order: 2,
+                        order: 3,
                         icon: PhosphorIconsRegular.television,
                         focusedIcon: PhosphorIconsBold.television,
                         label: 'TV',
@@ -674,7 +665,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-movies'),
-                        order: 3,
+                        order: 4,
                         icon: PhosphorIconsRegular.filmSlate,
                         focusedIcon: PhosphorIconsBold.filmSlate,
                         label: 'Movies',
@@ -686,10 +677,9 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                         onPressed: () =>
                             widget.onSelected(_FruityDestination.movies),
                       ),
-                      const Spacer(),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-settings'),
-                        order: 4,
+                        order: 5,
                         icon: PhosphorIconsRegular.gear,
                         focusedIcon: PhosphorIconsBold.gear,
                         label: 'Settings',
