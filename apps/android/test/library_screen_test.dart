@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/library/library_screen.dart';
@@ -250,7 +251,14 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('Home')).style?.fontWeight,
-      FontWeight.w700,
+      FontWeight.w800,
+    );
+    expect(tester.widget<Text>(find.text('Home')).style?.fontSize, 18);
+    expect(
+      tester
+          .widget<Icon>(find.byKey(const ValueKey('blockbuster-nav-home-icon')))
+          .icon,
+      PhosphorIconsBold.house,
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -261,7 +269,12 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('TV')).style?.fontWeight,
-      FontWeight.w700,
+      FontWeight.w800,
+    );
+    expect(tester.widget<Text>(find.text('TV')).style?.fontSize, 18);
+    expect(
+      tester.widget<Text>(find.text('Movies')).style?.color?.a,
+      closeTo(0.6, 0.001),
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);

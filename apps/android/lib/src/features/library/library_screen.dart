@@ -650,6 +650,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       key: const ValueKey('blockbuster-nav-home'),
                       order: 1,
                       icon: PhosphorIconsRegular.house,
+                      focusedIcon: PhosphorIconsBold.house,
                       label: 'Home',
                       focusNode: _destinationNodes[_FruityDestination.home]!,
                       expanded: showLabels,
@@ -661,6 +662,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       key: const ValueKey('blockbuster-nav-tv'),
                       order: 2,
                       icon: PhosphorIconsRegular.television,
+                      focusedIcon: PhosphorIconsBold.television,
                       label: 'TV',
                       focusNode: _destinationNodes[_FruityDestination.tv]!,
                       expanded: showLabels,
@@ -671,6 +673,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       key: const ValueKey('blockbuster-nav-movies'),
                       order: 3,
                       icon: PhosphorIconsRegular.filmSlate,
+                      focusedIcon: PhosphorIconsBold.filmSlate,
                       label: 'Movies',
                       focusNode: _destinationNodes[_FruityDestination.movies]!,
                       expanded: showLabels,
@@ -683,6 +686,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       key: const ValueKey('blockbuster-nav-settings'),
                       order: 4,
                       icon: PhosphorIconsRegular.gear,
+                      focusedIcon: PhosphorIconsBold.gear,
                       label: 'Settings',
                       focusNode:
                           _destinationNodes[_FruityDestination.settings]!,
@@ -735,6 +739,7 @@ class _BlockbusterRailItem extends StatefulWidget {
   const _BlockbusterRailItem({
     required this.order,
     required this.icon,
+    required this.focusedIcon,
     required this.label,
     required this.focusNode,
     required this.expanded,
@@ -745,6 +750,7 @@ class _BlockbusterRailItem extends StatefulWidget {
 
   final double order;
   final IconData icon;
+  final IconData focusedIcon;
   final String label;
   final FocusNode focusNode;
   final bool expanded;
@@ -761,6 +767,10 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final inactiveOpacity = widget.selected ? 0.82 : 0.6;
+    final foreground = _focused
+        ? Colors.white
+        : Colors.white.withValues(alpha: inactiveOpacity);
     return FocusTraversalOrder(
       order: NumericFocusOrder(widget.order),
       child: Padding(
@@ -807,16 +817,24 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
                       color: colors.primary,
                     ),
                     SizedBox(width: widget.expanded ? 12 : 4),
-                    Icon(widget.icon, size: 24, color: Colors.white),
+                    Icon(
+                      _focused ? widget.focusedIcon : widget.icon,
+                      key: ValueKey(
+                        'blockbuster-nav-${widget.label.toLowerCase()}-icon',
+                      ),
+                      size: _focused ? 27 : 24,
+                      color: foreground,
+                    ),
                     if (widget.expanded) ...[
                       const SizedBox(width: 14),
                       Expanded(
                         child: Text(
                           widget.label,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: foreground,
+                            fontSize: _focused ? 18 : 16,
                             fontWeight: _focused
-                                ? FontWeight.w700
+                                ? FontWeight.w800
                                 : FontWeight.w500,
                           ),
                         ),
