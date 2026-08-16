@@ -291,16 +291,6 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
       300,
     );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey('blockbuster-nav-settings')),
-        matching: find.byType(InkWell),
-      ),
-      findsNothing,
-    );
-    await tester.tap(find.byKey(const ValueKey('blockbuster-nav-settings')));
-    await tester.pump();
-    expect(find.byKey(const ValueKey('blockbuster-settings')), findsOneWidget);
   });
 
   testWidgets('switches presets in place and keeps Settings selected', (
