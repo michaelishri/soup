@@ -790,9 +790,9 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
             button: true,
             selected: widget.selected,
             label: widget.label,
-            child: InkWell(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: widget.onPressed,
-              borderRadius: BorderRadius.circular(2),
               child: AnimatedContainer(
                 key: ValueKey(
                   'blockbuster-nav-${widget.label.toLowerCase()}-surface',
