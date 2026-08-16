@@ -216,15 +216,27 @@ void main() {
 
     expect(find.byKey(const ValueKey('blockbuster-rail')), findsOneWidget);
     expect(find.byKey(const ValueKey('blockbuster-nav-home')), findsOneWidget);
-    final brandMark = tester.widget<Image>(
-      find.byKey(const ValueKey('blockbuster-brand-mark')),
+    expect(find.byKey(const ValueKey('blockbuster-brand-mark')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('blockbuster-nav-search-icon')),
+      findsOneWidget,
     );
     expect(
-      (brandMark.image as AssetImage).assetName,
-      'assets/branding/soup-sidebar-mark.png',
+      tester
+          .widget<Icon>(
+            find.byKey(const ValueKey('blockbuster-nav-search-icon')),
+          )
+          .icon,
+      PhosphorIconsRegular.magnifyingGlass,
     );
-    expect(brandMark.width, 34);
-    expect(brandMark.height, 34);
+    expect(
+      tester
+          .widget<Icon>(
+            find.byKey(const ValueKey('blockbuster-nav-search-icon')),
+          )
+          .size,
+      20,
+    );
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
 
@@ -235,6 +247,10 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('blockbuster-hero'))).dx,
       0,
+    );
+    expect(
+      tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,
+      360,
     );
     final collapsedRail = tester.widget<AnimatedContainer>(
       find.byKey(const ValueKey('blockbuster-rail')),
@@ -273,6 +289,12 @@ void main() {
           .widget<Icon>(find.byKey(const ValueKey('blockbuster-nav-home-icon')))
           .icon,
       PhosphorIconsBold.house,
+    );
+    expect(
+      tester
+          .widget<Icon>(find.byKey(const ValueKey('blockbuster-nav-home-icon')))
+          .size,
+      20,
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);

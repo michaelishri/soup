@@ -619,87 +619,90 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
               final showLabels = constraints.maxWidth > 180;
               return Padding(
                 padding: EdgeInsets.fromLTRB(8, 14, showLabels ? 72 : 8, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        mainAxisAlignment: showLabels
-                            ? MainAxisAlignment.start
-                            : MainAxisAlignment.center,
-                        children: [
-                          Image.asset(
-                            'assets/branding/soup-sidebar-mark.png',
-                            key: const ValueKey('blockbuster-brand-mark'),
-                            width: 34,
-                            height: 34,
-                            fit: BoxFit.contain,
-                            filterQuality: FilterQuality.high,
-                            semanticLabel: 'Soup',
-                          ),
-                          if (showLabels) ...[
-                            const SizedBox(width: 12),
-                            Text(
-                              'Soup',
-                              style: Theme.of(context).textTheme.titleLarge,
+                child: Center(
+                  child: Column(
+                    key: const ValueKey('blockbuster-nav-items'),
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        key: const ValueKey('blockbuster-nav-search'),
+                        height: 44,
+                        child: Align(
+                          alignment: showLabels
+                              ? Alignment.centerLeft
+                              : Alignment.center,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: showLabels ? 12 : 2,
                             ),
-                          ],
-                        ],
+                            child: Semantics(
+                              label: 'Search',
+                              child: Icon(
+                                PhosphorIconsRegular.magnifyingGlass,
+                                key: ValueKey('blockbuster-nav-search-icon'),
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 28),
-                    _BlockbusterRailItem(
-                      key: const ValueKey('blockbuster-nav-home'),
-                      order: 1,
-                      icon: PhosphorIconsRegular.house,
-                      focusedIcon: PhosphorIconsBold.house,
-                      label: 'Home',
-                      focusNode: _destinationNodes[_FruityDestination.home]!,
-                      expanded: showLabels,
-                      selected: widget.destination == _FruityDestination.home,
-                      onPressed: () =>
-                          widget.onSelected(_FruityDestination.home),
-                    ),
-                    _BlockbusterRailItem(
-                      key: const ValueKey('blockbuster-nav-tv'),
-                      order: 2,
-                      icon: PhosphorIconsRegular.television,
-                      focusedIcon: PhosphorIconsBold.television,
-                      label: 'TV',
-                      focusNode: _destinationNodes[_FruityDestination.tv]!,
-                      expanded: showLabels,
-                      selected: widget.destination == _FruityDestination.tv,
-                      onPressed: () => widget.onSelected(_FruityDestination.tv),
-                    ),
-                    _BlockbusterRailItem(
-                      key: const ValueKey('blockbuster-nav-movies'),
-                      order: 3,
-                      icon: PhosphorIconsRegular.filmSlate,
-                      focusedIcon: PhosphorIconsBold.filmSlate,
-                      label: 'Movies',
-                      focusNode: _destinationNodes[_FruityDestination.movies]!,
-                      expanded: showLabels,
-                      selected: widget.destination == _FruityDestination.movies,
-                      onPressed: () =>
-                          widget.onSelected(_FruityDestination.movies),
-                    ),
-                    const Spacer(),
-                    _BlockbusterRailItem(
-                      key: const ValueKey('blockbuster-nav-settings'),
-                      order: 4,
-                      icon: PhosphorIconsRegular.gear,
-                      focusedIcon: PhosphorIconsBold.gear,
-                      label: 'Settings',
-                      focusNode:
-                          _destinationNodes[_FruityDestination.settings]!,
-                      expanded: showLabels,
-                      selected:
-                          widget.destination == _FruityDestination.settings,
-                      onPressed: () =>
-                          widget.onSelected(_FruityDestination.settings),
-                    ),
-                  ],
+                      _BlockbusterRailItem(
+                        key: const ValueKey('blockbuster-nav-home'),
+                        order: 1,
+                        icon: PhosphorIconsRegular.house,
+                        focusedIcon: PhosphorIconsBold.house,
+                        label: 'Home',
+                        focusNode: _destinationNodes[_FruityDestination.home]!,
+                        expanded: showLabels,
+                        selected: widget.destination == _FruityDestination.home,
+                        onPressed: () =>
+                            widget.onSelected(_FruityDestination.home),
+                      ),
+                      _BlockbusterRailItem(
+                        key: const ValueKey('blockbuster-nav-tv'),
+                        order: 2,
+                        icon: PhosphorIconsRegular.television,
+                        focusedIcon: PhosphorIconsBold.television,
+                        label: 'TV',
+                        focusNode: _destinationNodes[_FruityDestination.tv]!,
+                        expanded: showLabels,
+                        selected: widget.destination == _FruityDestination.tv,
+                        onPressed: () =>
+                            widget.onSelected(_FruityDestination.tv),
+                      ),
+                      _BlockbusterRailItem(
+                        key: const ValueKey('blockbuster-nav-movies'),
+                        order: 3,
+                        icon: PhosphorIconsRegular.filmSlate,
+                        focusedIcon: PhosphorIconsBold.filmSlate,
+                        label: 'Movies',
+                        focusNode:
+                            _destinationNodes[_FruityDestination.movies]!,
+                        expanded: showLabels,
+                        selected:
+                            widget.destination == _FruityDestination.movies,
+                        onPressed: () =>
+                            widget.onSelected(_FruityDestination.movies),
+                      ),
+                      const Spacer(),
+                      _BlockbusterRailItem(
+                        key: const ValueKey('blockbuster-nav-settings'),
+                        order: 4,
+                        icon: PhosphorIconsRegular.gear,
+                        focusedIcon: PhosphorIconsBold.gear,
+                        label: 'Settings',
+                        focusNode:
+                            _destinationNodes[_FruityDestination.settings]!,
+                        expanded: showLabels,
+                        selected:
+                            widget.destination == _FruityDestination.settings,
+                        onPressed: () =>
+                            widget.onSelected(_FruityDestination.settings),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -841,7 +844,7 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
                           key: ValueKey(
                             'blockbuster-nav-${widget.label.toLowerCase()}-icon',
                           ),
-                          size: 24,
+                          size: 20,
                           color: Colors.white,
                         ),
                       ),
