@@ -253,7 +253,12 @@ void main() {
       tester.widget<Text>(find.text('Home')).style?.fontWeight,
       FontWeight.w800,
     );
-    expect(tester.widget<Text>(find.text('Home')).style?.fontSize, 18);
+    expect(tester.widget<Text>(find.text('Home')).style?.fontSize, 16);
+    final homeIconScale = tester.widget<AnimatedScale>(
+      find.byKey(const ValueKey('blockbuster-nav-home-icon-scale')),
+    );
+    expect(homeIconScale.scale, 1.12);
+    expect(homeIconScale.duration, const Duration(milliseconds: 180));
     expect(
       tester
           .widget<Icon>(find.byKey(const ValueKey('blockbuster-nav-home-icon')))
@@ -271,9 +276,29 @@ void main() {
       tester.widget<Text>(find.text('TV')).style?.fontWeight,
       FontWeight.w800,
     );
-    expect(tester.widget<Text>(find.text('TV')).style?.fontSize, 18);
+    expect(tester.widget<Text>(find.text('TV')).style?.fontSize, 16);
     expect(
-      tester.widget<Text>(find.text('Movies')).style?.color?.a,
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('blockbuster-nav-home-icon-scale')),
+          )
+          .scale,
+      1,
+    );
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.byKey(const ValueKey('blockbuster-nav-tv-label-scale')),
+          )
+          .scale,
+      1.1,
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey('blockbuster-nav-movies-label-opacity')),
+          )
+          .opacity,
       closeTo(0.6, 0.001),
     );
 
@@ -392,6 +417,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(homeScroll.position.pixels, 0);
+  });
+
+  testWidgets('disables Blockbuster rail focus motion when requested', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: LibraryScreen(
+          source: FakeLibrarySource(
+            const JellyfinHome(
+              libraries: [],
+              resume: [],
+              latest: [
+                JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie'),
+              ],
+            ),
+          ),
+          session: session,
+          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+
+    final iconScale = tester.widget<AnimatedScale>(
+      find.byKey(const ValueKey('blockbuster-nav-home-icon-scale')),
+    );
+    expect(iconScale.scale, 1.12);
+    expect(iconScale.duration, Duration.zero);
   });
 
   testWidgets('fits both presets at 1080p with enlarged text', (tester) async {

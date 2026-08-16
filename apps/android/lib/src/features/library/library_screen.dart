@@ -767,10 +767,12 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final focusDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+    final focusCurve = _focused ? Curves.easeOutBack : Curves.easeOutCubic;
     final inactiveOpacity = widget.selected ? 0.82 : 0.6;
-    final foreground = _focused
-        ? Colors.white
-        : Colors.white.withValues(alpha: inactiveOpacity);
     return FocusTraversalOrder(
       order: NumericFocusOrder(widget.order),
       child: Padding(
@@ -817,25 +819,58 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
                       color: colors.primary,
                     ),
                     SizedBox(width: widget.expanded ? 12 : 4),
-                    Icon(
-                      _focused ? widget.focusedIcon : widget.icon,
+                    AnimatedOpacity(
                       key: ValueKey(
-                        'blockbuster-nav-${widget.label.toLowerCase()}-icon',
+                        'blockbuster-nav-${widget.label.toLowerCase()}-opacity',
                       ),
-                      size: _focused ? 27 : 24,
-                      color: foreground,
+                      duration: focusDuration,
+                      curve: Curves.easeOutCubic,
+                      opacity: _focused ? 1 : inactiveOpacity,
+                      child: AnimatedScale(
+                        key: ValueKey(
+                          'blockbuster-nav-${widget.label.toLowerCase()}-icon-scale',
+                        ),
+                        duration: focusDuration,
+                        curve: focusCurve,
+                        scale: _focused ? 1.12 : 1,
+                        child: Icon(
+                          _focused ? widget.focusedIcon : widget.icon,
+                          key: ValueKey(
+                            'blockbuster-nav-${widget.label.toLowerCase()}-icon',
+                          ),
+                          size: 24,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                     if (widget.expanded) ...[
                       const SizedBox(width: 14),
                       Expanded(
-                        child: Text(
-                          widget.label,
-                          style: TextStyle(
-                            color: foreground,
-                            fontSize: _focused ? 18 : 16,
-                            fontWeight: _focused
-                                ? FontWeight.w800
-                                : FontWeight.w500,
+                        child: AnimatedOpacity(
+                          key: ValueKey(
+                            'blockbuster-nav-${widget.label.toLowerCase()}-label-opacity',
+                          ),
+                          duration: focusDuration,
+                          curve: Curves.easeOutCubic,
+                          opacity: _focused ? 1 : inactiveOpacity,
+                          child: AnimatedScale(
+                            key: ValueKey(
+                              'blockbuster-nav-${widget.label.toLowerCase()}-label-scale',
+                            ),
+                            alignment: Alignment.centerLeft,
+                            duration: focusDuration,
+                            curve: focusCurve,
+                            scale: _focused ? 1.1 : 1,
+                            child: Text(
+                              widget.label,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: _focused
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
                       ),
