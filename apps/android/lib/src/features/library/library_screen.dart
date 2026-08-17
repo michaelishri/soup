@@ -9,6 +9,7 @@ import 'package:soup/src/features/library/library_view_model.dart';
 enum _FruityDestination { home, tv, movies, settings }
 
 const _blockbusterContentInset = 104.0;
+const _blockbusterHeroRailOverlap = 170.0;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -237,6 +238,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       );
     }
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
+    final blockbusterWide =
+        blockbuster && MediaQuery.sizeOf(context).width >= 840;
     final hero = blockbuster
         ? home.latest.firstOrNull ?? home.resume.firstOrNull
         : home.resume.firstOrNull ?? home.latest.firstOrNull;
@@ -253,6 +256,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
               image: _viewModel.image(hero, type: 'Backdrop', maxWidth: 1600),
               onOpen: () => _open(hero),
               onHeroFocused: blockbuster ? _restoreFullHero : null,
+              layoutBottomOverlap: blockbusterWide && home.resume.isNotEmpty
+                  ? _blockbusterHeroRailOverlap
+                  : 0,
             ),
           )
         else
@@ -1062,6 +1068,7 @@ class _FruityHero extends StatelessWidget {
     required this.image,
     required this.onOpen,
     this.onHeroFocused,
+    this.layoutBottomOverlap = 0,
   });
 
   final bool blockbuster;
@@ -1070,6 +1077,7 @@ class _FruityHero extends StatelessWidget {
   final Future<Uint8List?> image;
   final VoidCallback onOpen;
   final VoidCallback? onHeroFocused;
+  final double layoutBottomOverlap;
 
   @override
   Widget build(BuildContext context) {
@@ -1084,124 +1092,140 @@ class _FruityHero extends StatelessWidget {
         ? size.height - (size.height * 0.72).clamp(460.0, 760.0) + 30
         : 30.0;
     return SizedBox(
-      key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
-      height: heroHeight,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          FutureBuilder<Uint8List?>(
-            future: image,
-            builder: (context, snapshot) {
-              final bytes = snapshot.data;
-              if (bytes == null || bytes.isEmpty) {
-                return ColoredBox(color: theme.colorScheme.surfaceContainer);
-              }
-              return Image.memory(bytes, fit: BoxFit.cover);
-            },
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: blockbuster
-                    ? Alignment.centerRight
-                    : Alignment.topCenter,
-                end: blockbuster
-                    ? Alignment.centerLeft
-                    : Alignment.bottomCenter,
-                colors: blockbuster
-                    ? [
+      height: heroHeight - layoutBottomOverlap,
+      child: OverflowBox(
+        alignment: Alignment.topCenter,
+        minHeight: heroHeight,
+        maxHeight: heroHeight,
+        child: SizedBox(
+          key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
+          height: heroHeight,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              FutureBuilder<Uint8List?>(
+                future: image,
+                builder: (context, snapshot) {
+                  final bytes = snapshot.data;
+                  if (bytes == null || bytes.isEmpty) {
+                    return ColoredBox(
+                      color: theme.colorScheme.surfaceContainer,
+                    );
+                  }
+                  return Image.memory(bytes, fit: BoxFit.cover);
+                },
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: blockbuster
+                        ? Alignment.centerRight
+                        : Alignment.topCenter,
+                    end: blockbuster
+                        ? Alignment.centerLeft
+                        : Alignment.bottomCenter,
+                    colors: blockbuster
+                        ? [
+                            Colors.transparent,
+                            theme.scaffoldBackgroundColor.withValues(
+                              alpha: 0.1,
+                            ),
+                            theme.scaffoldBackgroundColor.withValues(
+                              alpha: 0.58,
+                            ),
+                          ]
+                        : [
+                            tokens?.heroScrimStart ?? Colors.transparent,
+                            theme.scaffoldBackgroundColor.withValues(
+                              alpha: 0.35,
+                            ),
+                            theme.scaffoldBackgroundColor,
+                          ],
+                  ),
+                ),
+              ),
+              if (blockbuster)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
                         Colors.transparent,
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.1),
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.58),
-                      ]
-                    : [
-                        tokens?.heroScrimStart ?? Colors.transparent,
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
-                        theme.scaffoldBackgroundColor,
+                        theme.scaffoldBackgroundColor.withValues(alpha: 0.12),
+                        theme.scaffoldBackgroundColor.withValues(alpha: 0.9),
                       ],
-              ),
-            ),
-          ),
-          if (blockbuster)
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    theme.scaffoldBackgroundColor.withValues(alpha: 0.12),
-                    theme.scaffoldBackgroundColor.withValues(alpha: 0.9),
-                  ],
-                  stops: const [0.38, 0.7, 1],
+                      stops: const [0.38, 0.7, 1],
+                    ),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.bottomLeft,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    blockbuster && wide
+                        ? _blockbusterContentInset
+                        : (wide ? 44 : 24),
+                    24,
+                    24,
+                    heroContentBottomInset,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.playbackPositionTicks > 0
+                              ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
+                              : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          item.name,
+                          key: const ValueKey('fruity-hero-title'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: wide
+                              ? theme.textTheme.displaySmall
+                              : theme.textTheme.headlineLarge,
+                        ),
+                        if (item.overview case final overview?) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            overview,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        if (blockbuster)
+                          _BlockbusterHeroAction(
+                            key: const ValueKey('fruity-hero-open'),
+                            onPressed: onOpen,
+                            onFocused: onHeroFocused,
+                          )
+                        else
+                          FilledButton.icon(
+                            key: const ValueKey('fruity-hero-open'),
+                            autofocus: true,
+                            onPressed: onOpen,
+                            icon: const Icon(PhosphorIconsRegular.info),
+                            label: const Text('View details'),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                blockbuster && wide
-                    ? _blockbusterContentInset
-                    : (wide ? 44 : 24),
-                24,
-                24,
-                heroContentBottomInset,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.playbackPositionTicks > 0
-                          ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
-                          : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.name,
-                      key: const ValueKey('fruity-hero-title'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: wide
-                          ? theme.textTheme.displaySmall
-                          : theme.textTheme.headlineLarge,
-                    ),
-                    if (item.overview case final overview?) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        overview,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    if (blockbuster)
-                      _BlockbusterHeroAction(
-                        key: const ValueKey('fruity-hero-open'),
-                        onPressed: onOpen,
-                        onFocused: onHeroFocused,
-                      )
-                    else
-                      FilledButton.icon(
-                        key: const ValueKey('fruity-hero-open'),
-                        autofocus: true,
-                        onPressed: onOpen,
-                        icon: const Icon(PhosphorIconsRegular.info),
-                        label: const Text('View details'),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

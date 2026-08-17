@@ -261,6 +261,10 @@ void main() {
       720,
     );
     expect(
+      tester.getTopLeft(find.text('Continue Watching')).dy,
+      closeTo(550, 0.1),
+    );
+    expect(
       tester.getRect(find.byKey(const ValueKey('fruity-hero-open'))).bottom,
       closeTo(488.4, 0.1),
     );
