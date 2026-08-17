@@ -242,36 +242,49 @@ class _IntroductionCard extends StatelessWidget {
       color: const Color(0xFF101C2E),
       child: Padding(
         padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Your Jellyfin library, without a separate VPN app.',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Soup creates an app-local Tailscale connection and keeps your media traffic private.',
-              style: Theme.of(context).textTheme.bodyLarge,
-            ),
-            const SizedBox(height: 28),
-            Semantics(
-              label: 'Tailscale status ${status.label}',
-              child: Chip(
-                avatar: Icon(status.icon, color: colors.onSecondaryContainer),
-                label: Text(
-                  status.label,
-                  key: const ValueKey('connection-status'),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact =
+                constraints.hasBoundedHeight && constraints.maxHeight < 400;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Your Jellyfin library, without a separate VPN app.',
+                  style: compact
+                      ? Theme.of(context).textTheme.titleLarge
+                      : Theme.of(context).textTheme.headlineMedium,
                 ),
-              ),
-            ),
-            if (status.detail case final detail?) ...[
-              const SizedBox(height: 12),
-              Text(detail, key: const ValueKey('connection-detail')),
-            ],
-          ],
+                SizedBox(height: compact ? 10 : 16),
+                Text(
+                  'Soup creates an app-local Tailscale connection and keeps your media traffic private.',
+                  style: compact
+                      ? Theme.of(context).textTheme.bodyMedium
+                      : Theme.of(context).textTheme.bodyLarge,
+                ),
+                SizedBox(height: compact ? 16 : 28),
+                Semantics(
+                  label: 'Tailscale status ${status.label}',
+                  child: Chip(
+                    avatar: Icon(
+                      status.icon,
+                      color: colors.onSecondaryContainer,
+                    ),
+                    label: Text(
+                      status.label,
+                      key: const ValueKey('connection-status'),
+                    ),
+                  ),
+                ),
+                if (status.detail case final detail?) ...[
+                  const SizedBox(height: 12),
+                  Text(detail, key: const ValueKey('connection-detail')),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -334,7 +347,12 @@ class _SetupCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: _phaseContent(context),
+                  children: _phaseContent(
+                    context,
+                    availableHeight: constraints.hasBoundedHeight
+                        ? constraints.maxHeight
+                        : null,
+                  ),
                 ),
               ),
             );
@@ -361,8 +379,14 @@ class _SetupCard extends StatelessWidget {
     );
   }
 
-  List<Widget> _phaseContent(BuildContext context) => switch (viewModel.phase) {
-    SetupPhase.tailscale => _tailscaleContent(context),
+  List<Widget> _phaseContent(
+    BuildContext context, {
+    required double? availableHeight,
+  }) => switch (viewModel.phase) {
+    SetupPhase.tailscale => _tailscaleContent(
+      context,
+      availableHeight: availableHeight,
+    ),
     SetupPhase.server => [
       Text(
         'Find your Jellyfin server',
@@ -484,22 +508,30 @@ class _SetupCard extends StatelessWidget {
     ],
   };
 
-  List<Widget> _tailscaleContent(BuildContext context) {
+  List<Widget> _tailscaleContent(
+    BuildContext context, {
+    required double? availableHeight,
+  }) {
     final status = viewModel.status;
     switch (status.phase) {
       case TailscaleConnectionPhase.awaitingLogin:
         final authorizationUrl = status.authorizationUrl;
+        final compact = availableHeight != null && availableHeight < 460;
+        final qrSize = compact
+            ? (availableHeight - 186).clamp(110.0, 160.0).toDouble()
+            : 230.0;
+        final contentGap = compact ? 8.0 : 14.0;
         return [
           Text(
             'Finish signing in on another device',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: compact ? 6 : 10),
           const Text(
             'Scan this code with your phone and sign in to Tailscale.',
           ),
           if (authorizationUrl != null) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: compact ? 8 : 16),
             Center(
               child: DecoratedBox(
                 key: const ValueKey('tailscale-authorization-qr'),
@@ -507,48 +539,34 @@ class _SetupCard extends StatelessWidget {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Padding(
+                child: QrImageView(
+                  data: authorizationUrl.toString(),
+                  version: QrVersions.auto,
+                  size: qrSize,
                   padding: const EdgeInsets.all(10),
-                  child: QrImageView(
-                    data: authorizationUrl.toString(),
-                    version: QrVersions.auto,
-                    size: 210,
-                    padding: EdgeInsets.zero,
-                    backgroundColor: Colors.white,
-                    semanticsLabel: 'Tailscale sign-in QR code',
-                  ),
+                  backgroundColor: Colors.white,
+                  semanticsLabel: 'Tailscale sign-in QR code',
                 ),
               ),
             ),
-            const SizedBox(height: 14),
-            _ActionButton(
-              order: 1,
-              keyValue: 'open-tailscale-login-button',
-              busy: false,
-              onPressed: onOpenAuthorizationUrl,
-              icon: PhosphorIconsRegular.arrowSquareOut,
-              label: 'Open sign-in page',
-            ),
+            SizedBox(height: contentGap),
+            if (!compact)
+              _ActionButton(
+                order: 1,
+                keyValue: 'open-tailscale-login-button',
+                busy: false,
+                onPressed: onOpenAuthorizationUrl,
+                icon: PhosphorIconsRegular.arrowSquareOut,
+                label: 'Open sign-in page',
+              ),
           ],
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  key: const ValueKey('retry-tailscale-login-button'),
-                  onPressed: onRetryInteractive,
-                  child: const Text('Get a new code'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton(
-                  key: const ValueKey('cancel-tailscale-login-button'),
-                  onPressed: onCancelConnection,
-                  child: const Text('Cancel'),
-                ),
-              ),
-            ],
+          if (!compact) const SizedBox(height: 10),
+          _TailscaleLoginActions(
+            compact: compact,
+            showOpenAction: authorizationUrl != null,
+            onOpenAuthorizationUrl: onOpenAuthorizationUrl,
+            onRetryInteractive: onRetryInteractive,
+            onCancelConnection: onCancelConnection,
           ),
         ];
       case TailscaleConnectionPhase.awaitingApproval:
@@ -665,6 +683,60 @@ class _SetupCard extends StatelessWidget {
       case TailscaleConnectionPhase.connected:
         return const [];
     }
+  }
+}
+
+class _TailscaleLoginActions extends StatelessWidget {
+  const _TailscaleLoginActions({
+    required this.compact,
+    required this.showOpenAction,
+    required this.onOpenAuthorizationUrl,
+    required this.onRetryInteractive,
+    required this.onCancelConnection,
+  });
+
+  final bool compact;
+  final bool showOpenAction;
+  final VoidCallback onOpenAuthorizationUrl;
+  final VoidCallback onRetryInteractive;
+  final VoidCallback onCancelConnection;
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = <Widget>[
+      if (compact && showOpenAction)
+        Expanded(
+          child: FilledButton.icon(
+            key: const ValueKey('open-tailscale-login-button'),
+            onPressed: onOpenAuthorizationUrl,
+            icon: const Icon(PhosphorIconsRegular.arrowSquareOut),
+            label: const Text('Open'),
+          ),
+        ),
+      Expanded(
+        child: OutlinedButton(
+          key: const ValueKey('retry-tailscale-login-button'),
+          onPressed: onRetryInteractive,
+          child: Text(compact ? 'New code' : 'Get a new code'),
+        ),
+      ),
+      Expanded(
+        child: OutlinedButton(
+          key: const ValueKey('cancel-tailscale-login-button'),
+          onPressed: onCancelConnection,
+          child: const Text('Cancel'),
+        ),
+      ),
+    ];
+
+    return Row(
+      children: [
+        for (var index = 0; index < actions.length; index++) ...[
+          if (index > 0) const SizedBox(width: 10),
+          actions[index],
+        ],
+      ],
+    );
   }
 }
 

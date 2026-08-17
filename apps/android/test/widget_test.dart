@@ -442,6 +442,52 @@ void main() {
     expect(find.text('Find your Jellyfin server'), findsOneWidget);
   });
 
+  testWidgets('keeps QR login content inside a short TV card', (tester) async {
+    tester.view.physicalSize = const Size(2048, 1152);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final client = FakeTailscaleClient()..pauseInteractiveLogin = true;
+    final launcher = FakeAuthorizationUrlLauncher();
+    addTearDown(client.dispose);
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        authorizationUrlLauncher: launcher,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('connect-interactively-button')),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('open-tailscale-login-button')));
+    await tester.pump();
+
+    final cardRect = tester.getRect(find.byKey(const ValueKey('setup-card')));
+    final contentFinders = [
+      find.text('Finish signing in on another device'),
+      find.byKey(const ValueKey('tailscale-authorization-qr')),
+      find.byKey(const ValueKey('open-tailscale-login-button')),
+      find.byKey(const ValueKey('retry-tailscale-login-button')),
+      find.byKey(const ValueKey('cancel-tailscale-login-button')),
+    ];
+    for (final finder in contentFinders) {
+      final contentRect = tester.getRect(finder);
+      expect(contentRect.top, greaterThanOrEqualTo(cardRect.top));
+      expect(contentRect.bottom, lessThanOrEqualTo(cardRect.bottom));
+    }
+    final qrRect = tester.getRect(
+      find.byKey(const ValueKey('tailscale-authorization-qr')),
+    );
+    expect(qrRect.width, qrRect.height);
+    expect(qrRect.width, inInclusiveRange(110, 160));
+    expect(launcher.opened, [
+      Uri.parse('https://login.tailscale.com/a/soup-test'),
+    ]);
+  });
+
   testWidgets('falls back to QR when no Android browser is available', (
     tester,
   ) async {
