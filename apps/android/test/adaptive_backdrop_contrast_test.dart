@@ -8,13 +8,15 @@ void main() {
 
     expect(contrast.foreground, Colors.white);
     expect(contrast.scrim, Colors.black);
+    expect(contrast.scrimOpacity, 0);
   });
 
-  test('uses a dark foreground over a light backdrop', () {
+  test('keeps light copy and adds a dark fade over a light backdrop', () {
     final contrast = contrastForBackdropLuminances(List.filled(20, 0.9));
 
-    expect(contrast.foreground, const Color(0xFF101214));
-    expect(contrast.scrim, Colors.white);
+    expect(contrast.foreground, Colors.white);
+    expect(contrast.scrim, Colors.black);
+    expect(contrast.scrimOpacity, greaterThan(0));
   });
 
   test(
@@ -25,8 +27,8 @@ void main() {
         ...List.filled(12, 0.92),
       ]);
 
-      expect(contrast.foreground, const Color(0xFF101214));
-      expect(contrast.scrim, Colors.white);
+      expect(contrast.foreground, Colors.white);
+      expect(contrast.scrim, Colors.black);
       expect(contrast.scrimOpacity, greaterThan(0));
     },
   );

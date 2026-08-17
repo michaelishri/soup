@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-const _darkForeground = Color(0xFF101214);
 const _minimumTextContrast = 4.5;
 const _sampleWidth = 96;
 const _sampleHeight = 54;
@@ -30,7 +29,7 @@ class BackdropContrast {
   List<Shadow> get shadows => [
     Shadow(
       color: scrim.withValues(alpha: 0.78),
-      blurRadius: foreground == Colors.white ? 7 : 5,
+      blurRadius: 7,
       offset: const Offset(0, 1),
     ),
   ];
@@ -44,25 +43,12 @@ BackdropContrast contrastForBackdropLuminances(Iterable<double> values) {
         ..sort();
   if (luminances.isEmpty) return BackdropContrast.fallback;
 
-  final average = luminances.reduce((a, b) => a + b) / luminances.length;
-  final whiteContrast = _contrastRatio(1, average);
-  final darkContrast = _contrastRatio(
-    _darkForeground.computeLuminance(),
-    average,
-  );
-  final useDarkForeground = darkContrast > whiteContrast;
-  final foreground = useDarkForeground ? _darkForeground : Colors.white;
-  final scrim = useDarkForeground ? Colors.white : Colors.black;
-  final difficultLuminance = useDarkForeground
-      ? _percentile(luminances, 0.1)
-      : _percentile(luminances, 0.9);
-  final requiredOpacity = useDarkForeground
-      ? _lightScrimOpacity(difficultLuminance)
-      : _darkScrimOpacity(difficultLuminance);
+  final difficultLuminance = _percentile(luminances, 0.9);
+  final requiredOpacity = _darkScrimOpacity(difficultLuminance);
 
   return BackdropContrast(
-    foreground: foreground,
-    scrim: scrim,
+    foreground: Colors.white,
+    scrim: Colors.black,
     scrimOpacity: requiredOpacity.clamp(0.0, 0.58).toDouble(),
   );
 }
@@ -180,21 +166,8 @@ double _relativeLuminance(double red, double green, double blue) {
   return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
 }
 
-double _contrastRatio(double first, double second) {
-  final lighter = math.max(first, second);
-  final darker = math.min(first, second);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
 double _percentile(List<double> sorted, double percentile) {
   return sorted[((sorted.length - 1) * percentile).round()];
-}
-
-double _lightScrimOpacity(double luminance) {
-  final darkLuminance = _darkForeground.computeLuminance();
-  final target = _minimumTextContrast * (darkLuminance + 0.05) - 0.05;
-  if (luminance >= target) return 0;
-  return (target - luminance) / (1 - luminance);
 }
 
 double _darkScrimOpacity(double luminance) {
