@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -155,6 +156,33 @@ void main() {
       (request) => request.url.queryParameters['IncludeItemTypes'] == 'Episode',
     );
     expect(tvRequest.url.queryParameters['GroupItems'], 'true');
+  });
+
+  test('starts all five home requests concurrently', () async {
+    final allStarted = Completer<void>();
+    var started = 0;
+    final client = MockClient((request) async {
+      started++;
+      if (started == 5) allStarted.complete();
+      await allStarted.future.timeout(const Duration(seconds: 1));
+      return http.Response(
+        request.url.path.endsWith('/Items/Latest') ? '[]' : '{"Items":[]}',
+        200,
+      );
+    });
+    addTearDown(client.close);
+    final api = JellyfinApi(client, deviceId: 'device');
+    final session = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin/'),
+      serverId: 'server',
+      userId: 'user',
+      userName: 'Alex',
+      accessToken: 'token',
+    );
+
+    await api.getHome(session);
+
+    expect(started, 5);
   });
 
   test('loads artwork with authentication and sizing', () async {

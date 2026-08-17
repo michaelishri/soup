@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +10,7 @@ import 'package:http/testing.dart';
 import 'package:soup/src/app.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/appearance/appearance_store.dart';
+import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
@@ -235,6 +238,12 @@ void main() {
 
     final client = FakeTailscaleClient();
     final store = MemorySessionStore();
+    final database = SoupDatabase.forTesting(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
     String? submittedPassword;
     final httpClient = MockClient((request) async {
       if (request.url.path.endsWith('/System/Info/Public')) {
@@ -257,12 +266,14 @@ void main() {
     });
     addTearDown(client.dispose);
     addTearDown(httpClient.close);
+    addTearDown(database.close);
     await tester.pumpWidget(
       SoupApp(
         tailscaleClient: client,
         jellyfinClientFactory: FakeJellyfinClientFactory(httpClient),
         sessionStore: store,
         appearanceStore: MemoryAppearanceStore(),
+        database: database,
       ),
     );
     await tester.pump();

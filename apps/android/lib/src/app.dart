@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:soup/src/data/appearance/appearance_store.dart';
+import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
@@ -19,6 +23,7 @@ class SoupApp extends StatefulWidget {
     this.jellyfinClientFactory = const SocksJellyfinClientFactory(),
     this.sessionStore = const SecureSessionStore(),
     this.appearanceStore,
+    this.database,
     super.key,
   });
 
@@ -26,6 +31,7 @@ class SoupApp extends StatefulWidget {
   final JellyfinClientFactory jellyfinClientFactory;
   final SessionStore sessionStore;
   final AppearanceStore? appearanceStore;
+  final SoupDatabase? database;
 
   @override
   State<SoupApp> createState() => _SoupAppState();
@@ -34,10 +40,14 @@ class SoupApp extends StatefulWidget {
 class _SoupAppState extends State<SoupApp> {
   late final ConnectivityViewModel _viewModel;
   late final AppearanceController _appearanceController;
+  SoupDatabase? _database;
+  late final bool _ownsDatabase;
 
   @override
   void initState() {
     super.initState();
+    _database = widget.database;
+    _ownsDatabase = widget.database == null;
     _viewModel = ConnectivityViewModel(
       widget.tailscaleClient,
       jellyfinClientFactory: widget.jellyfinClientFactory,
@@ -52,6 +62,8 @@ class _SoupAppState extends State<SoupApp> {
   void dispose() {
     _viewModel.dispose();
     _appearanceController.dispose();
+    final database = _database;
+    if (_ownsDatabase && database != null) unawaited(database.close());
     super.dispose();
   }
 
@@ -91,6 +103,7 @@ class _SoupAppState extends State<SoupApp> {
                   viewModel: _viewModel,
                   appearanceController: _appearanceController,
                   session: session,
+                  database: _database ??= SoupDatabase(),
                 );
               }
               return ConnectivityScreen(viewModel: _viewModel);
@@ -107,12 +120,14 @@ class _AuthenticatedHome extends StatelessWidget {
     required this.viewModel,
     required this.session,
     required this.appearanceController,
+    required this.database,
     super.key,
   });
 
   final ConnectivityViewModel viewModel;
   final JellyfinSession session;
   final AppearanceController appearanceController;
+  final SoupDatabase database;
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +136,15 @@ class _AuthenticatedHome extends StatelessWidget {
       builder: (context, snapshot) {
         final api = snapshot.data;
         if (api != null) {
+          final metadataRepository = DriftJellyfinMetadataRepository(
+            database: database,
+            librarySource: api,
+            detailsSource: api,
+            session: session,
+          );
           return LibraryScreen(
             source: api,
+            metadataRepository: metadataRepository,
             session: session,
             onSignOut: viewModel.signOut,
             appearance: appearanceController.effectiveSettings,
@@ -133,6 +155,7 @@ class _AuthenticatedHome extends StatelessWidget {
                   builder: (_) => DetailsScreen(
                     source: api,
                     artworkSource: api,
+                    metadataRepository: metadataRepository,
                     session: session,
                     item: item,
                     onPlay: (item, startAt) {

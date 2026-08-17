@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/library/library_view_model.dart';
 import 'package:soup/src/features/shared/adaptive_backdrop_contrast.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
+import 'package:soup/src/features/shared/stale_data_banner.dart';
 
 enum _FruityDestination { home, tv, movies, settings }
 
@@ -25,6 +29,7 @@ class LibraryScreen extends StatefulWidget {
     required this.source,
     required this.session,
     required this.onSignOut,
+    this.metadataRepository,
     this.appearance = AppearanceSettings.defaults,
     this.onSaveAppearance,
     this.onOpenItem,
@@ -32,6 +37,7 @@ class LibraryScreen extends StatefulWidget {
   });
 
   final JellyfinLibrarySource source;
+  final JellyfinMetadataRepository? metadataRepository;
   final JellyfinSession session;
   final Future<void> Function() onSignOut;
   final AppearanceSettings appearance;
@@ -44,6 +50,8 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   late final LibraryViewModel _viewModel;
+  late final JellyfinMetadataRepository _metadataRepository;
+  late final bool _ownsMetadataRepository;
   final _blockbusterRailKey = GlobalKey<_BlockbusterRailState>();
   final _blockbusterPinnedHeroKey = GlobalKey();
   late final FocusScopeNode _blockbusterContentScopeNode;
@@ -70,8 +78,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     _homeScrollController = ScrollController(debugLabel: 'library-home-scroll');
     _appearanceDraft = widget.appearance;
+    _ownsMetadataRepository = widget.metadataRepository == null;
+    _metadataRepository =
+        widget.metadataRepository ??
+        TransientJellyfinMetadataRepository(
+          session: widget.session,
+          librarySource: widget.source,
+        );
     _viewModel = LibraryViewModel(
-      source: widget.source,
+      repository: _metadataRepository,
+      artworkSource: widget.source,
       session: widget.session,
     )..load();
   }
@@ -90,6 +106,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _blockbusterHeroFocusNode.dispose();
     _blockbusterContentScopeNode.dispose();
     _viewModel.dispose();
+    if (_ownsMetadataRepository) {
+      unawaited(_metadataRepository.close());
+    }
     super.dispose();
   }
 
@@ -335,7 +354,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (_viewModel.loading && _viewModel.home == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_viewModel.error case final error?) {
+    final error = _viewModel.error;
+    if (!_viewModel.hasSnapshot && error != null) {
       return _LibraryMessage(
         icon: PhosphorIconsRegular.cloudSlash,
         title: 'Could not load your library',
@@ -347,12 +367,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final home = _viewModel.home;
     if (home == null) return const SizedBox.shrink();
 
-    return switch (_destination) {
+    final content = switch (_destination) {
       _FruityDestination.home => _home(home),
       _FruityDestination.tv => _libraryDestination(home, television: true),
       _FruityDestination.movies => _libraryDestination(home, television: false),
       _FruityDestination.settings => _settings(),
     };
+    if (!_viewModel.stale) return content;
+    return Column(
+      children: [
+        StaleDataBanner(
+          message: _viewModel.error ?? 'Showing saved data. Refresh failed.',
+          retrying: _viewModel.refreshing,
+          onRetry: _viewModel.load,
+        ),
+        Expanded(child: content),
+      ],
+    );
   }
 
   Widget _home(JellyfinHome home) {
@@ -812,7 +843,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
             OutlinedButton.icon(
               key: const ValueKey('refresh-library-button'),
-              onPressed: _viewModel.loading ? null : _viewModel.load,
+              onPressed: _viewModel.refreshing ? null : _viewModel.load,
               icon: const Icon(PhosphorIconsRegular.arrowsClockwise),
               label: const Text('Refresh library'),
             ),

@@ -145,6 +145,7 @@ abstract final class CacheScopeType {
   static const homeLatest = 'home-latest';
   static const homeRecentMovies = 'home-recent-movies';
   static const homeRecentTv = 'home-recent-tv';
+  static const itemDetails = 'item-details';
   static const libraryContents = 'library-contents';
   static const seriesSeasons = 'series-seasons';
   static const seasonEpisodes = 'season-episodes';
@@ -262,7 +263,19 @@ class SoupDatabase extends _$SoupDatabase {
     );
   }
 
-  Future<void> markScopeStale(ScopeKey key, Object error) async {
+  Future<void> markScopeStale(ScopeKey key, Object error) {
+    return markScopesStale([key], error);
+  }
+
+  Future<void> markScopesStale(Iterable<ScopeKey> keys, Object error) {
+    return transaction(() async {
+      for (final key in keys) {
+        await _markScopeStale(key, error);
+      }
+    });
+  }
+
+  Future<void> _markScopeStale(ScopeKey key, Object error) async {
     final previous =
         await (select(scopeSyncs)..where(
               (sync) =>

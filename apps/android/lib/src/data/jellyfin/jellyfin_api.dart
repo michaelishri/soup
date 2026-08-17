@@ -70,6 +70,8 @@ class JellyfinItem {
     this.parentIndexNumber,
     this.primaryImageTag,
     this.backdropImageTag,
+    this.primaryBlurHash,
+    this.backdropBlurHash,
   });
 
   factory JellyfinItem.fromJson(Map<String, Object?> json) {
@@ -80,6 +82,10 @@ class JellyfinItem {
         ? json['ImageTags']! as Map<String, Object?>
         : const <String, Object?>{};
     final backdropTags = json['BackdropImageTags'];
+    final primaryImageTag = imageTags['Primary'] as String?;
+    final backdropImageTag = backdropTags is List && backdropTags.isNotEmpty
+        ? backdropTags.first as String?
+        : null;
     return JellyfinItem(
       id: json['Id'] as String? ?? '',
       name: json['Name'] as String? ?? 'Untitled',
@@ -98,10 +104,18 @@ class JellyfinItem {
       seasonName: json['SeasonName'] as String?,
       indexNumber: (json['IndexNumber'] as num?)?.toInt(),
       parentIndexNumber: (json['ParentIndexNumber'] as num?)?.toInt(),
-      primaryImageTag: imageTags['Primary'] as String?,
-      backdropImageTag: backdropTags is List && backdropTags.isNotEmpty
-          ? backdropTags.first as String?
-          : null,
+      primaryImageTag: primaryImageTag,
+      backdropImageTag: backdropImageTag,
+      primaryBlurHash: _blurHash(
+        json['ImageBlurHashes'],
+        'Primary',
+        primaryImageTag,
+      ),
+      backdropBlurHash: _blurHash(
+        json['ImageBlurHashes'],
+        'Backdrop',
+        backdropImageTag,
+      ),
     );
   }
 
@@ -123,9 +137,24 @@ class JellyfinItem {
   final int? parentIndexNumber;
   final String? primaryImageTag;
   final String? backdropImageTag;
+  final String? primaryBlurHash;
+  final String? backdropBlurHash;
 
   bool get isPlayable =>
       type == 'Movie' || type == 'Episode' || type == 'Video';
+
+  static String? _blurHash(Object? value, String type, String? imageTag) {
+    if (value is! Map) return null;
+    final hashes = value[type];
+    if (hashes is String && hashes.isNotEmpty) return hashes;
+    if (hashes is! Map) return null;
+    final tagged = imageTag == null ? null : hashes[imageTag];
+    if (tagged is String && tagged.isNotEmpty) return tagged;
+    for (final hash in hashes.values) {
+      if (hash is String && hash.isNotEmpty) return hash;
+    }
+    return null;
+  }
 }
 
 class JellyfinHome {
@@ -366,6 +395,7 @@ class JellyfinApi
       'RunTimeTicks',
       'OfficialRating',
       'CommunityRating',
+      'ImageBlurHashes',
     ].join(',');
     final latestQuery = {
       'Limit': '18',
@@ -373,47 +403,49 @@ class JellyfinApi
       'EnableImageTypes': 'Primary,Backdrop,Thumb',
       'ImageTypeLimit': '1',
     };
-    final libraries = await _getJson(
-      session,
-      'Users/${session.userId}/Views',
-      query: const {'IncludeExternalContent': 'false'},
-    );
-    final resume = await _getJson(
-      session,
-      'Users/${session.userId}/Items/Resume',
-      query: {
-        'Limit': '12',
-        'MediaTypes': 'Video',
-        'Fields': fields,
-        'EnableImageTypes': 'Primary,Backdrop,Thumb',
-      },
-    );
-    final latest = await _getJson(
-      session,
-      'Users/${session.userId}/Items/Latest',
-      query: latestQuery,
-    );
-    final recentlyAddedMovies = await _getJson(
-      session,
-      'Users/${session.userId}/Items/Latest',
-      query: {...latestQuery, 'Limit': '25', 'IncludeItemTypes': 'Movie'},
-    );
-    final recentlyAddedTv = await _getJson(
-      session,
-      'Users/${session.userId}/Items/Latest',
-      query: {
-        ...latestQuery,
-        'Limit': '25',
-        'IncludeItemTypes': 'Episode',
-        'GroupItems': 'true',
-      },
-    );
+    final responses = await Future.wait([
+      _getJson(
+        session,
+        'Users/${session.userId}/Views',
+        query: const {'IncludeExternalContent': 'false'},
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Resume',
+        query: {
+          'Limit': '12',
+          'MediaTypes': 'Video',
+          'Fields': fields,
+          'EnableImageTypes': 'Primary,Backdrop,Thumb',
+        },
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Latest',
+        query: latestQuery,
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Latest',
+        query: {...latestQuery, 'Limit': '25', 'IncludeItemTypes': 'Movie'},
+      ),
+      _getJson(
+        session,
+        'Users/${session.userId}/Items/Latest',
+        query: {
+          ...latestQuery,
+          'Limit': '25',
+          'IncludeItemTypes': 'Episode',
+          'GroupItems': 'true',
+        },
+      ),
+    ]);
     return JellyfinHome(
-      libraries: _itemsFromResponse(libraries),
-      resume: _itemsFromResponse(resume),
-      latest: _itemsFromResponse(latest),
-      recentlyAddedMovies: _itemsFromResponse(recentlyAddedMovies),
-      recentlyAddedTv: _itemsFromResponse(recentlyAddedTv),
+      libraries: _itemsFromCompleteResponse(responses[0]),
+      resume: _itemsFromCompleteResponse(responses[1]),
+      latest: _itemsFromCompleteResponse(responses[2]),
+      recentlyAddedMovies: _itemsFromCompleteResponse(responses[3]),
+      recentlyAddedTv: _itemsFromCompleteResponse(responses[4]),
     );
   }
 
@@ -482,7 +514,7 @@ class JellyfinApi
         'ImageTypeLimit': '1',
       },
     );
-    return _itemsFromResponse(value);
+    return _itemsFromCompleteResponse(value);
   }
 
   @override
@@ -499,7 +531,7 @@ class JellyfinApi
         'EnableImages': 'true',
       },
     );
-    return _itemsFromResponse(value);
+    return _itemsFromCompleteResponse(value);
   }
 
   @override
@@ -518,7 +550,7 @@ class JellyfinApi
         'EnableImages': 'true',
       },
     );
-    return _itemsFromResponse(value);
+    return _itemsFromCompleteResponse(value);
   }
 
   @override
@@ -831,9 +863,20 @@ class JellyfinApi
         .toList(growable: false);
   }
 
+  static List<JellyfinItem> _itemsFromCompleteResponse(Object? value) {
+    final rawItems = value is Map<String, Object?> ? value['Items'] : value;
+    if (rawItems is! List || rawItems.any((item) => item is! Map)) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an incomplete library response.',
+      );
+    }
+    return _itemsFromResponse(value);
+  }
+
   static const _detailFields =
       'Overview,PrimaryImageAspectRatio,ProductionYear,RunTimeTicks,'
-      'OfficialRating,CommunityRating,MediaSources,MediaStreams';
+      'OfficialRating,CommunityRating,MediaSources,MediaStreams,'
+      'ImageBlurHashes';
 
   static int _ticks(Duration value) => value.inMicroseconds * 10;
 

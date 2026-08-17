@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
+import 'package:soup/src/features/shared/stale_data_banner.dart';
 
 typedef PlayItem = void Function(JellyfinItem item, Duration startAt);
 
@@ -16,11 +20,13 @@ class DetailsScreen extends StatefulWidget {
     required this.session,
     required this.item,
     required this.onPlay,
+    this.metadataRepository,
     super.key,
   });
 
   final JellyfinDetailsSource source;
   final JellyfinLibrarySource artworkSource;
+  final JellyfinMetadataRepository? metadataRepository;
   final JellyfinSession session;
   final JellyfinItem item;
   final PlayItem onPlay;
@@ -31,14 +37,23 @@ class DetailsScreen extends StatefulWidget {
 
 class _DetailsScreenState extends State<DetailsScreen> {
   late final DetailsViewModel _viewModel;
+  late final JellyfinMetadataRepository _metadataRepository;
+  late final bool _ownsMetadataRepository;
   final Map<String, Future<Uint8List?>> _images = {};
 
   @override
   void initState() {
     super.initState();
+    _ownsMetadataRepository = widget.metadataRepository == null;
+    _metadataRepository =
+        widget.metadataRepository ??
+        TransientJellyfinMetadataRepository(
+          session: widget.session,
+          librarySource: widget.artworkSource,
+          detailsSource: widget.source,
+        );
     _viewModel = DetailsViewModel(
-      source: widget.source,
-      session: widget.session,
+      repository: _metadataRepository,
       initialItem: widget.item,
     )..load();
   }
@@ -46,6 +61,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
   @override
   void dispose() {
     _viewModel.dispose();
+    if (_ownsMetadataRepository) {
+      unawaited(_metadataRepository.close());
+    }
     super.dispose();
   }
 
@@ -86,6 +104,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         builder: (_) => DetailsScreen(
           source: widget.source,
           artworkSource: widget.artworkSource,
+          metadataRepository: _metadataRepository,
           session: widget.session,
           item: item,
           onPlay: widget.onPlay,
@@ -123,7 +142,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                   ),
                   if (_viewModel.loading)
                     const Center(child: CircularProgressIndicator())
-                  else if (_viewModel.error case final error?)
+                  else if (_viewModel.blockingError case final error?)
                     _DetailsError(error: error, onRetry: _viewModel.load)
                   else if (_viewModel.item.type == 'CollectionFolder')
                     _LibraryContents(
@@ -156,6 +175,21 @@ class _DetailsScreenState extends State<DetailsScreen> {
                       ),
                     ),
                   ),
+                  if (_viewModel.stale && _viewModel.blockingError == null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: StaleDataBanner(
+                        message:
+                            _viewModel.error ??
+                            'Showing saved data. Refresh failed.',
+                        retrying:
+                            _viewModel.refreshing ||
+                            _viewModel.refreshingEpisodes,
+                        onRetry: _viewModel.retry,
+                      ),
+                    ),
                 ],
               ),
             ),
