@@ -585,6 +585,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    void expectFocusedRailClippedBelowHero() {
+      final clipFinder = find.byKey(
+        const ValueKey('blockbuster-focused-rail-clip'),
+      );
+      final clip = tester.widget<ClipRect>(clipFinder);
+      final clipBounds = clip.clipper!.getClip(tester.getSize(clipFinder));
+      expect(
+        clipBounds.top,
+        greaterThanOrEqualTo(
+          tester
+                  .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                  .dy +
+              24,
+        ),
+      );
+    }
+
     expect(
       find.byKey(const ValueKey('blockbuster-background-featured')),
       findsOneWidget,
@@ -643,6 +660,7 @@ void main() {
             24,
       ),
     );
+    expectFocusedRailClippedBelowHero();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
@@ -697,6 +715,7 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
       lessThan(460),
     );
+    expectFocusedRailClippedBelowHero();
 
     final homeScroll = tester.state<ScrollableState>(
       find
@@ -721,6 +740,7 @@ void main() {
             24,
       ),
     );
+    expectFocusedRailClippedBelowHero();
 
     await tester.pumpAndSettle();
 
@@ -767,6 +787,7 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('media-card-movies'))).dy,
       lessThan(460),
     );
+    expectFocusedRailClippedBelowHero();
   });
 
   testWidgets('disables Blockbuster rail focus motion when requested', (

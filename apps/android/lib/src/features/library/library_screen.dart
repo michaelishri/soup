@@ -13,6 +13,7 @@ const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
 const _blockbusterPinnedHeroRailClearance = 80.0;
 const _blockbusterRailTransitionDuration = Duration(milliseconds: 180);
+const _blockbusterRailClipFallbackFraction = 0.62;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -46,6 +47,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   _FruityDestination _destination = _FruityDestination.home;
   JellyfinItem? _blockbusterBackdropItem;
   String? _blockbusterFocusedRail;
+  double? _blockbusterRailClipTop;
   int _blockbusterFocusRevision = 0;
   bool _savingAppearance = false;
 
@@ -98,6 +100,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       setState(() {
         _blockbusterBackdropItem = item;
         _blockbusterFocusedRail = rail;
+        _blockbusterRailClipTop = null;
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -140,6 +143,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final heroBottom = heroCopy
         .localToGlobal(Offset(0, heroCopy.size.height))
         .dy;
+    final safeRailTop = heroBottom + 24;
+    if (_blockbusterRailClipTop == null ||
+        (_blockbusterRailClipTop! - safeRailTop).abs() >= 1) {
+      setState(() => _blockbusterRailClipTop = safeRailTop);
+    }
     final cardTop = focusedCard.localToGlobal(Offset.zero).dy;
     final desiredCardTop = heroBottom + _blockbusterPinnedHeroRailClearance;
     final targetOffset =
@@ -431,6 +439,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     if (!blockbusterWide || hero == null) return homeContent;
     final backdropItem = _blockbusterBackdropItem ?? hero;
+    final clippedHomeContent = ClipRect(
+      key: const ValueKey('blockbuster-focused-rail-clip'),
+      clipper: _BlockbusterHeroSafeClipper(
+        top: hasFocusedRail
+            ? _blockbusterRailClipTop ??
+                  MediaQuery.sizeOf(context).height *
+                      _blockbusterRailClipFallbackFraction
+            : 0,
+      ),
+      child: homeContent,
+    );
     return Stack(
       children: [
         Positioned.fill(
@@ -443,7 +462,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
         ),
-        homeContent,
+        clippedHomeContent,
         if (hasFocusedRail)
           _BlockbusterPinnedHeroCopy(
             key: _blockbusterPinnedHeroKey,
@@ -459,6 +478,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() {
       _blockbusterBackdropItem = hero;
       _blockbusterFocusedRail = null;
+      _blockbusterRailClipTop = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_homeScrollController.hasClients) return;
@@ -1476,6 +1496,23 @@ class _BlockbusterHomeBackground extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _BlockbusterHeroSafeClipper extends CustomClipper<Rect> {
+  const _BlockbusterHeroSafeClipper({required this.top});
+
+  final double top;
+
+  @override
+  Rect getClip(Size size) {
+    final clippedTop = top.clamp(0, size.height).toDouble();
+    return Rect.fromLTRB(0, clippedTop, size.width, size.height);
+  }
+
+  @override
+  bool shouldReclip(covariant _BlockbusterHeroSafeClipper oldClipper) {
+    return oldClipper.top != top;
   }
 }
 
