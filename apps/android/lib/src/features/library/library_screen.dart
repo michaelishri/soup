@@ -11,7 +11,8 @@ enum _FruityDestination { home, tv, movies, settings }
 const _blockbusterContentInset = 104.0;
 const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
-const _blockbusterPinnedHeroRailClearance = 80.0;
+const _blockbusterPinnedHeroLift = 32.0;
+const _blockbusterPinnedHeroRailClearance = 80.0 + _blockbusterPinnedHeroLift;
 const _blockbusterRailTransitionDuration = Duration(milliseconds: 180);
 const _blockbusterRailClipFallbackFraction = 0.62;
 const _blockbusterRailFadeExtent = 64.0;
@@ -1580,7 +1581,7 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
     final theme = Theme.of(context);
     final size = MediaQuery.sizeOf(context);
     return Positioned(
-      top: size.height * 0.17,
+      top: size.height * 0.17 - _blockbusterPinnedHeroLift,
       left: _blockbusterContentInset,
       right: 24,
       child: ConstrainedBox(
