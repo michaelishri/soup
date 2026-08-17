@@ -263,8 +263,34 @@ class _LibraryScreenState extends State<LibraryScreen> {
             autofocusFirst: home.libraries.isEmpty,
             sectionOrder: 2,
           );
-    final overlayContinueWatching =
-        blockbusterWide && hero != null && continueWatching != null;
+    final latestMedia = home.latest.isEmpty
+        ? null
+        : _LibrarySection(
+            blockbuster: blockbuster,
+            title: 'Latest Media',
+            items: home.latest,
+            image: _viewModel.image,
+            onOpen: _open,
+            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
+            autofocusFirst: home.resume.isEmpty && home.libraries.isEmpty,
+            sectionOrder: 3,
+          );
+    final myMedia = home.libraries.isEmpty
+        ? null
+        : _LibrarySection(
+            blockbuster: blockbuster,
+            title: 'My Media',
+            items: home.libraries,
+            landscape: true,
+            image: _viewModel.image,
+            onOpen: _open,
+            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
+            autofocusFirst: true,
+            sectionOrder: 1,
+          );
+    final playlistRails = [?continueWatching, ?latestMedia, ?myMedia];
+    final overlayPlaylistRails =
+        blockbusterWide && hero != null && playlistRails.isNotEmpty;
     final heroContentItem = hero == null
         ? null
         : (blockbusterWide ? _blockbusterBackdropItem ?? hero : hero);
@@ -289,14 +315,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
       key: const ValueKey('library-home'),
       controller: _homeScrollController,
       slivers: [
-        if (heroWidget != null && overlayContinueWatching)
+        if (heroWidget != null && overlayPlaylistRails)
           SliverToBoxAdapter(
             child: Column(
               children: [
                 heroWidget,
                 Transform.translate(
                   offset: const Offset(0, -_blockbusterHeroRailOverlap),
-                  child: continueWatching.buildContent(context),
+                  child: _BlockbusterPlaylistRails(rails: playlistRails),
                 ),
               ],
             ),
@@ -314,31 +340,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
           ),
-        if (continueWatching != null && !overlayContinueWatching)
-          continueWatching,
-        if (home.latest.isNotEmpty)
-          _LibrarySection(
-            blockbuster: blockbuster,
-            title: 'Latest Media',
-            items: home.latest,
-            image: _viewModel.image,
-            onOpen: _open,
-            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
-            autofocusFirst: home.resume.isEmpty && home.libraries.isEmpty,
-            sectionOrder: 3,
-          ),
-        if (home.libraries.isNotEmpty)
-          _LibrarySection(
-            blockbuster: blockbuster,
-            title: 'My Media',
-            items: home.libraries,
-            landscape: true,
-            image: _viewModel.image,
-            onOpen: _open,
-            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
-            autofocusFirst: true,
-            sectionOrder: 1,
-          ),
+        if (!overlayPlaylistRails) ...playlistRails,
         const SliverToBoxAdapter(child: SizedBox(height: 36)),
       ],
     );
@@ -1510,6 +1512,20 @@ class _LibrarySection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BlockbusterPlaylistRails extends StatelessWidget {
+  const _BlockbusterPlaylistRails({required this.rails});
+
+  final List<_LibrarySection> rails;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const ValueKey('blockbuster-playlist-rails'),
+      children: [for (final rail in rails) rail.buildContent(context)],
     );
   }
 }

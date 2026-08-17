@@ -241,6 +241,10 @@ void main() {
     expect(find.text('Favourites'), findsNothing);
     expect(find.text('Latest'), findsWidgets);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsNothing);
+    expect(
+      find.byKey(const ValueKey('blockbuster-playlist-rails')),
+      findsOneWidget,
+    );
 
     final moreInfoSurface = tester.widget<AnimatedContainer>(
       find.byKey(const ValueKey('blockbuster-hero-more-info-surface')),
