@@ -64,6 +64,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('My Media'), findsNothing);
+    expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
+    expect(find.byKey(const ValueKey('media-card-shows')), findsNothing);
     expect(find.text('Movies'), findsOneWidget);
     expect(find.byKey(const ValueKey('fruity-nav-home')), findsOneWidget);
     expect(find.byKey(const ValueKey('fruity-nav-tv')), findsOneWidget);
@@ -101,10 +104,87 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.text('No playlists yet'), findsOneWidget);
     await tester.tap(find.text('Refresh'));
     await tester.pumpAndSettle();
     expect(source.loads, 2);
+  });
+
+  testWidgets('hides media-library folders from home rails in both presets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final source = FakeLibrarySource(
+      const JellyfinHome(
+        libraries: [
+          JellyfinItem(
+            id: 'movies',
+            name: 'Movies',
+            type: 'CollectionFolder',
+            collectionType: 'movies',
+          ),
+          JellyfinItem(
+            id: 'shows',
+            name: 'TV Shows',
+            type: 'CollectionFolder',
+            collectionType: 'tvshows',
+          ),
+        ],
+        resume: [
+          JellyfinItem(
+            id: 'resume-library',
+            name: 'Resume Library',
+            type: 'CollectionFolder',
+          ),
+          JellyfinItem(id: 'resume-movie', name: 'Resume Movie', type: 'Movie'),
+        ],
+        latest: [
+          JellyfinItem(
+            id: 'latest-library',
+            name: 'Latest Library',
+            type: 'CollectionFolder',
+          ),
+          JellyfinItem(id: 'latest-movie', name: 'Latest Movie', type: 'Movie'),
+        ],
+      ),
+    );
+
+    for (final preset in UiPreset.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LibraryScreen(
+            key: ValueKey('hidden-libraries-${preset.name}'),
+            source: source,
+            session: session,
+            appearance: AppearanceSettings(preset: preset),
+            onSignOut: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('My Media'), findsNothing);
+      expect(
+        find.byKey(const ValueKey('media-card-resume-library')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('media-card-latest-library')),
+        findsNothing,
+      );
+      expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
+      expect(find.byKey(const ValueKey('media-card-shows')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('media-card-resume-movie')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('media-card-latest-movie')),
+        findsOneWidget,
+      );
+    }
   });
 
   testWidgets('renders an actionable error state', (tester) async {
@@ -854,78 +934,8 @@ void main() {
     expectFocusedRailClippedBelowHero();
     expectFocusedCardFits('featured');
 
-    final homeScroll = tester.state<ScrollableState>(
-      find
-          .descendant(
-            of: find.byKey(const ValueKey('library-home')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    final latestMediaScrollOffset = homeScroll.position.pixels;
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 90));
-
-    expect(homeScroll.position.pixels, closeTo(latestMediaScrollOffset, 0.1));
-    expect(
-      tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
-      greaterThan(
-        tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
-                .dy +
-            24,
-      ),
-    );
-    expectFocusedRailClippedBelowHero();
-
-    await tester.pumpAndSettle();
-
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(
-              const ValueKey('blockbuster-playlist-continue-watching'),
-            ),
-          )
-          .opacity,
-      0,
-    );
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(const ValueKey('blockbuster-playlist-latest-media')),
-          )
-          .opacity,
-      0,
-    );
-    expect(
-      tester
-          .widget<AnimatedOpacity>(
-            find.byKey(const ValueKey('blockbuster-playlist-my-media')),
-          )
-          .opacity,
-      1,
-    );
-    expect(
-      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
-      'Movies',
-    );
-    expect(
-      tester.getTopLeft(find.text('My Media')).dy,
-      greaterThan(
-        tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
-                .dy +
-            24,
-      ),
-    );
-    expect(
-      tester.getTopLeft(find.byKey(const ValueKey('media-card-movies'))).dy,
-      lessThan(460),
-    );
-    expectFocusedRailClippedBelowHero();
-    expectFocusedCardFits('movies');
+    expect(find.text('My Media'), findsNothing);
+    expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
   });
 
   testWidgets('disables Blockbuster rail focus motion when requested', (

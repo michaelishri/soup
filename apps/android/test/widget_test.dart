@@ -300,7 +300,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('appearance-continue')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Your library is empty'), findsOneWidget);
+    expect(find.text('No playlists yet'), findsOneWidget);
     expect(passwordField.controller?.text, isEmpty);
     expect(submittedPassword, contains('not-stored'));
     expect(store.session?.accessToken, 'token');
