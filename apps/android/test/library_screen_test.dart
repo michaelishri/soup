@@ -594,8 +594,18 @@ void main() {
             const JellyfinHome(
               libraries: [],
               resume: [
-                JellyfinItem(id: 'resume-0', name: 'Resume 0', type: 'Movie'),
-                JellyfinItem(id: 'resume-1', name: 'Resume 1', type: 'Movie'),
+                JellyfinItem(
+                  id: 'resume-0',
+                  name: 'Resume 0',
+                  type: 'Movie',
+                  overview: 'First resume overview',
+                ),
+                JellyfinItem(
+                  id: 'resume-1',
+                  name: 'Resume 1',
+                  type: 'Movie',
+                  overview: 'Second resume overview',
+                ),
               ],
               latest: [
                 JellyfinItem(id: 'featured', name: 'Featured', type: 'Movie'),
@@ -614,6 +624,13 @@ void main() {
       find.byKey(const ValueKey('blockbuster-background-featured')),
       findsOneWidget,
     );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Featured',
+    );
+    final featuredTitleTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fruity-hero-title')))
+        .dy;
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
@@ -622,6 +639,15 @@ void main() {
       find.byKey(const ValueKey('blockbuster-background-resume-0')),
       findsOneWidget,
     );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Resume 0',
+    );
+    expect(find.text('First resume overview'), findsOneWidget);
+    final heroTitleTop = tester
+        .getTopLeft(find.byKey(const ValueKey('fruity-hero-title')))
+        .dy;
+    expect(heroTitleTop, lessThan(featuredTitleTop));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
@@ -629,6 +655,15 @@ void main() {
     expect(
       find.byKey(const ValueKey('blockbuster-background-resume-1')),
       findsOneWidget,
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Resume 1',
+    );
+    expect(find.text('Second resume overview'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('fruity-hero-title'))).dy,
+      closeTo(heroTitleTop, 0.1),
     );
   });
 

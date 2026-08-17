@@ -265,15 +265,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
           );
     final overlayContinueWatching =
         blockbusterWide && hero != null && continueWatching != null;
-    final heroWidget = hero == null
+    final heroContentItem = hero == null
+        ? null
+        : (blockbusterWide ? _blockbusterBackdropItem ?? hero : hero);
+    final heroWidget = heroContentItem == null
         ? null
         : _FruityHero(
             blockbuster: blockbuster,
-            item: hero,
+            item: heroContentItem,
             userName: widget.session.userName,
-            image: _viewModel.image(hero, type: 'Backdrop', maxWidth: 1600),
-            onOpen: () => _open(hero),
-            onHeroFocused: blockbuster ? () => _restoreFullHero(hero) : null,
+            image: _viewModel.image(
+              heroContentItem,
+              type: 'Backdrop',
+              maxWidth: 1600,
+            ),
+            onOpen: () => _open(heroContentItem),
+            onHeroFocused: blockbuster
+                ? () => _restoreFullHero(heroContentItem)
+                : null,
             showBackdrop: !blockbusterWide,
           );
     final homeContent = CustomScrollView(
