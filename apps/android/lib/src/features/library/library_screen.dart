@@ -602,6 +602,7 @@ class _BlockbusterRail extends StatefulWidget {
 class _BlockbusterRailState extends State<_BlockbusterRail> {
   late final FocusScopeNode _focusScopeNode;
   late final FocusNode _searchNode;
+  late final FocusNode _favouritesNode;
   late final Map<_FruityDestination, FocusNode> _destinationNodes;
   bool _expanded = false;
   bool _exitAfterCollapse = false;
@@ -612,6 +613,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
     _focusScopeNode = FocusScopeNode(debugLabel: 'blockbuster-navigation')
       ..addListener(_handleFocusChange);
     _searchNode = FocusNode(debugLabel: 'blockbuster-search');
+    _favouritesNode = FocusNode(debugLabel: 'blockbuster-favourites');
     _destinationNodes = {
       for (final destination in _FruityDestination.values)
         destination: FocusNode(debugLabel: 'blockbuster-${destination.name}'),
@@ -624,6 +626,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
       ..removeListener(_handleFocusChange)
       ..dispose();
     _searchNode.dispose();
+    _favouritesNode.dispose();
     for (final node in _destinationNodes.values) {
       node.dispose();
     }
@@ -690,8 +693,19 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                         onPressed: () {},
                       ),
                       _BlockbusterRailItem(
-                        key: const ValueKey('blockbuster-nav-home'),
+                        key: const ValueKey('blockbuster-nav-favourites'),
                         order: 2,
+                        icon: PhosphorIconsRegular.heart,
+                        focusedIcon: PhosphorIconsBold.heart,
+                        label: 'Favourites',
+                        focusNode: _favouritesNode,
+                        expanded: showLabels,
+                        selected: false,
+                        onPressed: () {},
+                      ),
+                      _BlockbusterRailItem(
+                        key: const ValueKey('blockbuster-nav-home'),
+                        order: 3,
                         icon: PhosphorIconsRegular.house,
                         focusedIcon: PhosphorIconsBold.house,
                         label: 'Home',
@@ -703,7 +717,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-tv'),
-                        order: 3,
+                        order: 4,
                         icon: PhosphorIconsRegular.television,
                         focusedIcon: PhosphorIconsBold.television,
                         label: 'TV',
@@ -715,7 +729,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-movies'),
-                        order: 4,
+                        order: 5,
                         icon: PhosphorIconsRegular.filmSlate,
                         focusedIcon: PhosphorIconsBold.filmSlate,
                         label: 'Movies',
@@ -729,7 +743,7 @@ class _BlockbusterRailState extends State<_BlockbusterRail> {
                       ),
                       _BlockbusterRailItem(
                         key: const ValueKey('blockbuster-nav-settings'),
-                        order: 5,
+                        order: 6,
                         icon: PhosphorIconsRegular.gear,
                         focusedIcon: PhosphorIconsBold.gear,
                         label: 'Settings',
