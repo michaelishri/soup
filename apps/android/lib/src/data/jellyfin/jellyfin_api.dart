@@ -173,6 +173,13 @@ class JellyfinHome {
   final List<JellyfinItem>? recentlyAddedTv;
 }
 
+class JellyfinImageResponse {
+  const JellyfinImageResponse({required this.bytes, required this.mimeType});
+
+  final Uint8List bytes;
+  final String mimeType;
+}
+
 class JellyfinSubtitleTrack {
   const JellyfinSubtitleTrack({
     required this.index,
@@ -259,6 +266,17 @@ abstract interface class JellyfinLibrarySource {
   });
 }
 
+abstract interface class JellyfinArtworkNetworkSource {
+  Future<JellyfinImageResponse?> downloadImage(
+    JellyfinSession session,
+    JellyfinItem item, {
+    required String type,
+    required int imageIndex,
+    required int maxWidth,
+    required int quality,
+  });
+}
+
 abstract interface class JellyfinDetailsSource {
   Future<JellyfinItem> getItem(JellyfinSession session, String itemId);
 
@@ -291,6 +309,7 @@ class JellyfinApiException implements Exception {
 class JellyfinApi
     implements
         JellyfinLibrarySource,
+        JellyfinArtworkNetworkSource,
         JellyfinDetailsSource,
         JellyfinPlaybackSource {
   JellyfinApi(
@@ -456,6 +475,25 @@ class JellyfinApi
     String type = 'Primary',
     int maxWidth = 480,
   }) async {
+    return (await downloadImage(
+      session,
+      item,
+      type: type,
+      imageIndex: 0,
+      maxWidth: maxWidth,
+      quality: 75,
+    ))?.bytes;
+  }
+
+  @override
+  Future<JellyfinImageResponse?> downloadImage(
+    JellyfinSession session,
+    JellyfinItem item, {
+    required String type,
+    required int imageIndex,
+    required int maxWidth,
+    required int quality,
+  }) async {
     final tag = type == 'Backdrop'
         ? item.backdropImageTag
         : item.primaryImageTag;
@@ -465,9 +503,17 @@ class JellyfinApi
           _sessionUri(
             session,
             'Items/${item.id}/Images/$type',
-            query: {'tag': tag, 'maxWidth': '$maxWidth', 'quality': '85'},
+            query: {
+              'tag': tag,
+              'maxWidth': '$maxWidth',
+              'quality': '$quality',
+              'imageIndex': '$imageIndex',
+            },
           ),
-          headers: _sessionHeaders(session),
+          headers: {
+            ..._sessionHeaders(session),
+            'Accept': 'image/webp, image/jpeg, image/png',
+          },
         )
         .timeout(const Duration(seconds: 20));
     if (response.statusCode == 404) return null;
@@ -476,7 +522,17 @@ class JellyfinApi
         'Could not load artwork. Jellyfin returned HTTP ${response.statusCode}.',
       );
     }
-    return response.bodyBytes;
+    final mimeType = (response.headers['content-type'] ?? '')
+        .split(';')
+        .first
+        .trim()
+        .toLowerCase();
+    if (!mimeType.startsWith('image/')) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an invalid artwork response.',
+      );
+    }
+    return JellyfinImageResponse(bytes: response.bodyBytes, mimeType: mimeType);
   }
 
   @override

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:soup/src/data/appearance/appearance_store.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
@@ -142,9 +143,15 @@ class _AuthenticatedHome extends StatelessWidget {
             detailsSource: api,
             session: session,
           );
+          final artworkRepository = ArtworkCache(
+            database: database,
+            networkSource: api,
+            session: session,
+          );
           return LibraryScreen(
             source: api,
             metadataRepository: metadataRepository,
+            artworkRepository: artworkRepository,
             session: session,
             onSignOut: viewModel.signOut,
             appearance: appearanceController.effectiveSettings,
@@ -156,6 +163,7 @@ class _AuthenticatedHome extends StatelessWidget {
                     source: api,
                     artworkSource: api,
                     metadataRepository: metadataRepository,
+                    artworkRepository: artworkRepository,
                     session: session,
                     item: item,
                     onPlay: (item, startAt) {

@@ -1,24 +1,33 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
 
 void main() {
   testWidgets('keeps the previous artwork while the next image cross-fades', (
     tester,
   ) async {
-    final firstImage = Completer<Uint8List?>();
-    final secondImage = Completer<Uint8List?>();
+    final firstImage = Completer<CachedArtwork?>();
+    final secondImage = Completer<CachedArtwork?>();
     final png = base64Decode(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
     );
+    final directory = Directory.systemTemp.createTempSync(
+      'soup-fading-artwork-',
+    );
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final firstFile = File('${directory.path}/first.png')
+      ..writeAsBytesSync(png);
+    final secondFile = File('${directory.path}/second.png')
+      ..writeAsBytesSync(png);
 
     Widget build({
       required Object artworkKey,
-      required Future<Uint8List?> image,
+      required Future<CachedArtwork?> image,
     }) {
       return MaterialApp(
         home: SizedBox.expand(
@@ -34,8 +43,16 @@ void main() {
     await tester.pumpWidget(
       build(artworkKey: 'first', image: firstImage.future),
     );
-    firstImage.complete(png);
-    await tester.pumpAndSettle();
+    firstImage.complete(
+      CachedArtwork(
+        file: firstFile,
+        variantKey: 'first',
+        mimeType: 'image/png',
+        variantWidth: 1,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byKey(const ValueKey('artwork-image-first')), findsOneWidget);
 
@@ -46,14 +63,21 @@ void main() {
     expect(find.byKey(const ValueKey('artwork-image-first')), findsOneWidget);
     expect(find.byKey(const ValueKey('artwork-image-second')), findsNothing);
 
-    secondImage.complete(png);
+    secondImage.complete(
+      CachedArtwork(
+        file: secondFile,
+        variantKey: 'second',
+        mimeType: 'image/png',
+        variantWidth: 1,
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 160));
 
     expect(find.byKey(const ValueKey('artwork-image-first')), findsOneWidget);
     expect(find.byKey(const ValueKey('artwork-image-second')), findsOneWidget);
 
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byKey(const ValueKey('artwork-image-first')), findsNothing);
     expect(find.byKey(const ValueKey('artwork-image-second')), findsOneWidget);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
@@ -21,12 +22,14 @@ class DetailsScreen extends StatefulWidget {
     required this.item,
     required this.onPlay,
     this.metadataRepository,
+    this.artworkRepository,
     super.key,
   });
 
   final JellyfinDetailsSource source;
   final JellyfinLibrarySource artworkSource;
   final JellyfinMetadataRepository? metadataRepository;
+  final ArtworkRepository? artworkRepository;
   final JellyfinSession session;
   final JellyfinItem item;
   final PlayItem onPlay;
@@ -39,7 +42,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   late final DetailsViewModel _viewModel;
   late final JellyfinMetadataRepository _metadataRepository;
   late final bool _ownsMetadataRepository;
-  final Map<String, Future<Uint8List?>> _images = {};
+  final Map<String, Future<CachedArtwork?>> _images = {};
 
   @override
   void initState() {
@@ -67,7 +70,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
     super.dispose();
   }
 
-  Future<Uint8List?> _image(
+  Future<CachedArtwork?> _image(
     JellyfinItem item, {
     String type = 'Primary',
     int maxWidth = 900,
@@ -85,12 +88,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
             initialTag.isNotEmpty
         ? widget.item
         : item;
-    final key = '${artworkItem.id}:$type:$maxWidth';
+    final key = '${artworkItem.id}:$type:$maxWidth:$detailTag:$initialTag';
     return _images.putIfAbsent(
       key,
-      () => widget.artworkSource
-          .getImage(widget.session, artworkItem, type: type, maxWidth: maxWidth)
-          .catchError((Object _) => null),
+      () =>
+          widget.artworkRepository
+              ?.getArtwork(artworkItem, type: type, maxWidth: maxWidth)
+              .catchError((Object _) => null) ??
+          Future.value(),
     );
   }
 
@@ -105,6 +110,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
           source: widget.source,
           artworkSource: widget.artworkSource,
           metadataRepository: _metadataRepository,
+          artworkRepository: widget.artworkRepository,
           session: widget.session,
           item: item,
           onPlay: widget.onPlay,
@@ -137,7 +143,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     image: _image(
                       _viewModel.item,
                       type: 'Backdrop',
-                      maxWidth: 1600,
+                      maxWidth: artworkBackdropWidth,
                     ),
                   ),
                   if (_viewModel.loading)
@@ -204,7 +210,7 @@ class _Backdrop extends StatelessWidget {
   const _Backdrop({required this.artworkKey, required this.image});
 
   final String artworkKey;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +259,7 @@ class _ItemDetails extends StatelessWidget {
   final JellyfinItem? selectedSeason;
   final List<JellyfinItem> episodes;
   final bool loadingEpisodes;
-  final Future<Uint8List?> Function(
+  final Future<CachedArtwork?> Function(
     JellyfinItem item, {
     String type,
     int maxWidth,
@@ -415,7 +421,7 @@ class _EpisodeList extends StatelessWidget {
   });
 
   final List<JellyfinItem> episodes;
-  final Future<Uint8List?> Function(
+  final Future<CachedArtwork?> Function(
     JellyfinItem item, {
     String type,
     int maxWidth,
@@ -440,7 +446,7 @@ class _EpisodeList extends StatelessWidget {
                   child: Row(
                     children: [
                       _Poster(
-                        image: image(episodes[index]),
+                        image: image(episodes[index], maxWidth: 720),
                         width: 180,
                         height: 102,
                       ),
@@ -496,7 +502,7 @@ class _LibraryContents extends StatelessWidget {
 
   final JellyfinItem library;
   final List<JellyfinItem> items;
-  final Future<Uint8List?> Function(
+  final Future<CachedArtwork?> Function(
     JellyfinItem item, {
     String type,
     int maxWidth,
@@ -540,7 +546,7 @@ class _LibraryContents extends StatelessWidget {
                 order: NumericFocusOrder(index + 1.0),
                 child: _DetailCard(
                   item: items[index],
-                  image: image(items[index], maxWidth: 400),
+                  image: image(items[index], maxWidth: 720),
                   autofocus: index == 0,
                   onPressed: () => onOpen(items[index]),
                 ),
@@ -561,7 +567,7 @@ class _DetailCard extends StatelessWidget {
   });
 
   final JellyfinItem item;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final bool autofocus;
   final VoidCallback onPressed;
 
@@ -609,7 +615,7 @@ class _Poster extends StatelessWidget {
     required this.height,
   });
 
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final double width;
   final double height;
 
@@ -625,15 +631,22 @@ class _Poster extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: FutureBuilder<Uint8List?>(
+          child: FutureBuilder<CachedArtwork?>(
             future: image,
             builder: (context, snapshot) {
-              final bytes = snapshot.data;
-              return bytes == null
+              final artwork = snapshot.data;
+              return artwork == null
                   ? const Center(
                       child: Icon(PhosphorIconsRegular.filmSlate, size: 44),
                     )
-                  : Image.memory(bytes, fit: BoxFit.cover);
+                  : Image.file(
+                      artwork.file,
+                      fit: BoxFit.cover,
+                      cacheWidth:
+                          (width * MediaQuery.devicePixelRatioOf(context))
+                              .ceil()
+                              .clamp(1, artwork.variantWidth),
+                    );
             },
           ),
         ),

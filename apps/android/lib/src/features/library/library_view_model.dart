@@ -1,22 +1,23 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 
 class LibraryViewModel extends ChangeNotifier {
   LibraryViewModel({
     required this.repository,
-    required this.artworkSource,
     required this.session,
+    this.artworkRepository,
   }) {
     _homeSubscription = repository.watchHome().listen(_acceptSnapshot);
   }
 
   final JellyfinMetadataRepository repository;
-  final JellyfinLibrarySource artworkSource;
+  final ArtworkRepository? artworkRepository;
   final JellyfinSession session;
-  final Map<String, Future<Uint8List?>> _images = {};
+  final Map<String, Future<CachedArtwork?>> _images = {};
   StreamSubscription<MetadataSnapshot<JellyfinHome>>? _homeSubscription;
 
   JellyfinHome? _home;
@@ -62,7 +63,7 @@ class LibraryViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<Uint8List?> image(
+  Future<CachedArtwork?> image(
     JellyfinItem item, {
     String type = 'Primary',
     int maxWidth = 480,
@@ -73,9 +74,11 @@ class LibraryViewModel extends ChangeNotifier {
     final key = '${item.id}:$type:$maxWidth:$tag';
     return _images.putIfAbsent(
       key,
-      () => artworkSource
-          .getImage(session, item, type: type, maxWidth: maxWidth)
-          .catchError((Object _) => null),
+      () =>
+          artworkRepository
+              ?.getArtwork(item, type: type, maxWidth: maxWidth)
+              .catchError((Object _) => null) ??
+          Future.value(),
     );
   }
 

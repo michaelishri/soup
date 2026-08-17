@@ -189,7 +189,11 @@ void main() {
     late http.Request captured;
     final client = MockClient((request) async {
       captured = request;
-      return http.Response.bytes([1, 2, 3], 200);
+      return http.Response.bytes(
+        [1, 2, 3],
+        200,
+        headers: {'content-type': 'image/webp'},
+      );
     });
     addTearDown(client.close);
     final api = JellyfinApi(client, deviceId: 'device');
@@ -212,6 +216,9 @@ void main() {
     expect(bytes, [1, 2, 3]);
     expect(captured.url.path, '/Items/item/Images/Primary');
     expect(captured.url.queryParameters['maxWidth'], '320');
+    expect(captured.url.queryParameters['quality'], '75');
+    expect(captured.url.queryParameters['imageIndex'], '0');
+    expect(captured.headers['accept'], 'image/webp, image/jpeg, image/png');
     expect(captured.headers['x-emby-token'], 'token');
   });
 

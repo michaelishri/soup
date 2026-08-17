@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 
 const _minimumTextContrast = 4.5;
 const _sampleWidth = 96;
@@ -88,7 +89,7 @@ class AdaptiveBackdropContrastBuilder extends StatefulWidget {
   });
 
   final Object artworkKey;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final Widget Function(BuildContext context, BackdropContrast contrast)
   builder;
 
@@ -124,7 +125,10 @@ class _AdaptiveBackdropContrastBuilderState
     }
     BackdropContrast contrast;
     try {
-      contrast = await analyzeBackdropContrast(await widget.image);
+      final artwork = await widget.image;
+      contrast = await analyzeBackdropContrast(
+        artwork == null ? null : await artwork.file.readAsBytes(),
+      );
     } catch (_) {
       contrast = BackdropContrast.fallback;
     }

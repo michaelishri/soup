@@ -356,4 +356,55 @@ class SoupDatabase extends _$SoupDatabase {
         ))
         .watchSingleOrNull();
   }
+
+  Future<ArtworkEntry?> findArtwork(String variantKey) {
+    return (select(
+      artworkEntries,
+    )..where((entry) => entry.variantKey.equals(variantKey))).getSingleOrNull();
+  }
+
+  Future<void> upsertArtwork(ArtworkEntriesCompanion entry) {
+    return into(artworkEntries).insertOnConflictUpdate(entry);
+  }
+
+  Future<void> touchArtwork(String variantKey, DateTime accessedAt) {
+    return (update(artworkEntries)
+          ..where((entry) => entry.variantKey.equals(variantKey)))
+        .write(ArtworkEntriesCompanion(lastAccess: Value(accessedAt)));
+  }
+
+  Future<void> removeArtwork(String variantKey) {
+    return (delete(
+      artworkEntries,
+    )..where((entry) => entry.variantKey.equals(variantKey))).go();
+  }
+
+  Future<List<ArtworkEntry>> oldestArtwork({bool backdropsOnly = false}) {
+    final query = select(artworkEntries);
+    if (backdropsOnly) {
+      query.where((entry) => entry.imageType.equals('Backdrop'));
+    }
+    query.orderBy([(entry) => OrderingTerm.asc(entry.lastAccess)]);
+    return query.get();
+  }
+
+  Future<int> artworkBytes({bool backdropsOnly = false}) async {
+    final total = artworkEntries.byteSize.sum();
+    final query = selectOnly(artworkEntries)..addColumns([total]);
+    if (backdropsOnly) {
+      query.where(artworkEntries.imageType.equals('Backdrop'));
+    }
+    final row = await query.getSingle();
+    return row.read(total) ?? 0;
+  }
+
+  Stream<int> watchArtworkBytes() {
+    final total = artworkEntries.byteSize.sum();
+    final query = selectOnly(artworkEntries)..addColumns([total]);
+    return query.watchSingle().map((row) => row.read(total) ?? 0);
+  }
+
+  Future<List<ArtworkEntry>> allArtwork() => select(artworkEntries).get();
+
+  Future<void> clearArtworkManifest() => delete(artworkEntries).go();
 }

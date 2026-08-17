@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -30,6 +31,7 @@ class LibraryScreen extends StatefulWidget {
     required this.session,
     required this.onSignOut,
     this.metadataRepository,
+    this.artworkRepository,
     this.appearance = AppearanceSettings.defaults,
     this.onSaveAppearance,
     this.onOpenItem,
@@ -38,6 +40,7 @@ class LibraryScreen extends StatefulWidget {
 
   final JellyfinLibrarySource source;
   final JellyfinMetadataRepository? metadataRepository;
+  final ArtworkRepository? artworkRepository;
   final JellyfinSession session;
   final Future<void> Function() onSignOut;
   final AppearanceSettings appearance;
@@ -87,8 +90,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         );
     _viewModel = LibraryViewModel(
       repository: _metadataRepository,
-      artworkSource: widget.source,
       session: widget.session,
+      artworkRepository: widget.artworkRepository,
     )..load();
   }
 
@@ -491,7 +494,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         : (blockbusterWide ? _blockbusterBackdropItem ?? hero : hero);
     final heroContentImage = heroContentItem == null
         ? null
-        : _viewModel.image(heroContentItem, type: 'Backdrop', maxWidth: 1600);
+        : _viewModel.image(
+            heroContentItem,
+            type: 'Backdrop',
+            maxWidth: artworkBackdropWidth,
+          );
     final heroWidget = heroContentItem == null
         ? null
         : _FruityHero(
@@ -1429,7 +1436,7 @@ class _FruityHero extends StatelessWidget {
   final bool blockbuster;
   final JellyfinItem item;
   final String userName;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final VoidCallback onOpen;
   final VoidCallback? onHeroFocused;
   final FocusNode? focusNode;
@@ -1707,7 +1714,7 @@ class _BlockbusterHomeBackground extends StatelessWidget {
   });
 
   final String artworkKey;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
 
   @override
   Widget build(BuildContext context) {
@@ -1827,7 +1834,7 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
 
   final JellyfinItem item;
   final String userName;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final VoidCallback onOpen;
   final FocusNode focusNode;
   final VoidCallback onFocused;
@@ -1985,7 +1992,7 @@ class _LibrarySection extends StatelessWidget {
   final bool blockbuster;
   final String title;
   final List<JellyfinItem> items;
-  final Future<Uint8List?> Function(
+  final Future<CachedArtwork?> Function(
     JellyfinItem item, {
     String type,
     int maxWidth,
@@ -2188,7 +2195,7 @@ class _MediaCard extends StatefulWidget {
   final JellyfinItem item;
   final double width;
   final double artHeight;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final bool autofocus;
   final VoidCallback onPressed;
   final VoidCallback? onFocused;
@@ -2263,15 +2270,24 @@ class _MediaCardState extends State<_MediaCard> {
                         : null,
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: FutureBuilder<Uint8List?>(
+                  child: FutureBuilder<CachedArtwork?>(
                     future: widget.image,
                     builder: (context, snapshot) {
-                      final bytes = snapshot.data;
-                      if (bytes != null && bytes.isNotEmpty) {
-                        return Image.memory(
-                          bytes,
+                      final artwork = snapshot.data;
+                      if (artwork != null) {
+                        final physicalWidth =
+                            (widget.width.isFinite
+                                ? widget.width
+                                : MediaQuery.sizeOf(context).width) *
+                            MediaQuery.devicePixelRatioOf(context);
+                        return Image.file(
+                          artwork.file,
                           fit: BoxFit.cover,
                           width: double.infinity,
+                          cacheWidth: physicalWidth.ceil().clamp(
+                            1,
+                            artwork.variantWidth,
+                          ),
                         );
                       }
                       return Center(
@@ -2321,7 +2337,7 @@ class _LibraryTile extends StatelessWidget {
 
   final bool blockbuster;
   final JellyfinItem item;
-  final Future<Uint8List?> image;
+  final Future<CachedArtwork?> image;
   final bool autofocus;
   final VoidCallback onPressed;
 
