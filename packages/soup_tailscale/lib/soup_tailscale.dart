@@ -4,9 +4,17 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
+import 'package:soup_tailscale/src/local_api.dart';
 import 'package:soup_tailscale/src/native_bindings.dart';
 
-enum TailscaleConnectionPhase { disconnected, connecting, connected, failed }
+enum TailscaleConnectionPhase {
+  disconnected,
+  starting,
+  awaitingLogin,
+  awaitingApproval,
+  connected,
+  failed,
+}
 
 class TailscaleProxy {
   const TailscaleProxy({
@@ -37,13 +45,23 @@ class TailscaleStatus {
     this.tailnetIp,
     this.detail,
     this.proxy,
+    this.authorizationUrl,
   });
 
   const TailscaleStatus.disconnected()
     : this(phase: TailscaleConnectionPhase.disconnected);
 
-  const TailscaleStatus.connecting()
-    : this(phase: TailscaleConnectionPhase.connecting);
+  const TailscaleStatus.starting()
+    : this(phase: TailscaleConnectionPhase.starting);
+
+  const TailscaleStatus.awaitingLogin(Uri authorizationUrl)
+    : this(
+        phase: TailscaleConnectionPhase.awaitingLogin,
+        authorizationUrl: authorizationUrl,
+      );
+
+  const TailscaleStatus.awaitingApproval()
+    : this(phase: TailscaleConnectionPhase.awaitingApproval);
 
   const TailscaleStatus.connected({
     required String hostname,
@@ -64,6 +82,7 @@ class TailscaleStatus {
   final String? tailnetIp;
   final String? detail;
   final TailscaleProxy? proxy;
+  final Uri? authorizationUrl;
 }
 
 abstract interface class TailscaleClient {
@@ -73,7 +92,9 @@ abstract interface class TailscaleClient {
 
   Future<void> restore();
 
-  Future<void> connect({required String authKey});
+  Future<void> connectInteractively();
+
+  Future<void> connectWithAuthKey({required String authKey});
 
   Future<void> disconnect();
 }
@@ -93,6 +114,7 @@ class NativeTailscaleClient implements TailscaleClient {
   TailscaleStatus _status = const TailscaleStatus.disconnected();
   int? _server;
   Future<void>? _pendingConnection;
+  int _connectionGeneration = 0;
 
   @override
   Stream<TailscaleStatus> get statuses => _statuses.stream;
@@ -105,7 +127,7 @@ class NativeTailscaleClient implements TailscaleClient {
     final stateFile = File('$stateDirectory/tailscaled.state');
     if (!stateFile.existsSync() || stateFile.lengthSync() == 0) return;
     try {
-      await _start(authKey: null);
+      await _start(mode: _RegistrationMode.restore);
     } on Object {
       // A stale or expired node state is surfaced through status and can be
       // replaced by entering a fresh one-time auth key.
@@ -113,58 +135,159 @@ class NativeTailscaleClient implements TailscaleClient {
   }
 
   @override
-  Future<void> connect({required String authKey}) {
+  Future<void> connectInteractively() {
+    return _start(mode: _RegistrationMode.interactive);
+  }
+
+  @override
+  Future<void> connectWithAuthKey({required String authKey}) {
     final trimmedKey = authKey.trim();
     if (trimmedKey.isEmpty) {
       return Future.error(ArgumentError.value(authKey, 'authKey', 'is empty'));
     }
-    return _start(authKey: trimmedKey);
+    return _start(mode: _RegistrationMode.authKey, authKey: trimmedKey);
   }
 
-  Future<void> _start({required String? authKey}) {
+  Future<void> _start({
+    required _RegistrationMode mode,
+    String? authKey,
+  }) async {
     if (_status.phase == TailscaleConnectionPhase.connected) {
-      return Future.value();
+      return;
     }
-    return _pendingConnection ??= _runStart(authKey).whenComplete(() {
-      _pendingConnection = null;
-    });
+    final previous = _pendingConnection;
+    if (previous != null) {
+      await disconnect();
+      await previous;
+    }
+    final operation = _runStart(mode, authKey);
+    _pendingConnection = operation;
+    try {
+      await operation;
+    } finally {
+      if (identical(_pendingConnection, operation)) {
+        _pendingConnection = null;
+      }
+    }
   }
 
-  Future<void> _runStart(String? authKey) async {
+  Future<void> _runStart(_RegistrationMode mode, String? authKey) async {
     await disconnect();
-    _emit(const TailscaleStatus.connecting());
+    final generation = ++_connectionGeneration;
+    _emit(const TailscaleStatus.starting());
     try {
       final directoryPath = stateDirectory;
       final nodeHostname = hostname;
       final interfacesJson = await networkInterfaces();
-      final connection = await Isolate.run(
-        () => _startNative(
+      final node = await Isolate.run(
+        () => _startNativeNode(
           stateDirectory: directoryPath,
           hostname: nodeHostname,
           authKey: authKey,
           interfacesJson: interfacesJson,
         ),
       );
-      _server = connection.server;
+      _server = node.server;
+      _ensureCurrent(generation);
+      final localApi = TailscaleLocalApiClient(
+        address: node.loopbackAddress,
+        credential: node.localApiCredential,
+      );
+      if (mode == _RegistrationMode.interactive) {
+        await localApi.startInteractiveLogin();
+      }
+      await _waitUntilConnected(localApi, mode: mode, generation: generation);
+      _ensureCurrent(generation);
+      final tailnetIp = await Isolate.run(() => _readTailnetIp(node.server));
       _emit(
         TailscaleStatus.connected(
           hostname: hostname,
-          tailnetIp: connection.tailnetIp,
+          tailnetIp: tailnetIp,
           proxy: TailscaleProxy.parse(
-            connection.loopbackAddress,
-            connection.proxyCredential,
+            node.loopbackAddress,
+            node.proxyCredential,
           ),
         ),
       );
-    } on Object catch (error) {
+    } on _ConnectionCancelled {
+      final server = _server;
       _server = null;
+      if (server != null) {
+        await Isolate.run(() => tailscaleClose(server));
+      }
+      // disconnect() owns the final status for an explicitly cancelled attempt.
+    } on Object catch (error) {
+      final server = _server;
+      _server = null;
+      if (server != null) {
+        await Isolate.run(() => tailscaleClose(server));
+      }
       _emit(TailscaleStatus.failed(_friendlyError(error)));
       rethrow;
     }
   }
 
+  Future<void> _waitUntilConnected(
+    TailscaleLocalApiClient localApi, {
+    required _RegistrationMode mode,
+    required int generation,
+  }) async {
+    var consecutiveFailures = 0;
+    var authKeyNeedsLoginSince = DateTime.now();
+    while (true) {
+      _ensureCurrent(generation);
+      try {
+        final status = await localApi.status();
+        consecutiveFailures = 0;
+        _ensureCurrent(generation);
+        switch (status.backendState) {
+          case 'Running':
+            return;
+          case 'NeedsMachineAuth':
+            _emit(const TailscaleStatus.awaitingApproval());
+          case 'NeedsLogin':
+            if (mode == _RegistrationMode.restore) {
+              await disconnect();
+              return;
+            }
+            if (mode == _RegistrationMode.authKey) {
+              if (DateTime.now().difference(authKeyNeedsLoginSince) >
+                  const Duration(seconds: 3)) {
+                throw const TailscaleException(
+                  'tailscale_start',
+                  'invalid key or unable to validate API key',
+                );
+              }
+              _emit(const TailscaleStatus.starting());
+              break;
+            }
+            final authorizationUrl = status.authorizationUrl;
+            if (authorizationUrl != null) {
+              _emit(TailscaleStatus.awaitingLogin(authorizationUrl));
+            } else {
+              _emit(const TailscaleStatus.starting());
+            }
+          default:
+            authKeyNeedsLoginSince = DateTime.now();
+            _emit(const TailscaleStatus.starting());
+        }
+      } on _ConnectionCancelled {
+        rethrow;
+      } on Object {
+        consecutiveFailures++;
+        if (consecutiveFailures >= 5) rethrow;
+      }
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+  }
+
+  void _ensureCurrent(int generation) {
+    if (generation != _connectionGeneration) throw const _ConnectionCancelled();
+  }
+
   @override
   Future<void> disconnect() async {
+    _connectionGeneration++;
     final server = _server;
     _server = null;
     if (server != null) {
@@ -199,7 +322,14 @@ class UnavailableTailscaleClient implements TailscaleClient {
   Future<void> restore() async {}
 
   @override
-  Future<void> connect({required String authKey}) {
+  Future<void> connectInteractively() {
+    return Future.error(
+      UnsupportedError('The native libtailscale adapter is unavailable.'),
+    );
+  }
+
+  @override
+  Future<void> connectWithAuthKey({required String authKey}) {
     return Future.error(
       UnsupportedError('The native libtailscale adapter is unavailable.'),
     );
@@ -207,6 +337,12 @@ class UnavailableTailscaleClient implements TailscaleClient {
 
   @override
   Future<void> disconnect() async {}
+}
+
+enum _RegistrationMode { restore, interactive, authKey }
+
+class _ConnectionCancelled implements Exception {
+  const _ConnectionCancelled();
 }
 
 class TailscaleException implements Exception {
@@ -219,8 +355,14 @@ class TailscaleException implements Exception {
   String toString() => '$operation failed: $message';
 }
 
-({int server, String tailnetIp, String loopbackAddress, String proxyCredential})
-_startNative({
+typedef _NativeNode = ({
+  int server,
+  String loopbackAddress,
+  String proxyCredential,
+  String localApiCredential,
+});
+
+_NativeNode _startNativeNode({
   required String stateDirectory,
   required String hostname,
   required String? authKey,
@@ -277,20 +419,7 @@ _startNative({
       });
     }
 
-    _check(server, 'tailscale_up', tailscaleUp(server));
-
-    final ips = _readNativeString(
-      256,
-      (output, length) {
-        return tailscaleGetIps(server, output, length);
-      },
-      server: server,
-      operation: 'tailscale_getips',
-    );
-    final tailnetIp = ips
-        .split(',')
-        .map((value) => value.trim())
-        .firstWhere((value) => value.isNotEmpty);
+    _check(server, 'tailscale_start', tailscaleStart(server));
 
     final address = calloc<Uint8>(128).cast<Utf8>();
     final proxyCredential = calloc<Uint8>(33).cast<Utf8>();
@@ -309,9 +438,9 @@ _startNative({
       );
       return (
         server: server,
-        tailnetIp: tailnetIp,
         loopbackAddress: address.toDartString(),
         proxyCredential: proxyCredential.toDartString(),
+        localApiCredential: localApiCredential.toDartString(),
       );
     } finally {
       calloc.free(address);
@@ -322,6 +451,25 @@ _startNative({
     tailscaleClose(server);
     rethrow;
   }
+}
+
+String _readTailnetIp(int server) {
+  final ips = _readNativeString(
+    256,
+    (output, length) => tailscaleGetIps(server, output, length),
+    server: server,
+    operation: 'tailscale_getips',
+  );
+  return ips
+      .split(',')
+      .map((value) => value.trim())
+      .firstWhere(
+        (value) => value.isNotEmpty,
+        orElse: () => throw const TailscaleException(
+          'tailscale_getips',
+          'the connected node has no tailnet IP address',
+        ),
+      );
 }
 
 void _withNativeString(String value, void Function(Pointer<Utf8>) action) {

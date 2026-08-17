@@ -19,6 +19,9 @@ external int tailscaleSetLogsDirectory(Pointer<Utf8> directory);
 @Native<Int32 Function()>(symbol: 'tailscale_new', assetId: _assetId)
 external int tailscaleNew();
 
+@Native<Int32 Function(Int32)>(symbol: 'tailscale_start', assetId: _assetId)
+external int tailscaleStart(int server);
+
 @Native<Int32 Function(Int32)>(symbol: 'tailscale_up', assetId: _assetId)
 external int tailscaleUp(int server);
 
