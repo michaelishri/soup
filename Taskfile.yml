@@ -167,6 +167,18 @@ tasks:
       - task: api:generate
       - git diff --exit-code -- packages/jellyfin_api
 
+  db:generate:
+    desc: Regenerate the Drift database bindings
+    dir: apps/android
+    cmds:
+      - dart run build_runner build
+
+  db:check:
+    desc: Regenerate Drift bindings and fail if committed output is stale
+    cmds:
+      - task: db:generate
+      - git diff --exit-code -- apps/android/lib/src/data/cache
+
   build:apk:debug:
     aliases: [build]
     desc: Build a debug APK, including libtailscale for Flutter-selected ABIs
