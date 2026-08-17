@@ -648,6 +648,21 @@ void main() {
       tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
       'Featured',
     );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
+    expect(
+      tester
+          .getBottomRight(find.byKey(const ValueKey('media-card-featured')))
+          .dy,
+      lessThan(720),
+    );
   });
 
   testWidgets('disables Blockbuster rail focus motion when requested', (

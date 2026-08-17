@@ -447,12 +447,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       duration: duration ?? Duration.zero,
       curve: curve ?? Curves.ease,
     );
-    _homeScrollController.position.ensureVisible(
-      target,
-      alignment: _blockbusterPinnedHeroCardAlignment,
-      duration: duration ?? Duration.zero,
-      curve: curve ?? Curves.ease,
-    );
+    final outerScrollable = Scrollable.maybeOf(nearestScrollable.context);
+    if (outerScrollable != null &&
+        axisDirectionToAxis(outerScrollable.axisDirection) == Axis.vertical) {
+      outerScrollable.position.ensureVisible(
+        nearestScrollable.context.findRenderObject()!,
+        targetRenderObject: target,
+        alignment: _blockbusterPinnedHeroCardAlignment,
+        duration: duration ?? Duration.zero,
+        curve: curve ?? Curves.ease,
+      );
+    }
   }
 
   Widget _libraryDestination(JellyfinHome home, {required bool television}) {
