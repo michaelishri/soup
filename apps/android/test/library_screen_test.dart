@@ -258,7 +258,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-hero'))).height,
-      closeTo(518.4, 0.1),
+      720,
     );
     expect(
       tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,
@@ -516,6 +516,17 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      final homeScroll = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('library-home')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      homeScroll.position.jumpTo(homeScroll.position.maxScrollExtent);
       await tester.pumpAndSettle();
 
       final firstCard = find.byKey(const ValueKey('media-card-latest-0'));

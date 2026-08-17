@@ -1078,7 +1078,7 @@ class _FruityHero extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
     final heroHeight = blockbuster && wide
-        ? (size.height * 0.72).clamp(460.0, 760.0).toDouble()
+        ? size.height
         : (wide ? 300.0 : 330.0);
     return SizedBox(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
