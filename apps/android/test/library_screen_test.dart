@@ -534,12 +534,18 @@ void main() {
   testWidgets('updates the fixed Blockbuster backdrop as card focus moves', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1280, 720);
-    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: const TextScaler.linear(1.3)),
+          child: child!,
+        ),
         home: LibraryScreen(
           source: FakeLibrarySource(
             const JellyfinHome(
@@ -549,7 +555,8 @@ void main() {
                   id: 'resume-0',
                   name: 'Resume 0',
                   type: 'Movie',
-                  overview: 'First resume overview',
+                  overview:
+                      'The Eternals are a team of ancient aliens who have been living on Earth in secret for thousands of years. When an unexpected tragedy forces them out of the shadows, they reunite against mankind’s most ancient enemy.',
                 ),
                 JellyfinItem(
                   id: 'resume-1',
@@ -579,6 +586,15 @@ void main() {
       tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
       'Featured',
     );
+    expect(
+      tester.getTopLeft(find.text('Latest Media')).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
     final featuredTitleTop = tester
         .getTopLeft(find.byKey(const ValueKey('fruity-hero-title')))
         .dy;
@@ -594,12 +610,23 @@ void main() {
       tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
       'Resume 0',
     );
-    expect(find.text('First resume overview'), findsOneWidget);
+    expect(
+      find.textContaining('The Eternals are a team of ancient aliens'),
+      findsOneWidget,
+    );
     final heroTitleTop = tester
         .getTopLeft(find.byKey(const ValueKey('fruity-hero-title')))
         .dy;
     expect(heroTitleTop, lessThan(featuredTitleTop));
-    expect(heroTitleTop, closeTo(150.4, 0.1));
+    expect(
+      tester.getTopLeft(find.text('Continue Watching')).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('media-card-resume-0'))).dy,
       greaterThan(
@@ -658,10 +685,8 @@ void main() {
       ),
     );
     expect(
-      tester
-          .getBottomRight(find.byKey(const ValueKey('media-card-featured')))
-          .dy,
-      lessThan(720),
+      tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
+      lessThan(460),
     );
   });
 

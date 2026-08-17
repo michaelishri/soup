@@ -12,6 +12,7 @@ const _blockbusterContentInset = 104.0;
 const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
 const _blockbusterPinnedHeroCardAlignment = 0.58;
+const _blockbusterPinnedHeroRailClearance = 80.0;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -38,6 +39,7 @@ class LibraryScreen extends StatefulWidget {
 class _LibraryScreenState extends State<LibraryScreen> {
   late final LibraryViewModel _viewModel;
   final _blockbusterRailKey = GlobalKey<_BlockbusterRailState>();
+  final _blockbusterPinnedHeroKey = GlobalKey();
   late final FocusScopeNode _blockbusterContentScopeNode;
   late final ScrollController _homeScrollController;
   late AppearanceSettings _appearanceDraft;
@@ -88,14 +90,60 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _setBlockbusterFocusedItem(JellyfinItem item, String rail) {
-    if (_blockbusterBackdropItem?.id == item.id &&
-        _blockbusterFocusedRail == rail) {
+    if (_blockbusterBackdropItem?.id != item.id ||
+        _blockbusterFocusedRail != rail) {
+      setState(() {
+        _blockbusterBackdropItem = item;
+        _blockbusterFocusedRail = rail;
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _positionFocusedPlaylistBelowHero();
+    });
+  }
+
+  void _positionFocusedPlaylistBelowHero() {
+    if (!mounted) return;
+    final focusContext = FocusManager.instance.primaryFocus?.context;
+    final focusedCard = focusContext?.findRenderObject();
+    final heroCopy = _blockbusterPinnedHeroKey.currentContext
+        ?.findRenderObject();
+    if (focusContext == null ||
+        focusedCard is! RenderBox ||
+        heroCopy is! RenderBox) {
       return;
     }
-    setState(() {
-      _blockbusterBackdropItem = item;
-      _blockbusterFocusedRail = rail;
-    });
+    final horizontalRail = Scrollable.maybeOf(focusContext);
+    if (horizontalRail == null ||
+        axisDirectionToAxis(horizontalRail.axisDirection) != Axis.horizontal) {
+      return;
+    }
+    final playlistScroll = Scrollable.maybeOf(horizontalRail.context);
+    if (playlistScroll == null ||
+        axisDirectionToAxis(playlistScroll.axisDirection) != Axis.vertical) {
+      return;
+    }
+
+    final heroBottom = heroCopy
+        .localToGlobal(Offset(0, heroCopy.size.height))
+        .dy;
+    final cardTop = focusedCard.localToGlobal(Offset.zero).dy;
+    final desiredCardTop = heroBottom + _blockbusterPinnedHeroRailClearance;
+    final targetOffset =
+        (playlistScroll.position.pixels + cardTop - desiredCardTop)
+            .clamp(
+              playlistScroll.position.minScrollExtent,
+              playlistScroll.position.maxScrollExtent,
+            )
+            .toDouble();
+    if ((targetOffset - playlistScroll.position.pixels).abs() < 1) return;
+    playlistScroll.position.animateTo(
+      targetOffset,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _saveAppearance() async {
@@ -385,6 +433,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         homeContent,
         if (hasFocusedRail)
           _BlockbusterPinnedHeroCopy(
+            key: _blockbusterPinnedHeroKey,
             item: heroContentItem!,
             userName: widget.session.userName,
             onOpen: () => _open(heroContentItem),
@@ -1433,6 +1482,7 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
     required this.item,
     required this.userName,
     required this.onOpen,
+    super.key,
   });
 
   final JellyfinItem item;
