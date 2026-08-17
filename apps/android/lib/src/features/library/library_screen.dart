@@ -1080,6 +1080,9 @@ class _FruityHero extends StatelessWidget {
     final heroHeight = blockbuster && wide
         ? size.height
         : (wide ? 300.0 : 330.0);
+    final heroContentBottomInset = blockbuster && wide
+        ? size.height - (size.height * 0.72).clamp(460.0, 760.0) + 30
+        : 30.0;
     return SizedBox(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
       height: heroHeight,
@@ -1143,7 +1146,7 @@ class _FruityHero extends StatelessWidget {
                     : (wide ? 44 : 24),
                 24,
                 24,
-                30,
+                heroContentBottomInset,
               ),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 620),

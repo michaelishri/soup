@@ -261,6 +261,10 @@ void main() {
       720,
     );
     expect(
+      tester.getRect(find.byKey(const ValueKey('fruity-hero-open'))).bottom,
+      closeTo(488.4, 0.1),
+    );
+    expect(
       tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,
       360,
     );
