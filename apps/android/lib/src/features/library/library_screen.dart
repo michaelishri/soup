@@ -362,7 +362,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final latestItems = home.latest
         .where((item) => !_isMediaLibrary(item))
         .toList(growable: false);
-    if (resumeItems.isEmpty && latestItems.isEmpty) {
+    final recentlyAddedMovies = (home.recentlyAddedMovies ?? latestItems)
+        .where((item) => !_isMediaLibrary(item))
+        .where(_isMovie)
+        .toList(growable: false);
+    final recentlyAddedTv = (home.recentlyAddedTv ?? latestItems)
+        .where((item) => !_isMediaLibrary(item))
+        .where(_isTelevision)
+        .toList(growable: false);
+    final recentlyAdded = latestItems
+        .where((item) => _isMovie(item) || _isTelevision(item))
+        .toList(growable: false);
+    if (resumeItems.isEmpty &&
+        recentlyAddedMovies.isEmpty &&
+        recentlyAddedTv.isEmpty) {
       return _LibraryMessage(
         icon: PhosphorIconsRegular.monitorPlay,
         title: 'No playlists yet',
@@ -374,7 +387,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     final blockbusterWide =
         blockbuster && MediaQuery.sizeOf(context).width >= 840;
-    final blockbusterHeroItems = latestItems.take(5).toList(growable: false);
+    final heroCandidates = recentlyAdded.isEmpty
+        ? [...recentlyAddedMovies, ...recentlyAddedTv]
+        : recentlyAdded;
+    final blockbusterHeroItems = heroCandidates.take(5).toList(growable: false);
     final effectiveHeroIndex = blockbusterHeroItems.isEmpty
         ? 0
         : _blockbusterHeroIndex.clamp(0, blockbusterHeroItems.length - 1);
@@ -383,7 +399,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         : blockbusterHeroItems[effectiveHeroIndex];
     final hero = blockbuster
         ? selectedBlockbusterHero
-        : resumeItems.firstOrNull ?? latestItems.firstOrNull;
+        : resumeItems.firstOrNull ?? heroCandidates.firstOrNull;
     final continueWatching = resumeItems.isEmpty
         ? null
         : _LibrarySection(
@@ -400,21 +416,41 @@ class _LibraryScreenState extends State<LibraryScreen> {
             autofocusFirst: true,
             sectionOrder: 2,
           );
-    final latestMedia = latestItems.isEmpty
+    final recentlyAddedMoviesRail = recentlyAddedMovies.isEmpty
         ? null
         : _LibrarySection(
             blockbuster: blockbuster,
-            title: 'Latest Media',
-            items: latestItems,
+            title: 'Recently Added Movies',
+            items: recentlyAddedMovies,
             image: _viewModel.image,
             onOpen: _open,
             onItemFocused: blockbusterWide
-                ? (item) => _setBlockbusterFocusedItem(item, 'Latest Media')
+                ? (item) =>
+                      _setBlockbusterFocusedItem(item, 'Recently Added Movies')
                 : null,
             autofocusFirst: resumeItems.isEmpty,
             sectionOrder: 3,
           );
-    final playlistRails = [?continueWatching, ?latestMedia];
+    final recentlyAddedTvRail = recentlyAddedTv.isEmpty
+        ? null
+        : _LibrarySection(
+            blockbuster: blockbuster,
+            title: 'Recently Added TV',
+            items: recentlyAddedTv,
+            image: _viewModel.image,
+            onOpen: _open,
+            onItemFocused: blockbusterWide
+                ? (item) =>
+                      _setBlockbusterFocusedItem(item, 'Recently Added TV')
+                : null,
+            autofocusFirst: resumeItems.isEmpty && recentlyAddedMovies.isEmpty,
+            sectionOrder: 4,
+          );
+    final playlistRails = [
+      ?continueWatching,
+      ?recentlyAddedMoviesRail,
+      ?recentlyAddedTvRail,
+    ];
     _blockbusterFirstPlaylistRail = playlistRails.firstOrNull?.title;
     final overlayPlaylistRails =
         blockbusterWide && hero != null && playlistRails.isNotEmpty;
@@ -529,6 +565,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   bool _isMediaLibrary(JellyfinItem item) =>
       item.type.toLowerCase() == 'collectionfolder';
+
+  bool _isMovie(JellyfinItem item) => item.type.toLowerCase() == 'movie';
+
+  bool _isTelevision(JellyfinItem item) {
+    final type = item.type.toLowerCase();
+    return type == 'series' || type == 'episode';
+  }
 
   void _restoreFullHero(JellyfinItem hero) {
     setState(() {

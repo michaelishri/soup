@@ -103,6 +103,18 @@ void main() {
           200,
         );
       }
+      if (request.url.queryParameters['IncludeItemTypes'] == 'Movie') {
+        return http.Response(
+          '[{"Id":"movie","Name":"Recent Movie","Type":"Movie"}]',
+          200,
+        );
+      }
+      if (request.url.queryParameters['IncludeItemTypes'] == 'Episode') {
+        return http.Response(
+          '[{"Id":"series","Name":"Recent Series","Type":"Series"}]',
+          200,
+        );
+      }
       return http.Response(
         '[{"Id":"latest","Name":"Episode","Type":"Episode","SeriesName":"Show"}]',
         200,
@@ -123,7 +135,9 @@ void main() {
     expect(home.libraries.single.name, 'Movies');
     expect(home.resume.single.playedPercentage, 25);
     expect(home.latest.single.seriesName, 'Show');
-    expect(requests, hasLength(3));
+    expect(home.recentlyAddedMovies!.single.name, 'Recent Movie');
+    expect(home.recentlyAddedTv!.single.name, 'Recent Series');
+    expect(requests, hasLength(5));
     expect(
       requests.every(
         (request) => request.headers['x-emby-token'] == 'secret-token',
@@ -131,6 +145,14 @@ void main() {
       isTrue,
     );
     expect(requests.first.url.path, '/jellyfin/Users/user/Views');
+    expect(requests[1].url.path, '/jellyfin/Users/user/Items/Resume');
+    expect(requests[2].url.queryParameters['IncludeItemTypes'], isNull);
+    expect(requests[3].url.queryParameters['IncludeItemTypes'], 'Movie');
+    expect(requests[4].url.queryParameters['IncludeItemTypes'], 'Episode');
+    final tvRequest = requests.singleWhere(
+      (request) => request.url.queryParameters['IncludeItemTypes'] == 'Episode',
+    );
+    expect(tvRequest.url.queryParameters['GroupItems'], 'true');
   });
 
   test('loads artwork with authentication and sizing', () async {

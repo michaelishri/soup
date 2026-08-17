@@ -133,11 +133,15 @@ class JellyfinHome {
     required this.libraries,
     required this.resume,
     required this.latest,
+    this.recentlyAddedMovies,
+    this.recentlyAddedTv,
   });
 
   final List<JellyfinItem> libraries;
   final List<JellyfinItem> resume;
   final List<JellyfinItem> latest;
+  final List<JellyfinItem>? recentlyAddedMovies;
+  final List<JellyfinItem>? recentlyAddedTv;
 }
 
 class JellyfinSubtitleTrack {
@@ -363,37 +367,52 @@ class JellyfinApi
       'OfficialRating',
       'CommunityRating',
     ].join(',');
-    final responses = await Future.wait([
-      _getJson(
-        session,
-        'Users/${session.userId}/Views',
-        query: const {'IncludeExternalContent': 'false'},
-      ),
-      _getJson(
-        session,
-        'Users/${session.userId}/Items/Resume',
-        query: {
-          'Limit': '12',
-          'MediaTypes': 'Video',
-          'Fields': fields,
-          'EnableImageTypes': 'Primary,Backdrop,Thumb',
-        },
-      ),
-      _getJson(
-        session,
-        'Users/${session.userId}/Items/Latest',
-        query: {
-          'Limit': '18',
-          'Fields': fields,
-          'EnableImageTypes': 'Primary,Backdrop,Thumb',
-          'ImageTypeLimit': '1',
-        },
-      ),
-    ]);
+    final latestQuery = {
+      'Limit': '18',
+      'Fields': fields,
+      'EnableImageTypes': 'Primary,Backdrop,Thumb',
+      'ImageTypeLimit': '1',
+    };
+    final libraries = await _getJson(
+      session,
+      'Users/${session.userId}/Views',
+      query: const {'IncludeExternalContent': 'false'},
+    );
+    final resume = await _getJson(
+      session,
+      'Users/${session.userId}/Items/Resume',
+      query: {
+        'Limit': '12',
+        'MediaTypes': 'Video',
+        'Fields': fields,
+        'EnableImageTypes': 'Primary,Backdrop,Thumb',
+      },
+    );
+    final latest = await _getJson(
+      session,
+      'Users/${session.userId}/Items/Latest',
+      query: latestQuery,
+    );
+    final recentlyAddedMovies = await _getJson(
+      session,
+      'Users/${session.userId}/Items/Latest',
+      query: {...latestQuery, 'IncludeItemTypes': 'Movie'},
+    );
+    final recentlyAddedTv = await _getJson(
+      session,
+      'Users/${session.userId}/Items/Latest',
+      query: {
+        ...latestQuery,
+        'IncludeItemTypes': 'Episode',
+        'GroupItems': 'true',
+      },
+    );
     return JellyfinHome(
-      libraries: _itemsFromResponse(responses[0]),
-      resume: _itemsFromResponse(responses[1]),
-      latest: _itemsFromResponse(responses[2]),
+      libraries: _itemsFromResponse(libraries),
+      resume: _itemsFromResponse(resume),
+      latest: _itemsFromResponse(latest),
+      recentlyAddedMovies: _itemsFromResponse(recentlyAddedMovies),
+      recentlyAddedTv: _itemsFromResponse(recentlyAddedTv),
     );
   }
 

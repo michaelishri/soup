@@ -64,6 +64,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Continue Watching'), findsOneWidget);
+    expect(find.text('Recently Added Movies'), findsOneWidget);
+    expect(find.text('Recently Added TV'), findsNothing);
+    expect(find.text('Latest Media'), findsNothing);
     expect(find.text('My Media'), findsNothing);
     expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
     expect(find.byKey(const ValueKey('media-card-shows')), findsNothing);
@@ -110,82 +113,158 @@ void main() {
     expect(source.loads, 2);
   });
 
-  testWidgets('hides media-library folders from home rails in both presets', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1280, 720);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final source = FakeLibrarySource(
-      const JellyfinHome(
-        libraries: [
-          JellyfinItem(
-            id: 'movies',
-            name: 'Movies',
-            type: 'CollectionFolder',
-            collectionType: 'movies',
-          ),
-          JellyfinItem(
-            id: 'shows',
-            name: 'TV Shows',
-            type: 'CollectionFolder',
-            collectionType: 'tvshows',
-          ),
-        ],
-        resume: [
-          JellyfinItem(
-            id: 'resume-library',
-            name: 'Resume Library',
-            type: 'CollectionFolder',
-          ),
-          JellyfinItem(id: 'resume-movie', name: 'Resume Movie', type: 'Movie'),
-        ],
-        latest: [
-          JellyfinItem(
-            id: 'latest-library',
-            name: 'Latest Library',
-            type: 'CollectionFolder',
-          ),
-          JellyfinItem(id: 'latest-movie', name: 'Latest Movie', type: 'Movie'),
-        ],
-      ),
-    );
-
-    for (final preset in UiPreset.values) {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: LibraryScreen(
-            key: ValueKey('hidden-libraries-${preset.name}'),
-            source: source,
-            session: session,
-            appearance: AppearanceSettings(preset: preset),
-            onSignOut: () async {},
-          ),
+  testWidgets(
+    'builds separate movie and TV playlists without library folders',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final source = FakeLibrarySource(
+        const JellyfinHome(
+          libraries: [
+            JellyfinItem(
+              id: 'movies',
+              name: 'Movies',
+              type: 'CollectionFolder',
+              collectionType: 'movies',
+            ),
+            JellyfinItem(
+              id: 'shows',
+              name: 'TV Shows',
+              type: 'CollectionFolder',
+              collectionType: 'tvshows',
+            ),
+          ],
+          resume: [
+            JellyfinItem(
+              id: 'resume-library',
+              name: 'Resume Library',
+              type: 'CollectionFolder',
+            ),
+            JellyfinItem(
+              id: 'resume-movie',
+              name: 'Resume Movie',
+              type: 'Movie',
+            ),
+          ],
+          latest: [
+            JellyfinItem(
+              id: 'latest-library',
+              name: 'Latest Library',
+              type: 'CollectionFolder',
+            ),
+            JellyfinItem(
+              id: 'latest-series',
+              name: 'Latest Series',
+              type: 'Series',
+            ),
+          ],
+          recentlyAddedMovies: [
+            JellyfinItem(
+              id: 'latest-library',
+              name: 'Latest Library',
+              type: 'CollectionFolder',
+            ),
+            JellyfinItem(
+              id: 'latest-movie',
+              name: 'Latest Movie',
+              type: 'Movie',
+            ),
+          ],
+          recentlyAddedTv: [
+            JellyfinItem(
+              id: 'latest-series',
+              name: 'Latest Series',
+              type: 'Series',
+            ),
+            JellyfinItem(
+              id: 'latest-episode',
+              name: 'Latest Episode',
+              type: 'Episode',
+            ),
+          ],
         ),
       );
-      await tester.pumpAndSettle();
 
-      expect(find.text('My Media'), findsNothing);
-      expect(
-        find.byKey(const ValueKey('media-card-resume-library')),
-        findsNothing,
-      );
-      expect(
-        find.byKey(const ValueKey('media-card-latest-library')),
-        findsNothing,
-      );
-      expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
-      expect(find.byKey(const ValueKey('media-card-shows')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('media-card-resume-movie')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey('media-card-latest-movie')),
-        findsOneWidget,
-      );
-    }
-  });
+      for (final preset in UiPreset.values) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: LibraryScreen(
+              key: ValueKey('hidden-libraries-${preset.name}'),
+              source: source,
+              session: session,
+              appearance: AppearanceSettings(preset: preset),
+              onSignOut: () async {},
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('My Media'), findsNothing);
+        expect(find.text('Latest Media'), findsNothing);
+        expect(find.text('Recently Added Movies'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('media-card-resume-library')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('media-card-latest-library')),
+          findsNothing,
+        );
+        expect(find.byKey(const ValueKey('media-card-movies')), findsNothing);
+        expect(find.byKey(const ValueKey('media-card-shows')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('media-card-resume-movie')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('media-card-latest-movie')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('library-row-recently added movies')),
+            matching: find.byKey(const ValueKey('media-card-latest-movie')),
+          ),
+          findsOneWidget,
+        );
+        await tester.scrollUntilVisible(
+          find.text('Recently Added TV'),
+          300,
+          scrollable: find
+              .descendant(
+                of: find.byKey(const ValueKey('library-home')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Recently Added TV'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('library-row-recently added tv')),
+            matching: find.byKey(const ValueKey('media-card-latest-series')),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('library-row-recently added tv')),
+            matching: find.byKey(const ValueKey('media-card-latest-episode')),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('library-row-recently added tv')),
+            matching: find.byKey(const ValueKey('media-card-latest-movie')),
+          ),
+          findsNothing,
+        );
+      }
+    },
+  );
 
   testWidgets('renders an actionable error state', (tester) async {
     final source = FakeLibrarySource.error();
@@ -268,7 +347,7 @@ void main() {
     expect(saved?.brightness, AppearanceBrightness.light);
   });
 
-  testWidgets('renders Blockbuster with a latest-first billboard and TV rail', (
+  testWidgets('renders Blockbuster with a latest-first billboard and rails', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1280, 720);
@@ -541,7 +620,7 @@ void main() {
   });
 
   testWidgets(
-    'restores the Blockbuster latest-media rail inset when focus returns to its first card',
+    'restores the Blockbuster recently-added rail inset at its first card',
     (tester) async {
       tester.view.physicalSize = const Size(1280, 720);
       tester.view.devicePixelRatio = 1;
@@ -589,7 +668,9 @@ void main() {
       final latestRow = tester.state<ScrollableState>(
         find
             .descendant(
-              of: find.byKey(const ValueKey('library-row-latest media')),
+              of: find.byKey(
+                const ValueKey('library-row-recently added movies'),
+              ),
               matching: find.byType(Scrollable),
             )
             .first,
@@ -826,7 +907,7 @@ void main() {
       'Featured',
     );
     expect(
-      tester.getTopLeft(find.text('Latest Media')).dy,
+      tester.getTopLeft(find.text('Recently Added Movies')).dy,
       greaterThan(
         tester
                 .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
