@@ -111,7 +111,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
       setState(() {
         _blockbusterBackdropItem = item;
         _blockbusterFocusedRail = rail;
-        _blockbusterRailClipTop = null;
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {

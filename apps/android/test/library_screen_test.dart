@@ -958,8 +958,37 @@ void main() {
     );
     expectFocusedRailClippedBelowHero();
     expectFocusedCardFits('resume-0');
+    final measuredClipTop = tester
+        .widget<ClipRect>(
+          find.byKey(const ValueKey('blockbuster-focused-rail-clip')),
+        )
+        .clipper!
+        .getClip(
+          tester.getSize(
+            find.byKey(const ValueKey('blockbuster-focused-rail-clip')),
+          ),
+        )
+        .top;
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    final transitioningClipTop = tester
+        .widget<ClipRect>(
+          find.byKey(const ValueKey('blockbuster-focused-rail-clip')),
+        )
+        .clipper!
+        .getClip(
+          tester.getSize(
+            find.byKey(const ValueKey('blockbuster-focused-rail-clip')),
+          ),
+        )
+        .top;
+    expect(
+      transitioningClipTop,
+      measuredClipTop,
+      reason: 'Card changes must retain the measured hero-safe boundary.',
+    );
     await tester.pumpAndSettle();
 
     expect(
