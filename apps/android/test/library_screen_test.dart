@@ -600,6 +600,15 @@ void main() {
         .dy;
     expect(heroTitleTop, lessThan(featuredTitleTop));
     expect(heroTitleTop, closeTo(150.4, 0.1));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('media-card-resume-0'))).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();

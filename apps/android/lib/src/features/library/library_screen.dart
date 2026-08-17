@@ -11,6 +11,7 @@ enum _FruityDestination { home, tv, movies, settings }
 const _blockbusterContentInset = 104.0;
 const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
+const _blockbusterPinnedHeroCardAlignment = 0.58;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -120,7 +121,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Scaffold(
       body: SafeArea(
         child: FocusTraversalGroup(
-          policy: ReadingOrderTraversalPolicy(),
+          policy: blockbuster && wide
+              ? ReadingOrderTraversalPolicy(
+                  requestFocusCallback: _requestBlockbusterTraversalFocus,
+                )
+              : ReadingOrderTraversalPolicy(),
           child: blockbuster && wide
               ? Stack(
                   children: [
@@ -403,6 +408,51 @@ class _LibraryScreenState extends State<LibraryScreen> {
         curve: Curves.easeOutCubic,
       );
     });
+  }
+
+  void _requestBlockbusterTraversalFocus(
+    FocusNode node, {
+    ScrollPositionAlignmentPolicy? alignmentPolicy,
+    double? alignment,
+    Duration? duration,
+    Curve? curve,
+  }) {
+    final targetContext = node.context;
+    final target = targetContext?.findRenderObject();
+    final nearestScrollable = targetContext == null
+        ? null
+        : Scrollable.maybeOf(targetContext);
+    final isPlaylistCard =
+        nearestScrollable != null &&
+        axisDirectionToAxis(nearestScrollable.axisDirection) == Axis.horizontal;
+    if (!isPlaylistCard ||
+        target == null ||
+        !_homeScrollController.hasClients) {
+      FocusTraversalPolicy.defaultTraversalRequestFocusCallback(
+        node,
+        alignmentPolicy: alignmentPolicy,
+        alignment: alignment,
+        duration: duration,
+        curve: curve,
+      );
+      return;
+    }
+
+    node.requestFocus();
+    nearestScrollable.position.ensureVisible(
+      target,
+      alignment: alignment ?? 1,
+      alignmentPolicy:
+          alignmentPolicy ?? ScrollPositionAlignmentPolicy.explicit,
+      duration: duration ?? Duration.zero,
+      curve: curve ?? Curves.ease,
+    );
+    _homeScrollController.position.ensureVisible(
+      target,
+      alignment: _blockbusterPinnedHeroCardAlignment,
+      duration: duration ?? Duration.zero,
+      curve: curve ?? Curves.ease,
+    );
   }
 
   Widget _libraryDestination(JellyfinHome home, {required bool television}) {
