@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/platform/authorization_url_launcher.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class ConnectivityScreen extends StatefulWidget {
-  const ConnectivityScreen({required this.viewModel, super.key});
+  const ConnectivityScreen({
+    required this.viewModel,
+    this.authorizationUrlLauncher = const ExternalAuthorizationUrlLauncher(),
+    super.key,
+  });
 
   final ConnectivityViewModel viewModel;
+  final AuthorizationUrlLauncher authorizationUrlLauncher;
 
   @override
   State<ConnectivityScreen> createState() => _ConnectivityScreenState();
@@ -18,6 +25,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   final _serverController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _advancedAuthKeyExpanded = false;
 
   @override
   void dispose() {
@@ -28,10 +36,30 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     super.dispose();
   }
 
-  Future<void> _connect() async {
+  Future<void> _connectWithAuthKey() async {
     final authKey = _authKeyController.text;
     _authKeyController.clear();
-    await widget.viewModel.connect(authKey);
+    await widget.viewModel.connectWithAuthKey(authKey);
+  }
+
+  Future<void> _connectInteractively() {
+    return widget.viewModel.connectInteractively();
+  }
+
+  Future<void> _retryInteractive() async {
+    await widget.viewModel.cancelTailscaleConnection();
+    await widget.viewModel.connectInteractively();
+  }
+
+  Future<void> _openAuthorizationUrl() async {
+    final url = widget.viewModel.status.authorizationUrl;
+    if (url == null) return;
+    final opened = await widget.authorizationUrlLauncher.open(url);
+    if (mounted && !opened) {
+      _showClipboardMessage(
+        'No browser is available. Scan the QR code instead.',
+      );
+    }
   }
 
   Future<void> _pasteAuthKey() async {
@@ -112,7 +140,15 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           passwordController: _passwordController,
           viewModel: widget.viewModel,
           busy: widget.viewModel.isBusy,
-          onConnect: _connect,
+          advancedAuthKeyExpanded: _advancedAuthKeyExpanded,
+          onAdvancedAuthKeyChanged: (value) {
+            setState(() => _advancedAuthKeyExpanded = value);
+          },
+          onConnectInteractively: _connectInteractively,
+          onConnectWithAuthKey: _connectWithAuthKey,
+          onOpenAuthorizationUrl: _openAuthorizationUrl,
+          onCancelConnection: widget.viewModel.cancelTailscaleConnection,
+          onRetryInteractive: _retryInteractive,
           onPasteAuthKey: _pasteAuthKey,
           onPasteServerUrl: _pasteServerUrl,
           onCheckServer: _checkServer,
@@ -250,7 +286,13 @@ class _SetupCard extends StatelessWidget {
     required this.passwordController,
     required this.viewModel,
     required this.busy,
-    required this.onConnect,
+    required this.advancedAuthKeyExpanded,
+    required this.onAdvancedAuthKeyChanged,
+    required this.onConnectInteractively,
+    required this.onConnectWithAuthKey,
+    required this.onOpenAuthorizationUrl,
+    required this.onCancelConnection,
+    required this.onRetryInteractive,
     required this.onPasteAuthKey,
     required this.onPasteServerUrl,
     required this.onCheckServer,
@@ -263,7 +305,13 @@ class _SetupCard extends StatelessWidget {
   final TextEditingController passwordController;
   final ConnectivityViewModel viewModel;
   final bool busy;
-  final VoidCallback onConnect;
+  final bool advancedAuthKeyExpanded;
+  final ValueChanged<bool> onAdvancedAuthKeyChanged;
+  final VoidCallback onConnectInteractively;
+  final VoidCallback onConnectWithAuthKey;
+  final VoidCallback onOpenAuthorizationUrl;
+  final VoidCallback onCancelConnection;
+  final VoidCallback onRetryInteractive;
   final VoidCallback onPasteAuthKey;
   final VoidCallback onPasteServerUrl;
   final VoidCallback onCheckServer;
@@ -314,53 +362,7 @@ class _SetupCard extends StatelessWidget {
   }
 
   List<Widget> _phaseContent(BuildContext context) => switch (viewModel.phase) {
-    SetupPhase.tailscale => [
-      Text(
-        'Connect Soup to your tailnet',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'Enter a one-time auth key. Soup uses it once and does not save it.',
-      ),
-      const SizedBox(height: 24),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(1),
-        child: TextField(
-          key: const ValueKey('auth-key-field'),
-          controller: authKeyController,
-          obscureText: true,
-          enableSuggestions: false,
-          autocorrect: false,
-          textInputAction: TextInputAction.done,
-          onSubmitted: busy ? null : (_) => onConnect(),
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'One-time auth key',
-            hintText: 'tskey-auth-…',
-          ),
-        ),
-      ),
-      const SizedBox(height: 12),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(2),
-        child: OutlinedButton.icon(
-          key: const ValueKey('paste-auth-key-button'),
-          onPressed: busy ? null : onPasteAuthKey,
-          icon: const Icon(PhosphorIconsRegular.clipboardText),
-          label: const Text('Paste auth key'),
-        ),
-      ),
-      const SizedBox(height: 16),
-      _ActionButton(
-        order: 3,
-        keyValue: 'connect-button',
-        busy: busy,
-        onPressed: onConnect,
-        icon: PhosphorIconsRegular.lock,
-        label: 'Connect securely',
-      ),
-    ],
+    SetupPhase.tailscale => _tailscaleContent(context),
     SetupPhase.server => [
       Text(
         'Find your Jellyfin server',
@@ -481,6 +483,189 @@ class _SetupCard extends StatelessWidget {
       ),
     ],
   };
+
+  List<Widget> _tailscaleContent(BuildContext context) {
+    final status = viewModel.status;
+    switch (status.phase) {
+      case TailscaleConnectionPhase.awaitingLogin:
+        final authorizationUrl = status.authorizationUrl;
+        return [
+          Text(
+            'Finish signing in on another device',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Scan this code with your phone and sign in to Tailscale.',
+          ),
+          if (authorizationUrl != null) ...[
+            const SizedBox(height: 16),
+            Center(
+              child: DecoratedBox(
+                key: const ValueKey('tailscale-authorization-qr'),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: QrImageView(
+                    data: authorizationUrl.toString(),
+                    version: QrVersions.auto,
+                    size: 210,
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Colors.white,
+                    semanticsLabel: 'Tailscale sign-in QR code',
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _ActionButton(
+              order: 1,
+              keyValue: 'open-tailscale-login-button',
+              busy: false,
+              onPressed: onOpenAuthorizationUrl,
+              icon: PhosphorIconsRegular.arrowSquareOut,
+              label: 'Open sign-in page',
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('retry-tailscale-login-button'),
+                  onPressed: onRetryInteractive,
+                  child: const Text('Get a new code'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  key: const ValueKey('cancel-tailscale-login-button'),
+                  onPressed: onCancelConnection,
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
+        ];
+      case TailscaleConnectionPhase.awaitingApproval:
+        return [
+          Text(
+            'Approve this TV',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Your tailnet requires device approval. Approve this TV in the Tailscale admin console; Soup will continue automatically.',
+          ),
+          const SizedBox(height: 24),
+          const Center(child: CircularProgressIndicator()),
+          const SizedBox(height: 20),
+          OutlinedButton(
+            key: const ValueKey('cancel-tailscale-login-button'),
+            onPressed: onCancelConnection,
+            child: const Text('Cancel'),
+          ),
+        ];
+      case TailscaleConnectionPhase.starting:
+        return [
+          Text(
+            'Preparing secure sign-in…',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 20),
+          const Center(child: CircularProgressIndicator()),
+          const SizedBox(height: 20),
+          OutlinedButton(
+            key: const ValueKey('cancel-tailscale-login-button'),
+            onPressed: onCancelConnection,
+            child: const Text('Cancel'),
+          ),
+        ];
+      case TailscaleConnectionPhase.disconnected:
+      case TailscaleConnectionPhase.failed:
+        return [
+          Text(
+            'Connect Soup to your tailnet',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Sign in on your phone by scanning a QR code. No auth key is needed.',
+          ),
+          const SizedBox(height: 22),
+          _ActionButton(
+            order: 1,
+            keyValue: 'connect-interactively-button',
+            busy: false,
+            onPressed: onConnectInteractively,
+            icon: PhosphorIconsRegular.qrCode,
+            label: status.phase == TailscaleConnectionPhase.failed
+                ? 'Try again'
+                : 'Sign in with Tailscale',
+          ),
+          const SizedBox(height: 14),
+          ExpansionTile(
+            key: const ValueKey('advanced-auth-key'),
+            initiallyExpanded: advancedAuthKeyExpanded,
+            onExpansionChanged: onAdvancedAuthKeyChanged,
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: const Text('Advanced options'),
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Use a one-time auth key for pre-approved or tagged-device setups. Soup never saves it.',
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                key: const ValueKey('auth-key-field'),
+                controller: authKeyController,
+                obscureText: true,
+                enableSuggestions: false,
+                autocorrect: false,
+                textInputAction: TextInputAction.done,
+                onSubmitted: busy ? null : (_) => onConnectWithAuthKey(),
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  labelText: 'One-time auth key',
+                  hintText: 'tskey-auth-…',
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      key: const ValueKey('paste-auth-key-button'),
+                      onPressed: busy ? null : onPasteAuthKey,
+                      icon: const Icon(PhosphorIconsRegular.clipboardText),
+                      label: const Text('Paste auth key'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      key: const ValueKey('connect-button'),
+                      onPressed: busy ? null : onConnectWithAuthKey,
+                      icon: const Icon(PhosphorIconsRegular.key),
+                      label: const Text('Use auth key'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ];
+      case TailscaleConnectionPhase.connected:
+        return const [];
+    }
+  }
 }
 
 class _ErrorBanner extends StatelessWidget {
@@ -562,7 +747,9 @@ class _ActionButton extends StatelessWidget {
 extension on TailscaleStatus {
   String get label => switch (phase) {
     TailscaleConnectionPhase.disconnected => 'Not connected',
-    TailscaleConnectionPhase.connecting => 'Connecting',
+    TailscaleConnectionPhase.starting => 'Starting secure sign-in',
+    TailscaleConnectionPhase.awaitingLogin => 'Waiting for sign-in',
+    TailscaleConnectionPhase.awaitingApproval => 'Waiting for approval',
     TailscaleConnectionPhase.connected =>
       hostname == null ? 'Connected' : 'Connected as $hostname',
     TailscaleConnectionPhase.failed => 'Connection failed',
@@ -570,7 +757,9 @@ extension on TailscaleStatus {
 
   IconData get icon => switch (phase) {
     TailscaleConnectionPhase.disconnected => PhosphorIconsRegular.cloudSlash,
-    TailscaleConnectionPhase.connecting => PhosphorIconsRegular.arrowsClockwise,
+    TailscaleConnectionPhase.starting => PhosphorIconsRegular.arrowsClockwise,
+    TailscaleConnectionPhase.awaitingLogin => PhosphorIconsRegular.qrCode,
+    TailscaleConnectionPhase.awaitingApproval => PhosphorIconsRegular.clock,
     TailscaleConnectionPhase.connected => PhosphorIconsRegular.cloudCheck,
     TailscaleConnectionPhase.failed => PhosphorIconsRegular.warningCircle,
   };

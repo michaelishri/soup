@@ -16,6 +16,7 @@ import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup/src/features/playback/playback_screen.dart';
+import 'package:soup/src/platform/authorization_url_launcher.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -25,6 +26,7 @@ class SoupApp extends StatefulWidget {
     this.sessionStore = const SecureSessionStore(),
     this.appearanceStore,
     this.database,
+    this.authorizationUrlLauncher = const ExternalAuthorizationUrlLauncher(),
     super.key,
   });
 
@@ -33,6 +35,7 @@ class SoupApp extends StatefulWidget {
   final SessionStore sessionStore;
   final AppearanceStore? appearanceStore;
   final SoupDatabase? database;
+  final AuthorizationUrlLauncher authorizationUrlLauncher;
 
   @override
   State<SoupApp> createState() => _SoupAppState();
@@ -107,7 +110,10 @@ class _SoupAppState extends State<SoupApp> {
                   database: _database ??= SoupDatabase(),
                 );
               }
-              return ConnectivityScreen(viewModel: _viewModel);
+              return ConnectivityScreen(
+                viewModel: _viewModel,
+                authorizationUrlLauncher: widget.authorizationUrlLauncher,
+              );
             },
           ),
         );

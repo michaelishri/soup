@@ -14,6 +14,7 @@ import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup/src/platform/authorization_url_launcher.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 void main() {
@@ -54,7 +55,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('wide-layout')), findsOneWidget);
     expect(find.byKey(const ValueKey('root-focus-traversal')), findsOneWidget);
-    expect(find.byKey(const ValueKey('paste-auth-key-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('advanced-auth-key')), findsOneWidget);
   });
 
   testWidgets('pastes and trims an auth key without exposing it', (
@@ -86,6 +87,7 @@ void main() {
     );
     await tester.pump();
 
+    await _openAdvancedAuthKey(tester);
     await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
     await tester.pumpAndSettle();
 
@@ -126,6 +128,7 @@ void main() {
     );
     await tester.pump();
 
+    await _openAdvancedAuthKey(tester);
     await tester.tap(find.byKey(const ValueKey('paste-auth-key-button')));
     await tester.pumpAndSettle();
 
@@ -168,6 +171,7 @@ void main() {
         ),
       );
       await tester.pump();
+      await _openAdvancedAuthKey(tester);
       await tester.enterText(
         find.byKey(const ValueKey('auth-key-field')),
         'tskey-auth-test',
@@ -213,6 +217,7 @@ void main() {
     );
     await tester.pump();
 
+    await _openAdvancedAuthKey(tester);
     await tester.enterText(
       find.byKey(const ValueKey('auth-key-field')),
       'tskey-auth-test',
@@ -278,6 +283,7 @@ void main() {
     );
     await tester.pump();
 
+    await _openAdvancedAuthKey(tester);
     await tester.enterText(
       find.byKey(const ValueKey('auth-key-field')),
       'tskey-auth-test',
@@ -346,6 +352,7 @@ void main() {
     );
     await tester.pump();
 
+    await _openAdvancedAuthKey(tester);
     await tester.enterText(
       find.byKey(const ValueKey('auth-key-field')),
       'tskey-auth-test',
@@ -382,6 +389,130 @@ void main() {
     expect(errorRect.top, greaterThanOrEqualTo(cardRect.top));
     expect(errorRect.bottom, lessThanOrEqualTo(cardRect.bottom));
   });
+
+  testWidgets('shows QR login and opens the authorization URL', (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final client = FakeTailscaleClient()..pauseInteractiveLogin = true;
+    final launcher = FakeAuthorizationUrlLauncher();
+    addTearDown(client.dispose);
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        authorizationUrlLauncher: launcher,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('connect-interactively-button')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('tailscale-authorization-qr')),
+      findsOneWidget,
+    );
+    expect(find.text('Waiting for sign-in'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('open-tailscale-login-button')));
+    await tester.pump();
+    expect(launcher.opened, [
+      Uri.parse('https://login.tailscale.com/a/soup-test'),
+    ]);
+
+    await tester.tap(
+      find.byKey(const ValueKey('retry-tailscale-login-button')),
+    );
+    await tester.pump();
+    expect(client.interactiveConnects, 2);
+    expect(
+      find.byKey(const ValueKey('tailscale-authorization-qr')),
+      findsOneWidget,
+    );
+
+    client.emitApprovalRequired();
+    await tester.pump();
+    expect(find.text('Approve this TV'), findsOneWidget);
+    expect(find.text('Waiting for approval'), findsOneWidget);
+
+    client.completeInteractiveLogin();
+    await tester.pumpAndSettle();
+    expect(find.text('Find your Jellyfin server'), findsOneWidget);
+  });
+
+  testWidgets('falls back to QR when no Android browser is available', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final client = FakeTailscaleClient()..pauseInteractiveLogin = true;
+    final launcher = FakeAuthorizationUrlLauncher(result: false);
+    addTearDown(client.dispose);
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        authorizationUrlLauncher: launcher,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('connect-interactively-button')),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('open-tailscale-login-button')));
+    await tester.pump();
+
+    expect(
+      find.text('No browser is available. Scan the QR code instead.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('tailscale-authorization-qr')),
+      findsOneWidget,
+    );
+    client.completeInteractiveLogin();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('cancels an interactive registration attempt', (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final client = FakeTailscaleClient()..pauseInteractiveLogin = true;
+    addTearDown(client.dispose);
+    await tester.pumpWidget(
+      SoupApp(
+        tailscaleClient: client,
+        appearanceStore: MemoryAppearanceStore(AppearanceSettings.defaults),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('connect-interactively-button')),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const ValueKey('cancel-tailscale-login-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not connected'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('connect-interactively-button')),
+      findsOneWidget,
+    );
+  });
+}
+
+Future<void> _openAdvancedAuthKey(WidgetTester tester) async {
+  await tester.tap(find.byKey(const ValueKey('advanced-auth-key')));
+  await tester.pumpAndSettle();
 }
 
 class FakeJellyfinClientFactory implements JellyfinClientFactory {
@@ -413,6 +544,9 @@ class FakeTailscaleClient implements TailscaleClient {
   final _statuses = StreamController<TailscaleStatus>.broadcast();
   TailscaleStatus _status = const TailscaleStatus.disconnected();
   String? receivedAuthKey;
+  bool pauseInteractiveLogin = false;
+  int interactiveConnects = 0;
+  Completer<void>? _interactiveLogin;
 
   @override
   Stream<TailscaleStatus> get statuses => _statuses.stream;
@@ -424,21 +558,81 @@ class FakeTailscaleClient implements TailscaleClient {
   Future<void> restore() async {}
 
   @override
-  Future<void> connect({required String authKey}) async {
+  Future<void> connectInteractively() async {
+    interactiveConnects++;
+    if (pauseInteractiveLogin) {
+      _interactiveLogin = Completer<void>();
+      _setStatus(
+        TailscaleStatus.awaitingLogin(
+          Uri.parse('https://login.tailscale.com/a/soup-test'),
+        ),
+      );
+      await _interactiveLogin!.future;
+      return;
+    }
+    _connect();
+  }
+
+  @override
+  Future<void> connectWithAuthKey({required String authKey}) async {
     receivedAuthKey = authKey;
-    _status = const TailscaleStatus.connected(
-      hostname: 'soup-test',
-      tailnetIp: '100.64.0.1',
-      proxy: TailscaleProxy(host: '127.0.0.1', port: 32145, password: 'secret'),
+    _connect();
+  }
+
+  void emitApprovalRequired() {
+    _setStatus(const TailscaleStatus.awaitingApproval());
+  }
+
+  void completeInteractiveLogin() {
+    _connect();
+    final pending = _interactiveLogin;
+    _interactiveLogin = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+  }
+
+  void _connect() {
+    _setStatus(
+      const TailscaleStatus.connected(
+        hostname: 'soup-test',
+        tailnetIp: '100.64.0.1',
+        proxy: TailscaleProxy(
+          host: '127.0.0.1',
+          port: 32145,
+          password: 'secret',
+        ),
+      ),
     );
-    _statuses.add(_status);
   }
 
   @override
   Future<void> disconnect() async {
-    _status = const TailscaleStatus.disconnected();
+    final pending = _interactiveLogin;
+    _interactiveLogin = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _setStatus(const TailscaleStatus.disconnected());
+  }
+
+  void _setStatus(TailscaleStatus value) {
+    _status = value;
     _statuses.add(_status);
   }
 
-  void dispose() => _statuses.close();
+  void dispose() {
+    final pending = _interactiveLogin;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _statuses.close();
+  }
+}
+
+class FakeAuthorizationUrlLauncher implements AuthorizationUrlLauncher {
+  FakeAuthorizationUrlLauncher({this.result = true});
+
+  final bool result;
+  final opened = <Uri>[];
+
+  @override
+  Future<bool> open(Uri url) async {
+    opened.add(url);
+    return result;
+  }
 }

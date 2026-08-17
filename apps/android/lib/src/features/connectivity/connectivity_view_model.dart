@@ -38,8 +38,7 @@ class ConnectivityViewModel extends ChangeNotifier {
   Uri? get serverUrl => _serverUrl;
 
   bool _isBusy = false;
-  bool get isBusy =>
-      _isBusy || _status.phase == TailscaleConnectionPhase.connecting;
+  bool get isBusy => _isBusy;
 
   String? _error;
   String? get error => _error;
@@ -68,22 +67,52 @@ class ConnectivityViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> connect(String authKey) async {
-    final trimmedKey = authKey.trim();
-    if (trimmedKey.isEmpty || isBusy) return;
+  Future<void> connectInteractively() async {
+    if (isBusy) return;
 
     _error = null;
     _setBusy(true);
     try {
-      await _tailscaleClient.connect(authKey: trimmedKey);
+      await _tailscaleClient.connectInteractively();
       _status = _tailscaleClient.status;
-      _phase = SetupPhase.server;
+      if (_status.phase == TailscaleConnectionPhase.connected) {
+        _phase = SetupPhase.server;
+      }
     } on Object catch (error) {
       _error = _friendlyError(error);
       _phase = SetupPhase.tailscale;
     } finally {
       _setBusy(false);
     }
+  }
+
+  Future<void> connectWithAuthKey(String authKey) async {
+    final trimmedKey = authKey.trim();
+    if (trimmedKey.isEmpty || isBusy) return;
+
+    _error = null;
+    _setBusy(true);
+    try {
+      await _tailscaleClient.connectWithAuthKey(authKey: trimmedKey);
+      _status = _tailscaleClient.status;
+      if (_status.phase == TailscaleConnectionPhase.connected) {
+        _phase = SetupPhase.server;
+      }
+    } on Object catch (error) {
+      _error = _friendlyError(error);
+      _phase = SetupPhase.tailscale;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  Future<void> cancelTailscaleConnection() async {
+    if (_status.phase == TailscaleConnectionPhase.connected) return;
+    await _tailscaleClient.disconnect();
+    _status = _tailscaleClient.status;
+    _error = null;
+    _phase = SetupPhase.tailscale;
+    _setBusy(false);
   }
 
   Future<void> checkServer(String value) async {
