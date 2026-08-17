@@ -9,6 +9,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
+import 'package:soup/src/features/shared/artwork_placeholder.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
 import 'package:soup/src/features/shared/stale_data_banner.dart';
 
@@ -43,6 +44,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   late final JellyfinMetadataRepository _metadataRepository;
   late final bool _ownsMetadataRepository;
   final Map<String, Future<CachedArtwork?>> _images = {};
+  final Set<String> _prefetchedImages = {};
 
   @override
   void initState() {
@@ -99,6 +101,15 @@ class _DetailsScreenState extends State<DetailsScreen> {
     );
   }
 
+  void _prefetch(JellyfinItem item, {int maxWidth = 720}) {
+    final repository = widget.artworkRepository;
+    final tag = item.primaryImageTag;
+    if (repository == null || tag == null || tag.isEmpty) return;
+    final key = '${item.id}:Primary:$maxWidth:$tag';
+    if (!_prefetchedImages.add(key)) return;
+    repository.prefetch(item, maxWidth: maxWidth);
+  }
+
   void _play(JellyfinItem item) {
     widget.onPlay(item, _viewModel.resumePosition(item));
   }
@@ -140,6 +151,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 children: [
                   _Backdrop(
                     artworkKey: _viewModel.item.id,
+                    blurHash: _viewModel.item.backdropBlurHash,
                     image: _image(
                       _viewModel.item,
                       type: 'Backdrop',
@@ -155,6 +167,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                       library: _viewModel.item,
                       items: _viewModel.libraryItems,
                       image: _image,
+                      prefetch: _prefetch,
                       onOpen: _openItem,
                     )
                   else
@@ -207,9 +220,14 @@ class _DetailsScreenState extends State<DetailsScreen> {
 }
 
 class _Backdrop extends StatelessWidget {
-  const _Backdrop({required this.artworkKey, required this.image});
+  const _Backdrop({
+    required this.artworkKey,
+    required this.blurHash,
+    required this.image,
+  });
 
   final String artworkKey;
+  final String? blurHash;
   final Future<CachedArtwork?> image;
 
   @override
@@ -226,7 +244,10 @@ class _Backdrop extends StatelessWidget {
           artworkKey: artworkKey,
           image: image,
           opacity: 0.28,
-          placeholder: const SizedBox.shrink(),
+          placeholder: Opacity(
+            opacity: 0.28,
+            child: ArtworkPlaceholder(blurHash: blurHash),
+          ),
         ),
         DecoratedBox(
           decoration: BoxDecoration(
@@ -293,7 +314,12 @@ class _ItemDetails extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _Poster(image: image(item), width: 250, height: 360),
+                    _Poster(
+                      image: image(item),
+                      blurHash: item.primaryBlurHash,
+                      width: 250,
+                      height: 360,
+                    ),
                     const SizedBox(width: 44),
                     Expanded(
                       child: _Metadata(item: item, onPlay: onPlay),
@@ -302,7 +328,12 @@ class _ItemDetails extends StatelessWidget {
                 )
               else ...[
                 Center(
-                  child: _Poster(image: image(item), width: 190, height: 270),
+                  child: _Poster(
+                    image: image(item),
+                    blurHash: item.primaryBlurHash,
+                    width: 190,
+                    height: 270,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 _Metadata(item: item, onPlay: onPlay),
@@ -447,6 +478,7 @@ class _EpisodeList extends StatelessWidget {
                     children: [
                       _Poster(
                         image: image(episodes[index], maxWidth: 720),
+                        blurHash: episodes[index].primaryBlurHash,
                         width: 180,
                         height: 102,
                       ),
@@ -497,6 +529,7 @@ class _LibraryContents extends StatelessWidget {
     required this.library,
     required this.items,
     required this.image,
+    required this.prefetch,
     required this.onOpen,
   });
 
@@ -508,10 +541,14 @@ class _LibraryContents extends StatelessWidget {
     int maxWidth,
   })
   image;
+  final void Function(JellyfinItem item, {int maxWidth}) prefetch;
   final ValueChanged<JellyfinItem> onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final gridWidth = MediaQuery.sizeOf(context).width - 120;
+    final calculatedColumns = ((gridWidth + 18) / (210 + 18)).ceil();
+    final columnCount = calculatedColumns < 1 ? 1 : calculatedColumns;
     return CustomScrollView(
       key: const ValueKey('library-contents'),
       slivers: [
@@ -542,15 +579,21 @@ class _LibraryContents extends StatelessWidget {
                 mainAxisSpacing: 22,
               ),
               itemCount: items.length,
-              itemBuilder: (context, index) => FocusTraversalOrder(
-                order: NumericFocusOrder(index + 1.0),
-                child: _DetailCard(
-                  item: items[index],
-                  image: image(items[index], maxWidth: 720),
-                  autofocus: index == 0,
-                  onPressed: () => onOpen(items[index]),
-                ),
-              ),
+              itemBuilder: (context, index) {
+                final prefetchIndex = index + columnCount;
+                if (prefetchIndex < items.length) {
+                  prefetch(items[prefetchIndex], maxWidth: 720);
+                }
+                return FocusTraversalOrder(
+                  order: NumericFocusOrder(index + 1.0),
+                  child: _DetailCard(
+                    item: items[index],
+                    image: image(items[index], maxWidth: 720),
+                    autofocus: index == 0,
+                    onPressed: () => onOpen(items[index]),
+                  ),
+                );
+              },
             ),
           ),
       ],
@@ -588,6 +631,7 @@ class _DetailCard extends StatelessWidget {
               Expanded(
                 child: _Poster(
                   image: image,
+                  blurHash: item.primaryBlurHash,
                   width: double.infinity,
                   height: 300,
                 ),
@@ -611,11 +655,13 @@ class _DetailCard extends StatelessWidget {
 class _Poster extends StatelessWidget {
   const _Poster({
     required this.image,
+    required this.blurHash,
     required this.width,
     required this.height,
   });
 
   final Future<CachedArtwork?> image;
+  final String? blurHash;
   final double width;
   final double height;
 
@@ -631,23 +677,33 @@ class _Poster extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: FutureBuilder<CachedArtwork?>(
-            future: image,
-            builder: (context, snapshot) {
-              final artwork = snapshot.data;
-              return artwork == null
-                  ? const Center(
-                      child: Icon(PhosphorIconsRegular.filmSlate, size: 44),
-                    )
-                  : Image.file(
-                      artwork.file,
-                      fit: BoxFit.cover,
-                      cacheWidth:
-                          (width * MediaQuery.devicePixelRatioOf(context))
-                              .ceil()
-                              .clamp(1, artwork.variantWidth),
-                    );
-            },
+          child: LayoutBuilder(
+            builder: (context, constraints) => FutureBuilder<CachedArtwork?>(
+              future: image,
+              builder: (context, snapshot) {
+                final artwork = snapshot.data;
+                final placeholder = ArtworkPlaceholder(
+                  blurHash: blurHash,
+                  fallback: const Center(
+                    child: Icon(PhosphorIconsRegular.filmSlate, size: 44),
+                  ),
+                );
+                if (artwork == null) return placeholder;
+                final logicalWidth = width.isFinite
+                    ? width
+                    : constraints.maxWidth;
+                final physicalWidth = logicalWidth.isFinite
+                    ? (logicalWidth * MediaQuery.devicePixelRatioOf(context))
+                          .ceil()
+                    : artwork.variantWidth;
+                return Image.file(
+                  artwork.file,
+                  fit: BoxFit.cover,
+                  cacheWidth: physicalWidth.clamp(1, artwork.variantWidth),
+                  errorBuilder: (_, _, _) => placeholder,
+                );
+              },
+            ),
           ),
         ),
       ),

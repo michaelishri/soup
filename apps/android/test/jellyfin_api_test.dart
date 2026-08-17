@@ -14,6 +14,23 @@ void main() {
     );
   });
 
+  test('parses BlurHashes for the active image tags', () {
+    final item = JellyfinItem.fromJson({
+      'Id': 'item',
+      'Name': 'Movie',
+      'Type': 'Movie',
+      'ImageTags': {'Primary': 'primary-tag'},
+      'BackdropImageTags': ['backdrop-tag'],
+      'ImageBlurHashes': {
+        'Primary': {'primary-tag': 'primary-hash'},
+        'Backdrop': {'backdrop-tag': 'backdrop-hash'},
+      },
+    });
+
+    expect(item.primaryBlurHash, 'primary-hash');
+    expect(item.backdropBlurHash, 'backdrop-hash');
+  });
+
   test(
     'uses the current MediaBrowser header and typed 10.11 response',
     () async {

@@ -105,7 +105,12 @@ class ArtworkCache implements ArtworkRepository {
     );
     final key = variant.key;
     final existing = _inFlight[key];
-    if (existing != null) return existing;
+    if (existing != null) {
+      if (priority == ArtworkRequestPriority.visible) {
+        _scheduler.promote(key);
+      }
+      return existing;
+    }
 
     final generation = _generation;
     final completer = Completer<CachedArtwork?>();
@@ -154,6 +159,7 @@ class ArtworkCache implements ArtworkRepository {
     return _scheduler.schedule(
       priority,
       () => _download(variant, item, generation),
+      key: variant.key,
     );
   }
 
@@ -388,10 +394,11 @@ class ArtworkDownloadScheduler {
 
   Future<T> schedule<T>(
     ArtworkRequestPriority priority,
-    Future<T> Function() work,
-  ) {
+    Future<T> Function() work, {
+    Object? key,
+  }) {
     final completer = Completer<T>();
-    final job = _DownloadJob(() async {
+    final job = _DownloadJob(key, () async {
       try {
         completer.complete(await work());
       } on Object catch (error, stackTrace) {
@@ -403,6 +410,20 @@ class ArtworkDownloadScheduler {
     );
     _drain();
     return completer.future;
+  }
+
+  void promote(Object key) {
+    _DownloadJob? match;
+    for (final job in _prefetch) {
+      if (job.key == key) {
+        match = job;
+        break;
+      }
+    }
+    if (match == null) return;
+    _prefetch.remove(match);
+    _visible.addFirst(match);
+    _drain();
   }
 
   void _drain() {
@@ -423,8 +444,9 @@ class ArtworkDownloadScheduler {
 }
 
 class _DownloadJob {
-  const _DownloadJob(this.run);
+  const _DownloadJob(this.key, this.run);
 
+  final Object? key;
   final Future<void> Function() run;
 }
 

@@ -10,6 +10,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/library/library_view_model.dart';
 import 'package:soup/src/features/shared/adaptive_backdrop_contrast.dart';
+import 'package:soup/src/features/shared/artwork_placeholder.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
 import 'package:soup/src/features/shared/stale_data_banner.dart';
 
@@ -68,7 +69,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String? _blockbusterFirstPlaylistRail;
   int _blockbusterHeroIndex = 0;
   int _blockbusterFocusRevision = 0;
+  Timer? _blockbusterBackdropTimer;
   bool _savingAppearance = false;
+  bool _clearingArtwork = false;
 
   @override
   void initState() {
@@ -105,6 +108,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   void dispose() {
+    _blockbusterBackdropTimer?.cancel();
     _homeScrollController.dispose();
     _blockbusterHeroFocusNode.dispose();
     _blockbusterContentScopeNode.dispose();
@@ -129,11 +133,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _setBlockbusterFocusedItem(JellyfinItem item, String rail) {
     final previousRail = _blockbusterFocusedRail;
     final focusRevision = ++_blockbusterFocusRevision;
-    if (_blockbusterBackdropItem?.id != item.id ||
-        _blockbusterFocusedRail != rail) {
-      setState(() {
-        _blockbusterBackdropItem = item;
-        _blockbusterFocusedRail = rail;
+    _blockbusterBackdropTimer?.cancel();
+    if (_blockbusterFocusedRail != rail) {
+      setState(() => _blockbusterFocusedRail = rail);
+    }
+    if (_blockbusterBackdropItem?.id != item.id) {
+      _blockbusterBackdropTimer = Timer(_blockbusterRailTransitionDuration, () {
+        if (!mounted || focusRevision != _blockbusterFocusRevision) return;
+        setState(() => _blockbusterBackdropItem = item);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && focusRevision == _blockbusterFocusRevision) {
+            _positionFocusedPlaylistBelowHero();
+          }
+        });
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -218,6 +230,56 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Appearance updated.')));
+  }
+
+  Future<void> _confirmClearArtworkCache() async {
+    final repository = widget.artworkRepository;
+    if (repository == null || _clearingArtwork) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear artwork cache?'),
+        content: const Text(
+          'Downloaded posters and backdrops will be removed. Library details and playback progress will be kept.',
+        ),
+        actions: [
+          TextButton(
+            key: const ValueKey('cancel-clear-artwork-cache'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey('confirm-clear-artwork-cache'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear cache'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _clearingArtwork = true);
+    try {
+      await repository.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Artwork cache cleared.')));
+    } on Object {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not clear the artwork cache.')),
+      );
+    } finally {
+      if (mounted) setState(() => _clearingArtwork = false);
+    }
+  }
+
+  static String _artworkUsageLabel(int bytes) {
+    final usedMiB = bytes / (1024 * 1024);
+    final used = usedMiB < 10
+        ? usedMiB.toStringAsFixed(1)
+        : usedMiB.toStringAsFixed(0);
+    return '$used MiB of 384 MiB used';
   }
 
   @override
@@ -338,6 +400,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   void _moveBlockbusterHero(List<JellyfinItem> items, int delta) {
     if (items.length < 2) return;
+    _blockbusterBackdropTimer?.cancel();
+    _blockbusterFocusRevision++;
     final nextIndex = (_blockbusterHeroIndex + delta) % items.length;
     final nextItem = items[nextIndex];
     setState(() {
@@ -442,6 +506,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             items: resumeItems,
             landscape: true,
             image: _viewModel.image,
+            prefetch: _viewModel.prefetchArtwork,
             onOpen: _open,
             onItemFocused: blockbusterWide
                 ? (item) =>
@@ -457,6 +522,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             title: 'Recently Added Movies',
             items: recentlyAddedMovies,
             image: _viewModel.image,
+            prefetch: _viewModel.prefetchArtwork,
             onOpen: _open,
             onItemFocused: blockbusterWide
                 ? (item) =>
@@ -472,6 +538,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             title: 'Recently Added TV',
             items: recentlyAddedTv,
             image: _viewModel.image,
+            prefetch: _viewModel.prefetchArtwork,
             onOpen: _open,
             onItemFocused: blockbusterWide
                 ? (item) =>
@@ -580,6 +647,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: _BlockbusterHomeBackground(
             artworkKey: backdropItem.id,
             image: heroContentImage!,
+            blurHash: backdropItem.backdropBlurHash,
           ),
         ),
         clippedHomeContent,
@@ -608,6 +676,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _restoreFullHero(JellyfinItem hero) {
+    _blockbusterBackdropTimer?.cancel();
+    _blockbusterFocusRevision++;
     setState(() {
       _blockbusterBackdropItem = hero;
       _blockbusterFocusedRail = null;
@@ -685,6 +755,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         onAction: _viewModel.load,
       );
     }
+    final horizontalPadding =
+        (blockbuster ? _blockbusterContentInset : 40) + 40;
+    final gridWidth = MediaQuery.sizeOf(context).width - horizontalPadding;
+    final calculatedColumns = ((gridWidth + 22) / (360 + 22)).ceil();
+    final columnCount = calculatedColumns < 1 ? 1 : calculatedColumns;
     return CustomScrollView(
       key: ValueKey(
         '${blockbuster ? 'blockbuster' : 'fruity'}-${title.toLowerCase()}',
@@ -716,16 +791,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
               mainAxisSpacing: 22,
             ),
             itemCount: items.length,
-            itemBuilder: (context, index) => FocusTraversalOrder(
-              order: NumericFocusOrder(100 + index.toDouble()),
-              child: _LibraryTile(
-                blockbuster: blockbuster,
-                item: items[index],
-                image: _viewModel.image(items[index], maxWidth: 720),
-                autofocus: index == 0,
-                onPressed: () => _open(items[index]),
-              ),
-            ),
+            itemBuilder: (context, index) {
+              final prefetchIndex = index + columnCount;
+              if (prefetchIndex < items.length) {
+                _viewModel.prefetchArtwork(items[prefetchIndex], maxWidth: 720);
+              }
+              return FocusTraversalOrder(
+                order: NumericFocusOrder(100 + index.toDouble()),
+                child: _LibraryTile(
+                  key: ValueKey('media-card-${items[index].id}'),
+                  blockbuster: blockbuster,
+                  item: items[index],
+                  image: _viewModel.image(items[index], maxWidth: 720),
+                  autofocus: index == 0,
+                  onPressed: () => _open(items[index]),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -734,6 +816,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _settings() {
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
+    final artworkRepository = widget.artworkRepository;
     return ListView(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-settings'),
       padding: EdgeInsets.fromLTRB(
@@ -829,6 +912,53 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 18),
+        Text('Storage', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        StreamBuilder<int>(
+          stream: artworkRepository?.watchUsageBytes(),
+          initialData: 0,
+          builder: (context, snapshot) {
+            final bytes = snapshot.data ?? 0;
+            final progress = (bytes / artworkGlobalByteLimit).clamp(0.0, 1.0);
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Artwork cache',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _artworkUsageLabel(bytes),
+                    key: const ValueKey('artwork-cache-usage'),
+                  ),
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    key: const ValueKey('artwork-cache-usage-progress'),
+                    value: progress,
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    key: const ValueKey('clear-artwork-cache'),
+                    onPressed: artworkRepository == null || _clearingArtwork
+                        ? null
+                        : _confirmClearArtworkCache,
+                    icon: _clearingArtwork
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(PhosphorIconsRegular.trash),
+                    label: const Text('Clear artwork cache'),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -1549,9 +1679,7 @@ class _FruityHero extends StatelessWidget {
             FadingArtwork(
               artworkKey: '${item.id}:backdrop',
               image: image,
-              placeholder: ColoredBox(
-                color: theme.colorScheme.surfaceContainer,
-              ),
+              placeholder: ArtworkPlaceholder(blurHash: item.backdropBlurHash),
             ),
           if (showBackdrop)
             DecoratedBox(
@@ -1711,10 +1839,12 @@ class _BlockbusterHomeBackground extends StatelessWidget {
   const _BlockbusterHomeBackground({
     required this.artworkKey,
     required this.image,
+    required this.blurHash,
   });
 
   final String artworkKey;
   final Future<CachedArtwork?> image;
+  final String? blurHash;
 
   @override
   Widget build(BuildContext context) {
@@ -1726,7 +1856,7 @@ class _BlockbusterHomeBackground extends StatelessWidget {
           key: const ValueKey('blockbuster-background-crossfade'),
           artworkKey: artworkKey,
           image: image,
-          placeholder: ColoredBox(color: theme.colorScheme.surfaceContainer),
+          placeholder: ArtworkPlaceholder(blurHash: blurHash),
         ),
         SizedBox.shrink(key: ValueKey('blockbuster-background-$artworkKey')),
         DecoratedBox(
@@ -1982,6 +2112,7 @@ class _LibrarySection extends StatelessWidget {
     required this.title,
     required this.items,
     required this.image,
+    required this.prefetch,
     required this.onOpen,
     this.onItemFocused,
     required this.autofocusFirst,
@@ -1998,6 +2129,7 @@ class _LibrarySection extends StatelessWidget {
     int maxWidth,
   })
   image;
+  final void Function(JellyfinItem item, {String type, int maxWidth}) prefetch;
   final ValueChanged<JellyfinItem> onOpen;
   final ValueChanged<JellyfinItem>? onItemFocused;
   final bool autofocusFirst;
@@ -2050,6 +2182,13 @@ class _LibrarySection extends StatelessWidget {
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
+                final imageWidth = landscape ? 720 : 480;
+                for (final offset in const [1, 2]) {
+                  final prefetchIndex = index + offset;
+                  if (prefetchIndex < items.length) {
+                    prefetch(items[prefetchIndex], maxWidth: imageWidth);
+                  }
+                }
                 return FocusTraversalOrder(
                   order: NumericFocusOrder(
                     sectionOrder * 100 + index.toDouble(),
@@ -2060,7 +2199,7 @@ class _LibrarySection extends StatelessWidget {
                     item: item,
                     width: width,
                     artHeight: artHeight,
-                    image: image(item, maxWidth: landscape ? 720 : 480),
+                    image: image(item, maxWidth: imageWidth),
                     autofocus: autofocusFirst && index == 0,
                     onFocused: () => onItemFocused?.call(item),
                     onPressed: () => onOpen(item),
@@ -2274,6 +2413,18 @@ class _MediaCardState extends State<_MediaCard> {
                     future: widget.image,
                     builder: (context, snapshot) {
                       final artwork = snapshot.data;
+                      final placeholder = ArtworkPlaceholder(
+                        blurHash: widget.item.primaryBlurHash,
+                        fallback: Center(
+                          child: Icon(
+                            widget.item.type == 'CollectionFolder'
+                                ? PhosphorIconsRegular.monitorPlay
+                                : PhosphorIconsRegular.filmSlate,
+                            size: 42,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      );
                       if (artwork != null) {
                         final physicalWidth =
                             (widget.width.isFinite
@@ -2288,17 +2439,10 @@ class _MediaCardState extends State<_MediaCard> {
                             1,
                             artwork.variantWidth,
                           ),
+                          errorBuilder: (_, _, _) => placeholder,
                         );
                       }
-                      return Center(
-                        child: Icon(
-                          widget.item.type == 'CollectionFolder'
-                              ? PhosphorIconsRegular.monitorPlay
-                              : PhosphorIconsRegular.filmSlate,
-                          size: 42,
-                          color: colors.onSurfaceVariant,
-                        ),
-                      );
+                      return placeholder;
                     },
                   ),
                 ),
@@ -2333,6 +2477,7 @@ class _LibraryTile extends StatelessWidget {
     required this.image,
     required this.autofocus,
     required this.onPressed,
+    super.key,
   });
 
   final bool blockbuster;

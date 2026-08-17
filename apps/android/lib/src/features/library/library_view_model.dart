@@ -18,6 +18,7 @@ class LibraryViewModel extends ChangeNotifier {
   final ArtworkRepository? artworkRepository;
   final JellyfinSession session;
   final Map<String, Future<CachedArtwork?>> _images = {};
+  final Set<String> _prefetchedImages = {};
   StreamSubscription<MetadataSnapshot<JellyfinHome>>? _homeSubscription;
 
   JellyfinHome? _home;
@@ -80,6 +81,22 @@ class LibraryViewModel extends ChangeNotifier {
               .catchError((Object _) => null) ??
           Future.value(),
     );
+  }
+
+  void prefetchArtwork(
+    JellyfinItem item, {
+    String type = 'Primary',
+    int maxWidth = 480,
+  }) {
+    final repository = artworkRepository;
+    if (repository == null) return;
+    final tag = type == 'Backdrop'
+        ? item.backdropImageTag
+        : item.primaryImageTag;
+    if (tag == null || tag.isEmpty) return;
+    final key = '${item.id}:$type:$maxWidth:$tag';
+    if (!_prefetchedImages.add(key)) return;
+    repository.prefetch(item, type: type, maxWidth: maxWidth);
   }
 
   @override

@@ -33,6 +33,8 @@ void main() {
 
     expect(cached.data?.resume.single.id, 'one');
     expect(cached.data?.resume.single.playbackPositionTicks, 50);
+    expect(cached.data?.resume.single.primaryBlurHash, 'primary-blur-one');
+    expect(cached.data?.resume.single.backdropBlurHash, 'backdrop-blur-one');
     expect(cached.stale, isFalse);
   });
 
@@ -132,6 +134,8 @@ JellyfinItem _item(String id, {int position = 0, bool played = false}) =>
       playbackPositionTicks: position,
       played: played,
       primaryImageTag: 'tag-$id',
+      primaryBlurHash: 'primary-blur-$id',
+      backdropBlurHash: 'backdrop-blur-$id',
     );
 
 JellyfinHome _home({

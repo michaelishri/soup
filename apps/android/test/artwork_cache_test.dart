@@ -59,6 +59,23 @@ void main() {
     expect(await database.allArtwork(), hasLength(2));
   });
 
+  test('usage stream updates after downloads and clearing', () async {
+    final cache = _cache(database, directory, FakeArtworkNetwork(bytes: 12));
+    expect(await cache.watchUsageBytes().first, 0);
+    final downloadedUsage = cache.watchUsageBytes().firstWhere(
+      (bytes) => bytes == 12,
+    );
+
+    await cache.getArtwork(_item('one'));
+    expect(await downloadedUsage, 12);
+
+    final clearedUsage = cache.watchUsageBytes().firstWhere(
+      (bytes) => bytes == 0,
+    );
+    await cache.clear();
+    expect(await clearedUsage, 0);
+  });
+
   test('concurrent identical requests share one download', () async {
     final network = FakeArtworkNetwork();
     final cache = _cache(database, directory, network);
@@ -200,6 +217,50 @@ void main() {
     gates['prefetch-5']!.complete();
     await Future.wait([...prefetches, visible]);
     expect(maximumActive, 4);
+  });
+
+  test('promotes a matching queued prefetch when it becomes visible', () async {
+    final scheduler = ArtworkDownloadScheduler(1);
+    final runningGate = Completer<void>();
+    final targetGate = Completer<void>();
+    final otherGate = Completer<void>();
+    final targetStarted = Completer<void>();
+    final started = <String>[];
+    Future<void> run(
+      String id,
+      Completer<void> gate, {
+      Completer<void>? signal,
+    }) async {
+      started.add(id);
+      signal?.complete();
+      await gate.future;
+    }
+
+    final running = scheduler.schedule(
+      ArtworkRequestPriority.prefetch,
+      () => run('running', runningGate),
+      key: 'running',
+    );
+    final target = scheduler.schedule(
+      ArtworkRequestPriority.prefetch,
+      () => run('target', targetGate, signal: targetStarted),
+      key: 'target',
+    );
+    final other = scheduler.schedule(
+      ArtworkRequestPriority.prefetch,
+      () => run('other', otherGate),
+      key: 'other',
+    );
+
+    scheduler.promote('target');
+    runningGate.complete();
+    await targetStarted.future;
+    expect(started, ['running', 'target']);
+
+    targetGate.complete();
+    await target;
+    otherGate.complete();
+    await Future.wait([running, other]);
   });
 
   test('failed responses are not cached and leave the dedupe map', () async {

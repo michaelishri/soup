@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 
@@ -63,6 +64,35 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('play-item-button')));
     expect(played?.id, 'movie');
     expect(startAt, const Duration(seconds: 90));
+  });
+
+  testWidgets('requests a detail backdrop immediately at 1280px', (
+    tester,
+  ) async {
+    const movie = JellyfinItem(
+      id: 'movie',
+      name: 'Movie',
+      type: 'Movie',
+      backdropImageTag: 'backdrop-tag',
+    );
+    final source = FakeDetailsSource(items: const {'movie': movie});
+    final artwork = RecordingArtworkRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DetailsScreen(
+          source: source,
+          artworkSource: source,
+          artworkRepository: artwork,
+          session: session,
+          item: movie,
+          onPlay: (_, _) {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(artwork.requests, contains('movie:Backdrop:$artworkBackdropWidth'));
   });
 
   testWidgets('loads seasons and resolves an episode for playback', (
@@ -245,4 +275,37 @@ class FakeDetailsSource
     String type = 'Primary',
     int maxWidth = 480,
   }) async => null;
+}
+
+class RecordingArtworkRepository implements ArtworkRepository {
+  final List<String> requests = [];
+
+  @override
+  Future<CachedArtwork?> getArtwork(
+    JellyfinItem item, {
+    String type = 'Primary',
+    int imageIndex = 0,
+    int maxWidth = 480,
+    ArtworkRequestPriority priority = ArtworkRequestPriority.visible,
+  }) async {
+    requests.add('${item.id}:$type:$maxWidth');
+    return null;
+  }
+
+  @override
+  void prefetch(
+    JellyfinItem item, {
+    String type = 'Primary',
+    int imageIndex = 0,
+    int maxWidth = 480,
+  }) {}
+
+  @override
+  Stream<int> watchUsageBytes() => Stream.value(0);
+
+  @override
+  Future<int> usageBytes() async => 0;
+
+  @override
+  Future<void> clear() async {}
 }

@@ -116,7 +116,7 @@ class _SoupAppState extends State<SoupApp> {
   }
 }
 
-class _AuthenticatedHome extends StatelessWidget {
+class _AuthenticatedHome extends StatefulWidget {
   const _AuthenticatedHome({
     required this.viewModel,
     required this.session,
@@ -131,47 +131,79 @@ class _AuthenticatedHome extends StatelessWidget {
   final SoupDatabase database;
 
   @override
+  State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
+}
+
+class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
+  late final Future<_AuthenticatedDependencies> _dependencies =
+      _loadDependencies();
+  _AuthenticatedDependencies? _resolvedDependencies;
+
+  Future<_AuthenticatedDependencies> _loadDependencies() async {
+    final api = await widget.viewModel.authenticatedApi();
+    final dependencies = _AuthenticatedDependencies(
+      api: api,
+      metadataRepository: DriftJellyfinMetadataRepository(
+        database: widget.database,
+        librarySource: api,
+        detailsSource: api,
+        session: widget.session,
+      ),
+      artworkRepository: ArtworkCache(
+        database: widget.database,
+        networkSource: api,
+        session: widget.session,
+      ),
+    );
+    if (!mounted) {
+      await dependencies.metadataRepository.close();
+      return dependencies;
+    }
+    _resolvedDependencies = dependencies;
+    return dependencies;
+  }
+
+  @override
+  void dispose() {
+    final dependencies = _resolvedDependencies;
+    if (dependencies != null) {
+      unawaited(dependencies.metadataRepository.close());
+    }
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: viewModel.authenticatedApi(),
+      future: _dependencies,
       builder: (context, snapshot) {
-        final api = snapshot.data;
-        if (api != null) {
-          final metadataRepository = DriftJellyfinMetadataRepository(
-            database: database,
-            librarySource: api,
-            detailsSource: api,
-            session: session,
-          );
-          final artworkRepository = ArtworkCache(
-            database: database,
-            networkSource: api,
-            session: session,
-          );
+        final dependencies = snapshot.data;
+        if (dependencies != null) {
+          final api = dependencies.api;
           return LibraryScreen(
             source: api,
-            metadataRepository: metadataRepository,
-            artworkRepository: artworkRepository,
-            session: session,
-            onSignOut: viewModel.signOut,
-            appearance: appearanceController.effectiveSettings,
-            onSaveAppearance: appearanceController.save,
+            metadataRepository: dependencies.metadataRepository,
+            artworkRepository: dependencies.artworkRepository,
+            session: widget.session,
+            onSignOut: widget.viewModel.signOut,
+            appearance: widget.appearanceController.effectiveSettings,
+            onSaveAppearance: widget.appearanceController.save,
             onOpenItem: (item) {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => DetailsScreen(
                     source: api,
                     artworkSource: api,
-                    metadataRepository: metadataRepository,
-                    artworkRepository: artworkRepository,
-                    session: session,
+                    metadataRepository: dependencies.metadataRepository,
+                    artworkRepository: dependencies.artworkRepository,
+                    session: widget.session,
                     item: item,
                     onPlay: (item, startAt) {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => PlaybackScreen(
                             api: api,
-                            session: session,
+                            session: widget.session,
                             item: item,
                             startAt: startAt,
                           ),
@@ -195,4 +227,16 @@ class _AuthenticatedHome extends StatelessWidget {
       },
     );
   }
+}
+
+class _AuthenticatedDependencies {
+  const _AuthenticatedDependencies({
+    required this.api,
+    required this.metadataRepository,
+    required this.artworkRepository,
+  });
+
+  final JellyfinApi api;
+  final DriftJellyfinMetadataRepository metadataRepository;
+  final ArtworkCache artworkRepository;
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 
@@ -1122,6 +1125,217 @@ void main() {
     expect(iconScale.duration, Duration.zero);
   });
 
+  testWidgets('prefetches beyond horizontal and grid viewports', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final artwork = FakeArtworkRepository();
+    addTearDown(artwork.close);
+    final latest = [
+      for (var index = 0; index < 100; index++)
+        JellyfinItem(
+          id: 'latest-$index',
+          name: 'Latest $index',
+          type: 'Movie',
+          primaryImageTag: 'primary-latest-$index',
+        ),
+    ];
+    final libraries = [
+      for (var index = 0; index < 100; index++)
+        JellyfinItem(
+          id: 'library-$index',
+          name: 'Library $index',
+          type: 'CollectionFolder',
+          collectionType: 'movies',
+          primaryImageTag: 'primary-library-$index',
+        ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: FakeLibrarySource(
+            JellyfinHome(
+              libraries: libraries,
+              resume: const [],
+              latest: latest,
+            ),
+          ),
+          artworkRepository: artwork,
+          session: session,
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final builtHorizontal = [
+      for (var index = 0; index < latest.length; index++)
+        if (find
+            .byKey(ValueKey('media-card-latest-$index'))
+            .evaluate()
+            .isNotEmpty)
+          index,
+    ];
+    final lastHorizontal = builtHorizontal.last;
+    expect(
+      artwork.prefetches,
+      contains('latest-${lastHorizontal + 1}:Primary:480'),
+    );
+    expect(
+      artwork.prefetches,
+      contains('latest-${lastHorizontal + 2}:Primary:480'),
+    );
+
+    artwork.prefetches.clear();
+    await tester.tap(find.byKey(const ValueKey('fruity-nav-movies')));
+    await tester.pumpAndSettle();
+    final builtGrid = [
+      for (var index = 0; index < libraries.length; index++)
+        if (find
+            .byKey(ValueKey('media-card-library-$index'))
+            .evaluate()
+            .isNotEmpty)
+          index,
+    ];
+    final lastGrid = builtGrid.last;
+    const gridColumns = 4;
+    expect(
+      artwork.prefetches,
+      contains('library-${lastGrid + gridColumns}:Primary:720'),
+    );
+  });
+
+  testWidgets('waits for stable rail focus before loading a backdrop', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final artwork = FakeArtworkRepository();
+    addTearDown(artwork.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: FakeLibrarySource(
+            const JellyfinHome(
+              libraries: [],
+              resume: [
+                JellyfinItem(
+                  id: 'resume-0',
+                  name: 'Resume 0',
+                  type: 'Movie',
+                  backdropImageTag: 'backdrop-0',
+                ),
+                JellyfinItem(
+                  id: 'resume-1',
+                  name: 'Resume 1',
+                  type: 'Movie',
+                  backdropImageTag: 'backdrop-1',
+                ),
+              ],
+              latest: [
+                JellyfinItem(
+                  id: 'featured',
+                  name: 'Featured',
+                  type: 'Movie',
+                  backdropImageTag: 'backdrop-featured',
+                ),
+              ],
+            ),
+          ),
+          artworkRepository: artwork,
+          session: session,
+          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    artwork.visibleRequests.clear();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 179));
+
+    expect(
+      artwork.visibleRequests.where(
+        (request) => request.contains(':Backdrop:'),
+      ),
+      isEmpty,
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(
+      artwork.visibleRequests,
+      contains('resume-1:Backdrop:$artworkBackdropWidth'),
+    );
+    expect(
+      artwork.visibleRequests,
+      isNot(contains('resume-0:Backdrop:$artworkBackdropWidth')),
+    );
+  });
+
+  testWidgets('shows cache usage and confirms artwork-only clearing', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final artwork = FakeArtworkRepository(usage: 64 * 1024 * 1024);
+    addTearDown(artwork.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: FakeLibrarySource(
+            const JellyfinHome(
+              libraries: [],
+              resume: [],
+              latest: [
+                JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie'),
+              ],
+            ),
+          ),
+          artworkRepository: artwork,
+          session: session,
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('fruity-nav-settings')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('clear-artwork-cache')),
+      240,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('fruity-settings')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+
+    expect(find.text('64 MiB of 384 MiB used'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('clear-artwork-cache')));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear artwork cache?'), findsOneWidget);
+    expect(
+      find.textContaining('Library details and playback progress'),
+      findsOneWidget,
+    );
+    expect(artwork.clearCalls, 0);
+
+    await tester.tap(find.byKey(const ValueKey('confirm-clear-artwork-cache')));
+    await tester.pumpAndSettle();
+    expect(artwork.clearCalls, 1);
+    expect(find.text('0.0 MiB of 384 MiB used'), findsOneWidget);
+  });
+
   testWidgets('fits both presets at 1080p with enlarged text', (tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;
@@ -1192,4 +1406,54 @@ class FakeLibrarySource implements JellyfinLibrarySource {
     String type = 'Primary',
     int maxWidth = 480,
   }) async => null;
+}
+
+class FakeArtworkRepository implements ArtworkRepository {
+  FakeArtworkRepository({this.usage = 0});
+
+  final StreamController<int> _usageChanges = StreamController.broadcast();
+  final List<String> visibleRequests = [];
+  final List<String> prefetches = [];
+  int usage;
+  int clearCalls = 0;
+
+  @override
+  Future<CachedArtwork?> getArtwork(
+    JellyfinItem item, {
+    String type = 'Primary',
+    int imageIndex = 0,
+    int maxWidth = 480,
+    ArtworkRequestPriority priority = ArtworkRequestPriority.visible,
+  }) async {
+    visibleRequests.add('${item.id}:$type:$maxWidth');
+    return null;
+  }
+
+  @override
+  void prefetch(
+    JellyfinItem item, {
+    String type = 'Primary',
+    int imageIndex = 0,
+    int maxWidth = 480,
+  }) {
+    prefetches.add('${item.id}:$type:$maxWidth');
+  }
+
+  @override
+  Stream<int> watchUsageBytes() async* {
+    yield usage;
+    yield* _usageChanges.stream;
+  }
+
+  @override
+  Future<int> usageBytes() async => usage;
+
+  @override
+  Future<void> clear() async {
+    clearCalls++;
+    usage = 0;
+    _usageChanges.add(0);
+  }
+
+  Future<void> close() => _usageChanges.close();
 }
