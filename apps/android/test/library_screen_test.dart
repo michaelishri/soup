@@ -738,6 +738,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.byKey(const ValueKey('blockbuster-background-crossfade')),
+      findsOneWidget,
+    );
+    expect(
       tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
       'Featured',
     );

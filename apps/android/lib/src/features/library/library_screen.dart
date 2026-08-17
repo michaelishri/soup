@@ -5,6 +5,7 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/library/library_view_model.dart';
+import 'package:soup/src/features/shared/fading_artwork.dart';
 
 enum _FruityDestination { home, tv, movies, settings }
 
@@ -513,7 +514,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       children: [
         Positioned.fill(
           child: _BlockbusterHomeBackground(
-            key: ValueKey('blockbuster-background-${backdropItem.id}'),
+            artworkKey: backdropItem.id,
             image: _viewModel.image(
               backdropItem,
               type: 'Backdrop',
@@ -1397,15 +1398,12 @@ class _FruityHero extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (showBackdrop)
-            FutureBuilder<Uint8List?>(
-              future: image,
-              builder: (context, snapshot) {
-                final bytes = snapshot.data;
-                if (bytes == null || bytes.isEmpty) {
-                  return ColoredBox(color: theme.colorScheme.surfaceContainer);
-                }
-                return Image.memory(bytes, fit: BoxFit.cover);
-              },
+            FadingArtwork(
+              artworkKey: '${item.id}:backdrop',
+              image: image,
+              placeholder: ColoredBox(
+                color: theme.colorScheme.surfaceContainer,
+              ),
             ),
           if (showBackdrop)
             DecoratedBox(
@@ -1570,8 +1568,12 @@ class _BlockbusterHeroDots extends StatelessWidget {
 }
 
 class _BlockbusterHomeBackground extends StatelessWidget {
-  const _BlockbusterHomeBackground({required this.image, super.key});
+  const _BlockbusterHomeBackground({
+    required this.artworkKey,
+    required this.image,
+  });
 
+  final String artworkKey;
   final Future<Uint8List?> image;
 
   @override
@@ -1580,16 +1582,13 @@ class _BlockbusterHomeBackground extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        FutureBuilder<Uint8List?>(
-          future: image,
-          builder: (context, snapshot) {
-            final bytes = snapshot.data;
-            if (bytes == null || bytes.isEmpty) {
-              return ColoredBox(color: theme.colorScheme.surfaceContainer);
-            }
-            return Image.memory(bytes, fit: BoxFit.cover);
-          },
+        FadingArtwork(
+          key: const ValueKey('blockbuster-background-crossfade'),
+          artworkKey: artworkKey,
+          image: image,
+          placeholder: ColoredBox(color: theme.colorScheme.surfaceContainer),
         ),
+        SizedBox.shrink(key: ValueKey('blockbuster-background-$artworkKey')),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

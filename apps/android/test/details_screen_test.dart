@@ -53,6 +53,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Example Movie'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('details-background-crossfade')),
+      findsOneWidget,
+    );
     expect(find.text('2025  •  12  •  1h 30m  •  ★ 8.3'), findsOneWidget);
     expect(find.text('A useful movie overview.'), findsOneWidget);
     expect(find.text('Resume'), findsOneWidget);

@@ -5,6 +5,7 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/details/details_view_model.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
+import 'package:soup/src/features/shared/fading_artwork.dart';
 
 typedef PlayItem = void Function(JellyfinItem item, Duration startAt);
 
@@ -113,6 +114,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 fit: StackFit.expand,
                 children: [
                   _Backdrop(
+                    artworkKey: _viewModel.item.id,
                     image: _image(
                       _viewModel.item,
                       type: 'Backdrop',
@@ -165,8 +167,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
 }
 
 class _Backdrop extends StatelessWidget {
-  const _Backdrop({required this.image});
+  const _Backdrop({required this.artworkKey, required this.image});
 
+  final String artworkKey;
   final Future<Uint8List?> image;
 
   @override
@@ -178,17 +181,12 @@ class _Backdrop extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        FutureBuilder<Uint8List?>(
-          future: image,
-          builder: (context, snapshot) {
-            final bytes = snapshot.data;
-            return bytes == null
-                ? const SizedBox.shrink()
-                : Opacity(
-                    opacity: 0.28,
-                    child: Image.memory(bytes, fit: BoxFit.cover),
-                  );
-          },
+        FadingArtwork(
+          key: const ValueKey('details-background-crossfade'),
+          artworkKey: artworkKey,
+          image: image,
+          opacity: 0.28,
+          placeholder: const SizedBox.shrink(),
         ),
         DecoratedBox(
           decoration: BoxDecoration(
