@@ -41,6 +41,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late final ScrollController _homeScrollController;
   late AppearanceSettings _appearanceDraft;
   _FruityDestination _destination = _FruityDestination.home;
+  JellyfinItem? _blockbusterBackdropItem;
   bool _savingAppearance = false;
 
   @override
@@ -82,6 +83,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('${item.name} details are coming next.')),
     );
+  }
+
+  void _setBlockbusterBackdrop(JellyfinItem item) {
+    if (_blockbusterBackdropItem?.id == item.id) return;
+    setState(() => _blockbusterBackdropItem = item);
   }
 
   Future<void> _saveAppearance() async {
@@ -253,6 +259,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             landscape: true,
             image: _viewModel.image,
             onOpen: _open,
+            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
             autofocusFirst: home.libraries.isEmpty,
             sectionOrder: 2,
           );
@@ -266,9 +273,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             userName: widget.session.userName,
             image: _viewModel.image(hero, type: 'Backdrop', maxWidth: 1600),
             onOpen: () => _open(hero),
-            onHeroFocused: blockbuster ? _restoreFullHero : null,
+            onHeroFocused: blockbuster ? () => _restoreFullHero(hero) : null,
+            showBackdrop: !blockbusterWide,
           );
-    return CustomScrollView(
+    final homeContent = CustomScrollView(
       key: const ValueKey('library-home'),
       controller: _homeScrollController,
       slivers: [
@@ -306,6 +314,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             items: home.latest,
             image: _viewModel.image,
             onOpen: _open,
+            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
             autofocusFirst: home.resume.isEmpty && home.libraries.isEmpty,
             sectionOrder: 3,
           ),
@@ -317,15 +326,34 @@ class _LibraryScreenState extends State<LibraryScreen> {
             landscape: true,
             image: _viewModel.image,
             onOpen: _open,
+            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
             autofocusFirst: true,
             sectionOrder: 1,
           ),
         const SliverToBoxAdapter(child: SizedBox(height: 36)),
       ],
     );
+    if (!blockbusterWide || hero == null) return homeContent;
+    final backdropItem = _blockbusterBackdropItem ?? hero;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: _BlockbusterHomeBackground(
+            key: ValueKey('blockbuster-background-${backdropItem.id}'),
+            image: _viewModel.image(
+              backdropItem,
+              type: 'Backdrop',
+              maxWidth: 1600,
+            ),
+          ),
+        ),
+        homeContent,
+      ],
+    );
   }
 
-  void _restoreFullHero() {
+  void _restoreFullHero(JellyfinItem hero) {
+    _setBlockbusterBackdrop(hero);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_homeScrollController.hasClients) return;
       _homeScrollController.animateTo(
@@ -1084,6 +1112,7 @@ class _FruityHero extends StatelessWidget {
     required this.image,
     required this.onOpen,
     this.onHeroFocused,
+    this.showBackdrop = true,
   });
 
   final bool blockbuster;
@@ -1092,6 +1121,7 @@ class _FruityHero extends StatelessWidget {
   final Future<Uint8List?> image;
   final VoidCallback onOpen;
   final VoidCallback? onHeroFocused;
+  final bool showBackdrop;
 
   @override
   Widget build(BuildContext context) {
@@ -1114,40 +1144,42 @@ class _FruityHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          FutureBuilder<Uint8List?>(
-            future: image,
-            builder: (context, snapshot) {
-              final bytes = snapshot.data;
-              if (bytes == null || bytes.isEmpty) {
-                return ColoredBox(color: theme.colorScheme.surfaceContainer);
-              }
-              return Image.memory(bytes, fit: BoxFit.cover);
-            },
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: blockbuster
-                    ? Alignment.centerRight
-                    : Alignment.topCenter,
-                end: blockbuster
-                    ? Alignment.centerLeft
-                    : Alignment.bottomCenter,
-                colors: blockbuster
-                    ? [
-                        Colors.transparent,
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.1),
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.58),
-                      ]
-                    : [
-                        tokens?.heroScrimStart ?? Colors.transparent,
-                        theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
-                        theme.scaffoldBackgroundColor,
-                      ],
+          if (showBackdrop)
+            FutureBuilder<Uint8List?>(
+              future: image,
+              builder: (context, snapshot) {
+                final bytes = snapshot.data;
+                if (bytes == null || bytes.isEmpty) {
+                  return ColoredBox(color: theme.colorScheme.surfaceContainer);
+                }
+                return Image.memory(bytes, fit: BoxFit.cover);
+              },
+            ),
+          if (showBackdrop)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: blockbuster
+                      ? Alignment.centerRight
+                      : Alignment.topCenter,
+                  end: blockbuster
+                      ? Alignment.centerLeft
+                      : Alignment.bottomCenter,
+                  colors: blockbuster
+                      ? [
+                          Colors.transparent,
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.1),
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.58),
+                        ]
+                      : [
+                          tokens?.heroScrimStart ?? Colors.transparent,
+                          theme.scaffoldBackgroundColor.withValues(alpha: 0.35),
+                          theme.scaffoldBackgroundColor,
+                        ],
+                ),
               ),
             ),
-          ),
-          if (blockbuster)
+          if (showBackdrop && blockbuster)
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -1228,6 +1260,59 @@ class _FruityHero extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BlockbusterHomeBackground extends StatelessWidget {
+  const _BlockbusterHomeBackground({required this.image, super.key});
+
+  final Future<Uint8List?> image;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        FutureBuilder<Uint8List?>(
+          future: image,
+          builder: (context, snapshot) {
+            final bytes = snapshot.data;
+            if (bytes == null || bytes.isEmpty) {
+              return ColoredBox(color: theme.colorScheme.surfaceContainer);
+            }
+            return Image.memory(bytes, fit: BoxFit.cover);
+          },
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerRight,
+              end: Alignment.centerLeft,
+              colors: [
+                Colors.transparent,
+                theme.scaffoldBackgroundColor.withValues(alpha: 0.1),
+                theme.scaffoldBackgroundColor.withValues(alpha: 0.58),
+              ],
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.transparent,
+                theme.scaffoldBackgroundColor.withValues(alpha: 0.12),
+                theme.scaffoldBackgroundColor.withValues(alpha: 0.9),
+              ],
+              stops: const [0.38, 0.7, 1],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1314,6 +1399,7 @@ class _LibrarySection extends StatelessWidget {
     required this.items,
     required this.image,
     required this.onOpen,
+    this.onItemFocused,
     required this.autofocusFirst,
     required this.sectionOrder,
     this.landscape = false,
@@ -1329,6 +1415,7 @@ class _LibrarySection extends StatelessWidget {
   })
   image;
   final ValueChanged<JellyfinItem> onOpen;
+  final ValueChanged<JellyfinItem>? onItemFocused;
   final bool autofocusFirst;
   final int sectionOrder;
   final bool landscape;
@@ -1391,6 +1478,7 @@ class _LibrarySection extends StatelessWidget {
                     artHeight: artHeight,
                     image: image(item, maxWidth: landscape ? 720 : 480),
                     autofocus: autofocusFirst && index == 0,
+                    onFocused: () => onItemFocused?.call(item),
                     onPressed: () => onOpen(item),
                   ),
                 );
@@ -1472,6 +1560,7 @@ class _MediaCard extends StatefulWidget {
     required this.image,
     required this.autofocus,
     required this.onPressed,
+    this.onFocused,
     super.key,
   });
 
@@ -1482,6 +1571,7 @@ class _MediaCard extends StatefulWidget {
   final Future<Uint8List?> image;
   final bool autofocus;
   final VoidCallback onPressed;
+  final VoidCallback? onFocused;
 
   @override
   State<_MediaCard> createState() => _MediaCardState();
@@ -1500,6 +1590,9 @@ class _MediaCardState extends State<_MediaCard> {
       width: widget.width,
       child: FocusableActionDetector(
         autofocus: widget.autofocus,
+        onFocusChange: (focused) {
+          if (focused) widget.onFocused?.call();
+        },
         onShowFocusHighlight: (focused) => setState(() => _focused = focused),
         actions: {
           ActivateIntent: CallbackAction<ActivateIntent>(

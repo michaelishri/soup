@@ -564,6 +564,58 @@ void main() {
     },
   );
 
+  testWidgets('updates the fixed Blockbuster backdrop as card focus moves', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LibraryScreen(
+          source: FakeLibrarySource(
+            const JellyfinHome(
+              libraries: [],
+              resume: [
+                JellyfinItem(id: 'resume-0', name: 'Resume 0', type: 'Movie'),
+                JellyfinItem(id: 'resume-1', name: 'Resume 1', type: 'Movie'),
+              ],
+              latest: [
+                JellyfinItem(id: 'featured', name: 'Featured', type: 'Movie'),
+              ],
+            ),
+          ),
+          session: session,
+          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+          onSignOut: () async {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('blockbuster-background-featured')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('blockbuster-background-resume-0')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('blockbuster-background-resume-1')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('disables Blockbuster rail focus motion when requested', (
     tester,
   ) async {
