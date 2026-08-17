@@ -148,7 +148,9 @@ void main() {
     expect(requests[1].url.path, '/jellyfin/Users/user/Items/Resume');
     expect(requests[2].url.queryParameters['IncludeItemTypes'], isNull);
     expect(requests[3].url.queryParameters['IncludeItemTypes'], 'Movie');
+    expect(requests[3].url.queryParameters['Limit'], '25');
     expect(requests[4].url.queryParameters['IncludeItemTypes'], 'Episode');
+    expect(requests[4].url.queryParameters['Limit'], '25');
     final tvRequest = requests.singleWhere(
       (request) => request.url.queryParameters['IncludeItemTypes'] == 'Episode',
     );

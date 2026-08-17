@@ -396,13 +396,14 @@ class JellyfinApi
     final recentlyAddedMovies = await _getJson(
       session,
       'Users/${session.userId}/Items/Latest',
-      query: {...latestQuery, 'IncludeItemTypes': 'Movie'},
+      query: {...latestQuery, 'Limit': '25', 'IncludeItemTypes': 'Movie'},
     );
     final recentlyAddedTv = await _getJson(
       session,
       'Users/${session.userId}/Items/Latest',
       query: {
         ...latestQuery,
+        'Limit': '25',
         'IncludeItemTypes': 'Episode',
         'GroupItems': 'true',
       },

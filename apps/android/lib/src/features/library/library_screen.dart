@@ -554,7 +554,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
             key: _blockbusterPinnedHeroKey,
             item: heroContentItem!,
             userName: widget.session.userName,
-            onOpen: () => _open(heroContentItem),
             focusNode: _blockbusterHeroFocusNode,
             onFocused: () => _restoreFullHero(selectedBlockbusterHero!),
           ),
@@ -1527,25 +1526,18 @@ class _FruityHero extends StatelessWidget {
                       ],
                       const SizedBox(height: 18),
                       if (blockbuster)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _BlockbusterHeroAction(
-                              key: const ValueKey('fruity-hero-open'),
-                              onPressed: onOpen,
-                              onFocused: onHeroFocused,
-                              focusNode: focusNode,
-                              onPrevious: onPreviousHero,
-                              onNext: onNextHero,
-                            ),
-                            if (heroCount case final count? when count > 1) ...[
-                              const SizedBox(height: 16),
-                              _BlockbusterHeroDots(
-                                currentIndex: heroIndex ?? 0,
-                                count: count,
-                              ),
-                            ],
-                          ],
+                        _BlockbusterHeroFocus(
+                          key: const ValueKey('blockbuster-hero-focus-anchor'),
+                          onFocused: onHeroFocused,
+                          focusNode: focusNode,
+                          onPrevious: onPreviousHero,
+                          onNext: onNextHero,
+                          child: (heroCount ?? 0) > 1
+                              ? _BlockbusterHeroDots(
+                                  currentIndex: heroIndex ?? 0,
+                                  count: heroCount!,
+                                )
+                              : const SizedBox(width: 1, height: 1),
                         )
                       else
                         FilledButton.icon(
@@ -1721,7 +1713,6 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
   const _BlockbusterPinnedHeroCopy({
     required this.item,
     required this.userName,
-    required this.onOpen,
     required this.focusNode,
     required this.onFocused,
     super.key,
@@ -1729,7 +1720,6 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
 
   final JellyfinItem item;
   final String userName;
-  final VoidCallback onOpen;
   final FocusNode focusNode;
   final VoidCallback onFocused;
 
@@ -1769,12 +1759,12 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
               Text(overview, maxLines: 2, overflow: TextOverflow.ellipsis),
             ],
             const SizedBox(height: 18),
-            _BlockbusterHeroAction(
-              key: const ValueKey('fruity-hero-open'),
-              onPressed: onOpen,
+            _BlockbusterHeroFocus(
+              key: const ValueKey('blockbuster-hero-focus-anchor'),
               onFocused: onFocused,
               focusNode: focusNode,
               autofocus: false,
+              child: const SizedBox(width: 1, height: 1),
             ),
           ],
         ),
@@ -1783,9 +1773,9 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
   }
 }
 
-class _BlockbusterHeroAction extends StatefulWidget {
-  const _BlockbusterHeroAction({
-    required this.onPressed,
+class _BlockbusterHeroFocus extends StatelessWidget {
+  const _BlockbusterHeroFocus({
+    required this.child,
     this.onFocused,
     this.focusNode,
     this.onPrevious,
@@ -1794,7 +1784,7 @@ class _BlockbusterHeroAction extends StatefulWidget {
     super.key,
   });
 
-  final VoidCallback onPressed;
+  final Widget child;
   final VoidCallback? onFocused;
   final FocusNode? focusNode;
   final VoidCallback? onPrevious;
@@ -1802,15 +1792,7 @@ class _BlockbusterHeroAction extends StatefulWidget {
   final bool autofocus;
 
   @override
-  State<_BlockbusterHeroAction> createState() => _BlockbusterHeroActionState();
-}
-
-class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
-  bool _focused = false;
-
-  @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -1819,69 +1801,24 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
           return KeyEventResult.ignored;
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
-            widget.onPrevious != null) {
-          widget.onPrevious!();
+            onPrevious != null) {
+          onPrevious!();
           return KeyEventResult.handled;
         }
         if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
-            widget.onNext != null) {
-          widget.onNext!();
+            onNext != null) {
+          onNext!();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
       },
       child: FocusableActionDetector(
-        focusNode: widget.focusNode,
-        autofocus: widget.autofocus,
+        focusNode: focusNode,
+        autofocus: autofocus,
         onFocusChange: (focused) {
-          if (focused) widget.onFocused?.call();
+          if (focused) onFocused?.call();
         },
-        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
-        actions: {
-          ActivateIntent: CallbackAction<ActivateIntent>(
-            onInvoke: (_) {
-              widget.onPressed();
-              return null;
-            },
-          ),
-        },
-        child: Semantics(
-          button: true,
-          label: 'More info',
-          child: GestureDetector(
-            onTap: widget.onPressed,
-            child: AnimatedContainer(
-              key: const ValueKey('blockbuster-hero-more-info-surface'),
-              duration: reduceMotion
-                  ? Duration.zero
-                  : const Duration(milliseconds: 120),
-              height: 42,
-              padding: const EdgeInsets.symmetric(horizontal: 15),
-              decoration: BoxDecoration(
-                color: _focused ? Colors.white : const Color(0xB36D6D6E),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    PhosphorIconsRegular.info,
-                    size: 20,
-                    color: _focused ? Colors.black : Colors.white,
-                  ),
-                  const SizedBox(width: 9),
-                  Text(
-                    'More info',
-                    style: TextStyle(
-                      color: _focused ? Colors.black : Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+        child: child,
       ),
     );
   }
@@ -2065,12 +2002,22 @@ class _BlockbusterHorizontalCardRow extends StatelessWidget {
       separatorBuilder: (_, _) => const SizedBox(width: 18),
       itemBuilder: (context, index) {
         final child = itemBuilder(context, index);
-        if (index != 0 || !restoreLeadingInset) return child;
         return Focus(
           canRequestFocus: false,
           skipTraversal: true,
+          onKeyEvent: (_, event) {
+            if (restoreLeadingInset &&
+                index == itemCount - 1 &&
+                (event is KeyDownEvent || event is KeyRepeatEvent) &&
+                event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
           onFocusChange: (focused) {
-            if (focused) _restoreLeadingInset(context);
+            if (focused && index == 0 && restoreLeadingInset) {
+              _restoreLeadingInset(context);
+            }
           },
           child: child,
         );

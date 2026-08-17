@@ -405,12 +405,15 @@ void main() {
       findsOneWidget,
     );
 
-    final moreInfoSurface = tester.widget<AnimatedContainer>(
+    expect(find.text('More info'), findsNothing);
+    expect(
       find.byKey(const ValueKey('blockbuster-hero-more-info-surface')),
+      findsNothing,
     );
-    final moreInfoDecoration = moreInfoSurface.decoration! as BoxDecoration;
-    expect(moreInfoDecoration.color, const Color(0xB36D6D6E));
-    expect(moreInfoDecoration.border, isNull);
+    expect(
+      find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+      findsOneWidget,
+    );
 
     expect(
       tester.getSize(find.byKey(const ValueKey('blockbuster-rail'))).width,
@@ -429,8 +432,10 @@ void main() {
       closeTo(620, 0.1),
     );
     expect(
-      tester.getRect(find.byKey(const ValueKey('fruity-hero-open'))).bottom,
-      closeTo(416.4, 0.1),
+      tester
+          .getRect(find.byKey(const ValueKey('blockbuster-hero-focus-anchor')))
+          .bottom,
+      lessThan(tester.getTopLeft(find.text('Continue Watching')).dy),
     );
     expect(
       tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,
@@ -879,7 +884,9 @@ void main() {
         clipBounds.top,
         greaterThanOrEqualTo(
           tester
-              .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+              .getBottomLeft(
+                find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+              )
               .dy,
         ),
       );
@@ -910,7 +917,9 @@ void main() {
       tester.getTopLeft(find.text('Recently Added Movies')).dy,
       greaterThan(
         tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .getBottomLeft(
+                  find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+                )
                 .dy +
             24,
       ),
@@ -942,7 +951,9 @@ void main() {
       tester.getTopLeft(find.text('Continue Watching')).dy,
       greaterThan(
         tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .getBottomLeft(
+                  find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+                )
                 .dy +
             24,
       ),
@@ -951,7 +962,9 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('media-card-resume-0'))).dy,
       greaterThan(
         tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .getBottomLeft(
+                  find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+                )
                 .dy +
             24,
       ),
@@ -1004,6 +1017,20 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('fruity-hero-title'))).dy,
       closeTo(heroTitleTop, 0.1),
     );
+    final trailingCardFocus = FocusManager.instance.primaryFocus;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+
+    expect(
+      FocusManager.instance.primaryFocus,
+      same(trailingCardFocus),
+      reason: 'Right focus must stop at the final card in a playlist.',
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Resume 1',
+    );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
@@ -1032,7 +1059,9 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
       greaterThan(
         tester
-                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .getBottomLeft(
+                  find.byKey(const ValueKey('blockbuster-hero-focus-anchor')),
+                )
                 .dy +
             24,
       ),
