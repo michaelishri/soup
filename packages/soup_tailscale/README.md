@@ -15,11 +15,21 @@ netlink. `native/android_interfaces.go` registers the supported Tailscale
 interface getter, populated through the app's Java `NetworkInterface` bridge.
 It also places native log state inside the app-owned support directory.
 
-This template uses the following structure:
+## Registration lifecycle
 
-`tailscale_up` runs in a worker isolate. A non-ephemeral node stores state in
-the directory provided by the host app. Auth keys are passed directly to the
-native call and are not retained by this package.
+The adapter starts a non-ephemeral node with `tailscale_start`, obtains the
+authenticated loopback LocalAPI endpoint, and supports two registration paths:
+
+- Interactive registration requests a Tailscale HTTPS authorization URL,
+  reports it to the app for QR/browser presentation, and monitors `NeedsLogin`,
+  `NeedsMachineAuth`, and `Running` states until the node is usable.
+- Auth-key registration passes a trimmed one-time key directly to the native
+  node. The package does not retain or persist the key.
+
+Both paths can be cancelled safely and produce the same authenticated SOCKS5
+proxy after connection. Persistent node state lives in the host-provided private
+directory, allowing `restore()` to reconnect without another registration when
+the state remains valid.
 
 ```sh
 flutter analyze

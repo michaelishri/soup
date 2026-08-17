@@ -4,6 +4,19 @@ Flutter prototype for Android mobile and Android TV. It embeds a Tailscale node
 inside the application and routes Jellyfin discovery and login over the node's
 authenticated loopback SOCKS5 proxy.
 
+## Tailscale registration
+
+Soup normally registers its embedded node through Tailscale's interactive web
+login. On Android TV it displays the one-time HTTPS authorization URL as a QR
+code for a phone to scan; Android devices can also open the same URL in an
+installed browser. Soup follows the connection automatically and shows a
+separate waiting state when the tailnet requires administrator approval.
+
+For pre-approved or tagged-device environments, **Advanced options** retains a
+masked one-time auth-key field and clipboard paste action. The field is cleared
+before submission, and Soup never persists or logs the key. Successful node
+state remains in the app's private support directory for future reconnects.
+
 ## Run locally
 
 From the repository root, initialize the pinned native source first:
