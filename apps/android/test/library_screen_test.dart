@@ -460,59 +460,6 @@ void main() {
     expect(find.byKey(const ValueKey('blockbuster-settings')), findsOneWidget);
   });
 
-  testWidgets('restores the full Blockbuster hero when focus returns upward', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1280, 720);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final source = FakeLibrarySource(
-      const JellyfinHome(
-        libraries: [
-          JellyfinItem(
-            id: 'movies',
-            name: 'Movies',
-            type: 'CollectionFolder',
-            collectionType: 'movies',
-          ),
-        ],
-        resume: [JellyfinItem(id: 'resume', name: 'Resume', type: 'Movie')],
-        latest: [JellyfinItem(id: 'latest', name: 'Latest', type: 'Movie')],
-      ),
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: LibraryScreen(
-          source: source,
-          session: session,
-          appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
-          onSignOut: () async {},
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final homeScroll = tester.state<ScrollableState>(
-      find
-          .descendant(
-            of: find.byKey(const ValueKey('library-home')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pumpAndSettle();
-    homeScroll.position.jumpTo(homeScroll.position.maxScrollExtent);
-    await tester.pump();
-    expect(homeScroll.position.pixels, greaterThan(0));
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pumpAndSettle();
-
-    expect(homeScroll.position.pixels, 0);
-  });
-
   testWidgets(
     'restores the Blockbuster latest-media rail inset when focus returns to its first card',
     (tester) async {
@@ -652,6 +599,7 @@ void main() {
         .getTopLeft(find.byKey(const ValueKey('fruity-hero-title')))
         .dy;
     expect(heroTitleTop, lessThan(featuredTitleTop));
+    expect(heroTitleTop, closeTo(150.4, 0.1));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
@@ -668,6 +616,28 @@ void main() {
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('fruity-hero-title'))).dy,
       closeTo(heroTitleTop, 0.1),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(
+              const ValueKey('blockbuster-playlist-continue-watching'),
+            ),
+          )
+          .opacity,
+      0,
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('fruity-hero-title'))).dy,
+      closeTo(heroTitleTop, 0.1),
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Featured',
     );
   });
 

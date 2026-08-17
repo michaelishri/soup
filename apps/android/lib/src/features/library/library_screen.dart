@@ -42,6 +42,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   late AppearanceSettings _appearanceDraft;
   _FruityDestination _destination = _FruityDestination.home;
   JellyfinItem? _blockbusterBackdropItem;
+  String? _blockbusterFocusedRail;
   bool _savingAppearance = false;
 
   @override
@@ -85,9 +86,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  void _setBlockbusterBackdrop(JellyfinItem item) {
-    if (_blockbusterBackdropItem?.id == item.id) return;
-    setState(() => _blockbusterBackdropItem = item);
+  void _setBlockbusterFocusedItem(JellyfinItem item, String rail) {
+    if (_blockbusterBackdropItem?.id == item.id &&
+        _blockbusterFocusedRail == rail) {
+      return;
+    }
+    setState(() {
+      _blockbusterBackdropItem = item;
+      _blockbusterFocusedRail = rail;
+    });
   }
 
   Future<void> _saveAppearance() async {
@@ -259,7 +266,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
             landscape: true,
             image: _viewModel.image,
             onOpen: _open,
-            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
+            onItemFocused: blockbusterWide
+                ? (item) =>
+                      _setBlockbusterFocusedItem(item, 'Continue Watching')
+                : null,
             autofocusFirst: home.libraries.isEmpty,
             sectionOrder: 2,
           );
@@ -271,7 +281,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             items: home.latest,
             image: _viewModel.image,
             onOpen: _open,
-            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
+            onItemFocused: blockbusterWide
+                ? (item) => _setBlockbusterFocusedItem(item, 'Latest Media')
+                : null,
             autofocusFirst: home.resume.isEmpty && home.libraries.isEmpty,
             sectionOrder: 3,
           );
@@ -284,13 +296,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
             landscape: true,
             image: _viewModel.image,
             onOpen: _open,
-            onItemFocused: blockbusterWide ? _setBlockbusterBackdrop : null,
+            onItemFocused: blockbusterWide
+                ? (item) => _setBlockbusterFocusedItem(item, 'My Media')
+                : null,
             autofocusFirst: true,
             sectionOrder: 1,
           );
     final playlistRails = [?continueWatching, ?latestMedia, ?myMedia];
     final overlayPlaylistRails =
         blockbusterWide && hero != null && playlistRails.isNotEmpty;
+    final hasFocusedRail = blockbusterWide && _blockbusterFocusedRail != null;
     final heroContentItem = hero == null
         ? null
         : (blockbusterWide ? _blockbusterBackdropItem ?? hero : hero);
@@ -310,6 +325,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ? () => _restoreFullHero(heroContentItem)
                 : null,
             showBackdrop: !blockbusterWide,
+            showContent: !hasFocusedRail,
           );
     final homeContent = CustomScrollView(
       key: const ValueKey('library-home'),
@@ -322,7 +338,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 heroWidget,
                 Transform.translate(
                   offset: const Offset(0, -_blockbusterHeroRailOverlap),
-                  child: _BlockbusterPlaylistRails(rails: playlistRails),
+                  child: _BlockbusterPlaylistRails(
+                    rails: playlistRails,
+                    activeRail: _blockbusterFocusedRail,
+                  ),
                 ),
               ],
             ),
@@ -359,12 +378,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         ),
         homeContent,
+        if (hasFocusedRail)
+          _BlockbusterPinnedHeroCopy(
+            item: heroContentItem!,
+            userName: widget.session.userName,
+            onOpen: () => _open(heroContentItem),
+          ),
       ],
     );
   }
 
   void _restoreFullHero(JellyfinItem hero) {
-    _setBlockbusterBackdrop(hero);
+    setState(() {
+      _blockbusterBackdropItem = hero;
+      _blockbusterFocusedRail = null;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_homeScrollController.hasClients) return;
       _homeScrollController.animateTo(
@@ -1138,6 +1166,7 @@ class _FruityHero extends StatelessWidget {
     required this.onOpen,
     this.onHeroFocused,
     this.showBackdrop = true,
+    this.showContent = true,
   });
 
   final bool blockbuster;
@@ -1147,6 +1176,7 @@ class _FruityHero extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onHeroFocused;
   final bool showBackdrop;
+  final bool showContent;
 
   @override
   Widget build(BuildContext context) {
@@ -1219,70 +1249,71 @@ class _FruityHero extends StatelessWidget {
                 ),
               ),
             ),
-          Align(
-            alignment: Alignment.bottomLeft,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                blockbuster && wide
-                    ? _blockbusterContentInset
-                    : (wide ? 44 : 24),
-                24,
-                24,
-                heroContentBottomInset,
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 620),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.playbackPositionTicks > 0
-                          ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
-                          : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item.name,
-                      key: const ValueKey('fruity-hero-title'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: wide
-                          ? theme.textTheme.displaySmall
-                          : theme.textTheme.headlineLarge,
-                    ),
-                    if (item.overview case final overview?) ...[
-                      const SizedBox(height: 10),
+          if (showContent)
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  blockbuster && wide
+                      ? _blockbusterContentInset
+                      : (wide ? 44 : 24),
+                  24,
+                  24,
+                  heroContentBottomInset,
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 620),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        overview,
+                        item.playbackPositionTicks > 0
+                            ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
+                            : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.name,
+                        key: const ValueKey('fruity-hero-title'),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                        style: wide
+                            ? theme.textTheme.displaySmall
+                            : theme.textTheme.headlineLarge,
                       ),
+                      if (item.overview case final overview?) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          overview,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 18),
+                      if (blockbuster)
+                        _BlockbusterHeroAction(
+                          key: const ValueKey('fruity-hero-open'),
+                          onPressed: onOpen,
+                          onFocused: onHeroFocused,
+                        )
+                      else
+                        FilledButton.icon(
+                          key: const ValueKey('fruity-hero-open'),
+                          autofocus: true,
+                          onPressed: onOpen,
+                          icon: const Icon(PhosphorIconsRegular.info),
+                          label: const Text('View details'),
+                        ),
                     ],
-                    const SizedBox(height: 18),
-                    if (blockbuster)
-                      _BlockbusterHeroAction(
-                        key: const ValueKey('fruity-hero-open'),
-                        onPressed: onOpen,
-                        onFocused: onHeroFocused,
-                      )
-                    else
-                      FilledButton.icon(
-                        key: const ValueKey('fruity-hero-open'),
-                        autofocus: true,
-                        onPressed: onOpen,
-                        icon: const Icon(PhosphorIconsRegular.info),
-                        label: const Text('View details'),
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -1342,15 +1373,76 @@ class _BlockbusterHomeBackground extends StatelessWidget {
   }
 }
 
+class _BlockbusterPinnedHeroCopy extends StatelessWidget {
+  const _BlockbusterPinnedHeroCopy({
+    required this.item,
+    required this.userName,
+    required this.onOpen,
+  });
+
+  final JellyfinItem item;
+  final String userName;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.sizeOf(context);
+    return Positioned(
+      top: size.height * 0.17,
+      left: _blockbusterContentInset,
+      right: 24,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.playbackPositionTicks > 0
+                  ? 'CONTINUE WATCHING FOR ${userName.toUpperCase()}'
+                  : 'NOW SHOWING FOR ${userName.toUpperCase()}',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.name,
+              key: const ValueKey('fruity-hero-title'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.displaySmall,
+            ),
+            if (item.overview case final overview?) ...[
+              const SizedBox(height: 10),
+              Text(overview, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ],
+            const SizedBox(height: 18),
+            _BlockbusterHeroAction(
+              key: const ValueKey('fruity-hero-open'),
+              onPressed: onOpen,
+              autofocus: false,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BlockbusterHeroAction extends StatefulWidget {
   const _BlockbusterHeroAction({
     required this.onPressed,
     this.onFocused,
+    this.autofocus = true,
     super.key,
   });
 
   final VoidCallback onPressed;
   final VoidCallback? onFocused;
+  final bool autofocus;
 
   @override
   State<_BlockbusterHeroAction> createState() => _BlockbusterHeroActionState();
@@ -1363,7 +1455,7 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return FocusableActionDetector(
-      autofocus: true,
+      autofocus: widget.autofocus,
       onFocusChange: (focused) {
         if (focused) widget.onFocused?.call();
       },
@@ -1517,15 +1609,36 @@ class _LibrarySection extends StatelessWidget {
 }
 
 class _BlockbusterPlaylistRails extends StatelessWidget {
-  const _BlockbusterPlaylistRails({required this.rails});
+  const _BlockbusterPlaylistRails({
+    required this.rails,
+    required this.activeRail,
+  });
 
   final List<_LibrarySection> rails;
+  final String? activeRail;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       key: const ValueKey('blockbuster-playlist-rails'),
-      children: [for (final rail in rails) rail.buildContent(context)],
+      children: [
+        for (final rail in rails)
+          AnimatedOpacity(
+            key: ValueKey(
+              'blockbuster-playlist-${rail.title.toLowerCase().replaceAll(' ', '-')}',
+            ),
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            opacity:
+                rail.title == 'Continue Watching' &&
+                    activeRail != null &&
+                    activeRail != rail.title
+                ? 0
+                : 1,
+            child: rail.buildContent(context),
+          ),
+      ],
     );
   }
 }
