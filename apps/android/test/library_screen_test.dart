@@ -638,7 +638,6 @@ void main() {
           type: 'Movie',
         ),
       );
-
       await tester.pumpWidget(
         MaterialApp(
           home: LibraryScreen(
@@ -714,6 +713,7 @@ void main() {
           type: index.isEven ? 'Movie' : 'Episode',
         ),
       );
+      JellyfinItem? opened;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -734,6 +734,7 @@ void main() {
             session: session,
             appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
             onSignOut: () async {},
+            onOpenItem: (item) => opened = item,
           ),
         ),
       );
@@ -752,6 +753,10 @@ void main() {
         find.byKey(const ValueKey('blockbuster-hero-dots')),
         findsOneWidget,
       );
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pump();
+      expect(opened?.id, 'hero-0');
+
       for (var index = 0; index < 5; index++) {
         expect(
           find.byKey(ValueKey('blockbuster-hero-dot-$index')),

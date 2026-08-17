@@ -5,6 +5,7 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/library/library_view_model.dart';
+import 'package:soup/src/features/shared/adaptive_backdrop_contrast.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
 
 enum _FruityDestination { home, tv, movies, settings }
@@ -457,17 +458,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final heroContentItem = hero == null
         ? null
         : (blockbusterWide ? _blockbusterBackdropItem ?? hero : hero);
+    final heroContentImage = heroContentItem == null
+        ? null
+        : _viewModel.image(heroContentItem, type: 'Backdrop', maxWidth: 1600);
     final heroWidget = heroContentItem == null
         ? null
         : _FruityHero(
             blockbuster: blockbuster,
             item: heroContentItem,
             userName: widget.session.userName,
-            image: _viewModel.image(
-              heroContentItem,
-              type: 'Backdrop',
-              maxWidth: 1600,
-            ),
+            image: heroContentImage!,
             onOpen: () => _open(heroContentItem),
             onHeroFocused: blockbuster
                 ? () => _restoreFullHero(selectedBlockbusterHero!)
@@ -541,11 +541,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         Positioned.fill(
           child: _BlockbusterHomeBackground(
             artworkKey: backdropItem.id,
-            image: _viewModel.image(
-              backdropItem,
-              type: 'Backdrop',
-              maxWidth: 1600,
-            ),
+            image: heroContentImage!,
           ),
         ),
         clippedHomeContent,
@@ -554,6 +550,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             key: _blockbusterPinnedHeroKey,
             item: heroContentItem!,
             userName: widget.session.userName,
+            image: heroContentImage,
+            onOpen: () => _open(heroContentItem),
             focusNode: _blockbusterHeroFocusNode,
             onFocused: () => _restoreFullHero(selectedBlockbusterHero!),
           ),
@@ -1426,6 +1424,83 @@ class _FruityHero extends StatelessWidget {
               30 +
               _blockbusterHeroContentLift
         : 30.0;
+    Widget buildHeroCopy(BackdropContrast? contrast) {
+      final foreground = contrast?.foreground;
+      final shadows = contrast?.shadows;
+      final copy = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.playbackPositionTicks > 0
+                ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
+                : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color:
+                  foreground?.withValues(alpha: 0.84) ??
+                  theme.colorScheme.primary,
+              letterSpacing: 1.2,
+              shadows: shadows,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.name,
+            key: const ValueKey('fruity-hero-title'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style:
+                (wide
+                        ? theme.textTheme.displaySmall
+                        : theme.textTheme.headlineLarge)
+                    ?.copyWith(color: foreground, shadows: shadows),
+          ),
+          if (item.overview case final overview?) ...[
+            const SizedBox(height: 10),
+            Text(
+              overview,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: foreground == null
+                  ? null
+                  : theme.textTheme.bodyMedium?.copyWith(
+                      color: foreground,
+                      shadows: shadows,
+                    ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          if (blockbuster)
+            _BlockbusterHeroFocus(
+              key: const ValueKey('blockbuster-hero-focus-anchor'),
+              onActivate: onOpen,
+              onFocused: onHeroFocused,
+              focusNode: focusNode,
+              onPrevious: onPreviousHero,
+              onNext: onNextHero,
+              child: (heroCount ?? 0) > 1
+                  ? _BlockbusterHeroDots(
+                      currentIndex: heroIndex ?? 0,
+                      count: heroCount!,
+                      color: foreground ?? Colors.white,
+                    )
+                  : const SizedBox(width: 1, height: 1),
+            )
+          else
+            FilledButton.icon(
+              key: const ValueKey('fruity-hero-open'),
+              autofocus: true,
+              onPressed: onOpen,
+              icon: const Icon(PhosphorIconsRegular.info),
+              label: const Text('View details'),
+            ),
+        ],
+      );
+      return contrast == null
+          ? copy
+          : _BlockbusterHeroContrastSurface(contrast: contrast, child: copy);
+    }
+
     return SizedBox(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
       height: heroHeight,
@@ -1493,62 +1568,14 @@ class _FruityHero extends StatelessWidget {
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 620),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.playbackPositionTicks > 0
-                            ? '${blockbuster ? 'CONTINUE WATCHING' : 'UP NEXT'} FOR ${userName.toUpperCase()}'
-                            : '${blockbuster ? 'NOW SHOWING' : 'FEATURED'} FOR ${userName.toUpperCase()}',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.name,
-                        key: const ValueKey('fruity-hero-title'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: wide
-                            ? theme.textTheme.displaySmall
-                            : theme.textTheme.headlineLarge,
-                      ),
-                      if (item.overview case final overview?) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          overview,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: 18),
-                      if (blockbuster)
-                        _BlockbusterHeroFocus(
-                          key: const ValueKey('blockbuster-hero-focus-anchor'),
-                          onFocused: onHeroFocused,
-                          focusNode: focusNode,
-                          onPrevious: onPreviousHero,
-                          onNext: onNextHero,
-                          child: (heroCount ?? 0) > 1
-                              ? _BlockbusterHeroDots(
-                                  currentIndex: heroIndex ?? 0,
-                                  count: heroCount!,
-                                )
-                              : const SizedBox(width: 1, height: 1),
+                  child: blockbuster
+                      ? AdaptiveBackdropContrastBuilder(
+                          artworkKey:
+                              '${item.id}:${item.backdropImageTag ?? item.primaryImageTag}',
+                          image: image,
+                          builder: (_, contrast) => buildHeroCopy(contrast),
                         )
-                      else
-                        FilledButton.icon(
-                          key: const ValueKey('fruity-hero-open'),
-                          autofocus: true,
-                          onPressed: onOpen,
-                          icon: const Icon(PhosphorIconsRegular.info),
-                          label: const Text('View details'),
-                        ),
-                    ],
-                  ),
+                      : buildHeroCopy(null),
                 ),
               ),
             ),
@@ -1558,11 +1585,58 @@ class _FruityHero extends StatelessWidget {
   }
 }
 
+class _BlockbusterHeroContrastSurface extends StatelessWidget {
+  const _BlockbusterHeroContrastSurface({
+    required this.contrast,
+    required this.child,
+  });
+
+  final BackdropContrast contrast;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final opacity = contrast.scrimOpacity;
+    return Stack(
+      key: const ValueKey('blockbuster-hero-contrast-surface'),
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          top: -56,
+          bottom: -56,
+          left: -64,
+          right: -96,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: const Alignment(-0.15, 0),
+                radius: 0.92,
+                colors: [
+                  contrast.scrim.withValues(alpha: opacity * 0.9),
+                  contrast.scrim.withValues(alpha: opacity * 0.55),
+                  contrast.scrim.withValues(alpha: 0),
+                ],
+                stops: const [0, 0.55, 1],
+              ),
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
 class _BlockbusterHeroDots extends StatelessWidget {
-  const _BlockbusterHeroDots({required this.currentIndex, required this.count});
+  const _BlockbusterHeroDots({
+    required this.currentIndex,
+    required this.count,
+    required this.color,
+  });
 
   final int currentIndex;
   final int count;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1583,7 +1657,7 @@ class _BlockbusterHeroDots extends StatelessWidget {
               height: 7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(
+                color: color.withValues(
                   alpha: index == currentIndex ? 0.82 : 0.3,
                 ),
               ),
@@ -1713,6 +1787,8 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
   const _BlockbusterPinnedHeroCopy({
     required this.item,
     required this.userName,
+    required this.image,
+    required this.onOpen,
     required this.focusNode,
     required this.onFocused,
     super.key,
@@ -1720,6 +1796,8 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
 
   final JellyfinItem item;
   final String userName;
+  final Future<Uint8List?> image;
+  final VoidCallback onOpen;
   final FocusNode focusNode;
   final VoidCallback onFocused;
 
@@ -1733,40 +1811,61 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
       right: 24,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item.playbackPositionTicks > 0
-                  ? 'CONTINUE WATCHING FOR ${userName.toUpperCase()}'
-                  : 'NOW SHOWING FOR ${userName.toUpperCase()}',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                letterSpacing: 1.2,
-              ),
+        child: AdaptiveBackdropContrastBuilder(
+          artworkKey:
+              '${item.id}:${item.backdropImageTag ?? item.primaryImageTag}',
+          image: image,
+          builder: (_, contrast) => _BlockbusterHeroContrastSurface(
+            contrast: contrast,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.playbackPositionTicks > 0
+                      ? 'CONTINUE WATCHING FOR ${userName.toUpperCase()}'
+                      : 'NOW SHOWING FOR ${userName.toUpperCase()}',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: contrast.foreground.withValues(alpha: 0.84),
+                    letterSpacing: 1.2,
+                    shadows: contrast.shadows,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.name,
+                  key: const ValueKey('fruity-hero-title'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: contrast.foreground,
+                    shadows: contrast.shadows,
+                  ),
+                ),
+                if (item.overview case final overview?) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    overview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: contrast.foreground,
+                      shadows: contrast.shadows,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                _BlockbusterHeroFocus(
+                  key: const ValueKey('blockbuster-hero-focus-anchor'),
+                  onActivate: onOpen,
+                  onFocused: onFocused,
+                  focusNode: focusNode,
+                  autofocus: false,
+                  child: const SizedBox(width: 1, height: 1),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              item.name,
-              key: const ValueKey('fruity-hero-title'),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.displaySmall,
-            ),
-            if (item.overview case final overview?) ...[
-              const SizedBox(height: 10),
-              Text(overview, maxLines: 2, overflow: TextOverflow.ellipsis),
-            ],
-            const SizedBox(height: 18),
-            _BlockbusterHeroFocus(
-              key: const ValueKey('blockbuster-hero-focus-anchor'),
-              onFocused: onFocused,
-              focusNode: focusNode,
-              autofocus: false,
-              child: const SizedBox(width: 1, height: 1),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1776,6 +1875,7 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
 class _BlockbusterHeroFocus extends StatelessWidget {
   const _BlockbusterHeroFocus({
     required this.child,
+    required this.onActivate,
     this.onFocused,
     this.focusNode,
     this.onPrevious,
@@ -1785,6 +1885,7 @@ class _BlockbusterHeroFocus extends StatelessWidget {
   });
 
   final Widget child;
+  final VoidCallback onActivate;
   final VoidCallback? onFocused;
   final FocusNode? focusNode;
   final VoidCallback? onPrevious;
@@ -1818,7 +1919,20 @@ class _BlockbusterHeroFocus extends StatelessWidget {
         onFocusChange: (focused) {
           if (focused) onFocused?.call();
         },
-        child: child,
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              onActivate();
+              return null;
+            },
+          ),
+        },
+        child: Semantics(
+          button: true,
+          label: 'View details',
+          onTap: onActivate,
+          child: child,
+        ),
       ),
     );
   }
