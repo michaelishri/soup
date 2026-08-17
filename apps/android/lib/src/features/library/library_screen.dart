@@ -11,8 +11,9 @@ enum _FruityDestination { home, tv, movies, settings }
 const _blockbusterContentInset = 104.0;
 const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
-const _blockbusterPinnedHeroLift = 32.0;
-const _blockbusterPinnedHeroRailClearance = 80.0 + _blockbusterPinnedHeroLift;
+const _blockbusterPinnedHeroLift = 64.0;
+const _blockbusterPinnedHeroRailClearance = 112.0;
+const _blockbusterFocusedCardBottomClearance = 12.0;
 const _blockbusterRailTransitionDuration = Duration(milliseconds: 180);
 const _blockbusterRailClipFallbackFraction = 0.62;
 const _blockbusterRailFadeExtent = 64.0;
@@ -145,13 +146,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final heroBottom = heroCopy
         .localToGlobal(Offset(0, heroCopy.size.height))
         .dy;
-    final safeRailTop = heroBottom + 24;
+    final safeRailTop = heroBottom;
     if (_blockbusterRailClipTop == null ||
         (_blockbusterRailClipTop! - safeRailTop).abs() >= 1) {
       setState(() => _blockbusterRailClipTop = safeRailTop);
     }
     final cardTop = focusedCard.localToGlobal(Offset.zero).dy;
-    final desiredCardTop = heroBottom + _blockbusterPinnedHeroRailClearance;
+    final preferredCardTop = heroBottom + _blockbusterPinnedHeroRailClearance;
+    final maxCardTop =
+        MediaQuery.sizeOf(context).height -
+        focusedCard.size.height -
+        _blockbusterFocusedCardBottomClearance;
+    final desiredCardTop =
+        (preferredCardTop < maxCardTop ? preferredCardTop : maxCardTop)
+            .clamp(0.0, double.infinity)
+            .toDouble();
     final targetOffset =
         (playlistScroll.position.pixels + cardTop - desiredCardTop)
             .clamp(
@@ -1738,10 +1747,10 @@ class _LibrarySection extends StatelessWidget {
     final phone = MediaQuery.sizeOf(context).width < 600;
     final width = landscape
         ? (phone ? 210.0 : (blockbuster ? 240.0 : 270.0))
-        : (phone ? 140.0 : (blockbuster ? 148.0 : 166.0));
+        : (phone ? 140.0 : (blockbuster ? 128.0 : 166.0));
     final artHeight = landscape
         ? (phone ? 118.0 : (blockbuster ? 135.0 : 152.0))
-        : (phone ? 196.0 : (blockbuster ? 207.0 : 232.0));
+        : (phone ? 196.0 : (blockbuster ? 179.0 : 232.0));
     return Padding(
       padding: const EdgeInsets.only(bottom: 26),
       child: Column(

@@ -600,10 +600,18 @@ void main() {
         clipBounds.top,
         greaterThanOrEqualTo(
           tester
-                  .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
-                  .dy +
-              24,
+              .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+              .dy,
         ),
+      );
+    }
+
+    void expectFocusedCardFits(String itemId) {
+      final viewportHeight =
+          tester.view.physicalSize.height / tester.view.devicePixelRatio;
+      expect(
+        tester.getBottomLeft(find.byKey(ValueKey('media-card-$itemId'))).dy,
+        lessThanOrEqualTo(viewportHeight - 8),
       );
     }
 
@@ -666,6 +674,7 @@ void main() {
       ),
     );
     expectFocusedRailClippedBelowHero();
+    expectFocusedCardFits('resume-0');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
@@ -721,6 +730,7 @@ void main() {
       lessThan(460),
     );
     expectFocusedRailClippedBelowHero();
+    expectFocusedCardFits('featured');
 
     final homeScroll = tester.state<ScrollableState>(
       find
@@ -793,6 +803,7 @@ void main() {
       lessThan(460),
     );
     expectFocusedRailClippedBelowHero();
+    expectFocusedCardFits('movies');
   });
 
   testWidgets('disables Blockbuster rail focus motion when requested', (
