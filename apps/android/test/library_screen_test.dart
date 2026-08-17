@@ -589,8 +589,13 @@ void main() {
       final clipFinder = find.byKey(
         const ValueKey('blockbuster-focused-rail-clip'),
       );
+      final fadeFinder = find.byKey(
+        const ValueKey('blockbuster-focused-rail-fade'),
+      );
       final clip = tester.widget<ClipRect>(clipFinder);
+      final fade = tester.widget<ShaderMask>(fadeFinder);
       final clipBounds = clip.clipper!.getClip(tester.getSize(clipFinder));
+      expect(fade.blendMode, BlendMode.dstIn);
       expect(
         clipBounds.top,
         greaterThanOrEqualTo(

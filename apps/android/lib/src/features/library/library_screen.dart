@@ -14,6 +14,7 @@ const _blockbusterHeroContentLift = 72.0;
 const _blockbusterPinnedHeroRailClearance = 80.0;
 const _blockbusterRailTransitionDuration = Duration(milliseconds: 180);
 const _blockbusterRailClipFallbackFraction = 0.62;
+const _blockbusterRailFadeExtent = 64.0;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -439,16 +440,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
     if (!blockbusterWide || hero == null) return homeContent;
     final backdropItem = _blockbusterBackdropItem ?? hero;
+    final railClipTop = hasFocusedRail
+        ? _blockbusterRailClipTop ??
+              MediaQuery.sizeOf(context).height *
+                  _blockbusterRailClipFallbackFraction
+        : 0.0;
     final clippedHomeContent = ClipRect(
       key: const ValueKey('blockbuster-focused-rail-clip'),
-      clipper: _BlockbusterHeroSafeClipper(
-        top: hasFocusedRail
-            ? _blockbusterRailClipTop ??
-                  MediaQuery.sizeOf(context).height *
-                      _blockbusterRailClipFallbackFraction
-            : 0,
+      clipper: _BlockbusterHeroSafeClipper(top: railClipTop),
+      child: _BlockbusterHeroSafeFade(
+        top: railClipTop,
+        enabled: hasFocusedRail,
+        child: homeContent,
       ),
-      child: homeContent,
     );
     return Stack(
       children: [
@@ -1513,6 +1517,49 @@ class _BlockbusterHeroSafeClipper extends CustomClipper<Rect> {
   @override
   bool shouldReclip(covariant _BlockbusterHeroSafeClipper oldClipper) {
     return oldClipper.top != top;
+  }
+}
+
+class _BlockbusterHeroSafeFade extends StatelessWidget {
+  const _BlockbusterHeroSafeFade({
+    required this.top,
+    required this.enabled,
+    required this.child,
+  });
+
+  final double top;
+  final bool enabled;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      key: const ValueKey('blockbuster-focused-rail-fade'),
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        if (!enabled || bounds.height <= 0) {
+          return const LinearGradient(
+            colors: [Colors.white, Colors.white],
+          ).createShader(bounds);
+        }
+        final fadeStart = top.clamp(0, bounds.height).toDouble();
+        final fadeEnd = (fadeStart + _blockbusterRailFadeExtent)
+            .clamp(fadeStart, bounds.height)
+            .toDouble();
+        return LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: const [
+            Colors.transparent,
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+          ],
+          stops: [0, fadeStart / bounds.height, fadeEnd / bounds.height, 1],
+        ).createShader(bounds);
+      },
+      child: child,
+    );
   }
 }
 
