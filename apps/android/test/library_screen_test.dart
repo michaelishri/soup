@@ -262,11 +262,11 @@ void main() {
     );
     expect(
       tester.getTopLeft(find.text('Continue Watching')).dy,
-      closeTo(550, 0.1),
+      closeTo(620, 0.1),
     );
     expect(
       tester.getRect(find.byKey(const ValueKey('fruity-hero-open'))).bottom,
-      closeTo(488.4, 0.1),
+      closeTo(416.4, 0.1),
     );
     expect(
       tester.getCenter(find.byKey(const ValueKey('blockbuster-nav-items'))).dy,

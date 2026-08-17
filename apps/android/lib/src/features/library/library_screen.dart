@@ -9,7 +9,8 @@ import 'package:soup/src/features/library/library_view_model.dart';
 enum _FruityDestination { home, tv, movies, settings }
 
 const _blockbusterContentInset = 104.0;
-const _blockbusterHeroRailOverlap = 170.0;
+const _blockbusterHeroRailOverlap = 100.0;
+const _blockbusterHeroContentLift = 72.0;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -1102,7 +1103,10 @@ class _FruityHero extends StatelessWidget {
         ? size.height
         : (wide ? 300.0 : 330.0);
     final heroContentBottomInset = blockbuster && wide
-        ? size.height - (size.height * 0.72).clamp(460.0, 760.0) + 30
+        ? size.height -
+              (size.height * 0.72).clamp(460.0, 760.0) +
+              30 +
+              _blockbusterHeroContentLift
         : 30.0;
     return SizedBox(
       key: ValueKey('${blockbuster ? 'blockbuster' : 'fruity'}-hero'),
