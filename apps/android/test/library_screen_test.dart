@@ -549,7 +549,14 @@ void main() {
         home: LibraryScreen(
           source: FakeLibrarySource(
             const JellyfinHome(
-              libraries: [],
+              libraries: [
+                JellyfinItem(
+                  id: 'movies',
+                  name: 'Movies',
+                  type: 'CollectionFolder',
+                  collectionType: 'movies',
+                ),
+              ],
               resume: [
                 JellyfinItem(
                   id: 'resume-0',
@@ -654,6 +661,8 @@ void main() {
       closeTo(heroTitleTop, 0.1),
     );
 
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
 
@@ -686,6 +695,76 @@ void main() {
     );
     expect(
       tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
+      lessThan(460),
+    );
+
+    final homeScroll = tester.state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('library-home')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    final latestMediaScrollOffset = homeScroll.position.pixels;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 90));
+
+    expect(homeScroll.position.pixels, closeTo(latestMediaScrollOffset, 0.1));
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('media-card-featured'))).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(
+              const ValueKey('blockbuster-playlist-continue-watching'),
+            ),
+          )
+          .opacity,
+      0,
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey('blockbuster-playlist-latest-media')),
+          )
+          .opacity,
+      0,
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey('blockbuster-playlist-my-media')),
+          )
+          .opacity,
+      1,
+    );
+    expect(
+      tester.widget<Text>(find.byKey(const ValueKey('fruity-hero-title'))).data,
+      'Movies',
+    );
+    expect(
+      tester.getTopLeft(find.text('My Media')).dy,
+      greaterThan(
+        tester
+                .getBottomLeft(find.byKey(const ValueKey('fruity-hero-open')))
+                .dy +
+            24,
+      ),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('media-card-movies'))).dy,
       lessThan(460),
     );
   });

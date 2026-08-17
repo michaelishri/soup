@@ -11,8 +11,8 @@ enum _FruityDestination { home, tv, movies, settings }
 const _blockbusterContentInset = 104.0;
 const _blockbusterHeroRailOverlap = 100.0;
 const _blockbusterHeroContentLift = 72.0;
-const _blockbusterPinnedHeroCardAlignment = 0.58;
 const _blockbusterPinnedHeroRailClearance = 80.0;
+const _blockbusterRailTransitionDuration = Duration(milliseconds: 180);
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({
@@ -46,6 +46,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   _FruityDestination _destination = _FruityDestination.home;
   JellyfinItem? _blockbusterBackdropItem;
   String? _blockbusterFocusedRail;
+  int _blockbusterFocusRevision = 0;
   bool _savingAppearance = false;
 
   @override
@@ -90,6 +91,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _setBlockbusterFocusedItem(JellyfinItem item, String rail) {
+    final previousRail = _blockbusterFocusedRail;
+    final focusRevision = ++_blockbusterFocusRevision;
     if (_blockbusterBackdropItem?.id != item.id ||
         _blockbusterFocusedRail != rail) {
       setState(() {
@@ -98,7 +101,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
       });
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _positionFocusedPlaylistBelowHero();
+      if (!mounted) return;
+      final waitForPreviousRailToFade =
+          previousRail != null && previousRail != rail;
+      final delay =
+          waitForPreviousRailToFade && !MediaQuery.disableAnimationsOf(context)
+          ? _blockbusterRailTransitionDuration
+          : Duration.zero;
+      Future<void>.delayed(delay, () {
+        if (!mounted || focusRevision != _blockbusterFocusRevision) return;
+        _positionFocusedPlaylistBelowHero();
+      });
     });
   }
 
@@ -141,7 +154,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       targetOffset,
       duration: MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
-          : const Duration(milliseconds: 180),
+          : _blockbusterRailTransitionDuration,
       curve: Curves.easeOutCubic,
     );
   }
@@ -496,17 +509,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
       duration: duration ?? Duration.zero,
       curve: curve ?? Curves.ease,
     );
-    final outerScrollable = Scrollable.maybeOf(nearestScrollable.context);
-    if (outerScrollable != null &&
-        axisDirectionToAxis(outerScrollable.axisDirection) == Axis.vertical) {
-      outerScrollable.position.ensureVisible(
-        nearestScrollable.context.findRenderObject()!,
-        targetRenderObject: target,
-        alignment: _blockbusterPinnedHeroCardAlignment,
-        duration: duration ?? Duration.zero,
-        curve: curve ?? Curves.ease,
-      );
-    }
   }
 
   Widget _libraryDestination(JellyfinHome home, {required bool television}) {
@@ -1724,23 +1726,21 @@ class _BlockbusterPlaylistRails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final activeRailIndex = activeRail == null
+        ? -1
+        : rails.indexWhere((rail) => rail.title == activeRail);
     return Column(
       key: const ValueKey('blockbuster-playlist-rails'),
       children: [
-        for (final rail in rails)
+        for (final (index, rail) in rails.indexed)
           AnimatedOpacity(
             key: ValueKey(
               'blockbuster-playlist-${rail.title.toLowerCase().replaceAll(' ', '-')}',
             ),
             duration: MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
-                : const Duration(milliseconds: 180),
-            opacity:
-                rail.title == 'Continue Watching' &&
-                    activeRail != null &&
-                    activeRail != rail.title
-                ? 0
-                : 1,
+                : _blockbusterRailTransitionDuration,
+            opacity: activeRailIndex >= 0 && index < activeRailIndex ? 0 : 1,
             child: rail.buildContent(context),
           ),
       ],
