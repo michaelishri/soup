@@ -45,12 +45,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _blockbusterRailKey = GlobalKey<_BlockbusterRailState>();
   final _blockbusterPinnedHeroKey = GlobalKey();
   late final FocusScopeNode _blockbusterContentScopeNode;
+  late final FocusNode _blockbusterHeroFocusNode;
   late final ScrollController _homeScrollController;
   late AppearanceSettings _appearanceDraft;
   _FruityDestination _destination = _FruityDestination.home;
   JellyfinItem? _blockbusterBackdropItem;
   String? _blockbusterFocusedRail;
   double? _blockbusterRailClipTop;
+  String? _blockbusterFirstPlaylistRail;
+  int _blockbusterHeroIndex = 0;
   int _blockbusterFocusRevision = 0;
   bool _savingAppearance = false;
 
@@ -59,6 +62,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.initState();
     _blockbusterContentScopeNode = FocusScopeNode(
       debugLabel: 'blockbuster-content',
+    );
+    _blockbusterHeroFocusNode = FocusNode(
+      debugLabel: 'blockbuster-hero-carousel',
     );
     _homeScrollController = ScrollController(debugLabel: 'library-home-scroll');
     _appearanceDraft = widget.appearance;
@@ -79,6 +85,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   void dispose() {
     _homeScrollController.dispose();
+    _blockbusterHeroFocusNode.dispose();
     _blockbusterContentScopeNode.dispose();
     _viewModel.dispose();
     super.dispose();
@@ -282,8 +289,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
     FocusNode node,
     KeyEvent event,
   ) {
-    if (event is! KeyDownEvent ||
-        event.logicalKey != LogicalKeyboardKey.arrowLeft) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+        _blockbusterFocusedRail != null &&
+        _blockbusterFocusedRail == _blockbusterFirstPlaylistRail &&
+        _blockbusterHeroFocusNode.context != null) {
+      _blockbusterHeroFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.arrowLeft) {
       return KeyEventResult.ignored;
     }
     final moved =
@@ -295,6 +311,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _blockbusterRailKey.currentState?.focusSelectedDestination();
     }
     return KeyEventResult.handled;
+  }
+
+  void _moveBlockbusterHero(List<JellyfinItem> items, int delta) {
+    if (items.length < 2) return;
+    final nextIndex = (_blockbusterHeroIndex + delta) % items.length;
+    final nextItem = items[nextIndex];
+    setState(() {
+      _blockbusterHeroIndex = nextIndex;
+      _blockbusterBackdropItem = nextItem;
+      _blockbusterFocusedRail = null;
+      _blockbusterRailClipTop = null;
+    });
   }
 
   void _focusBlockbusterContent() {
@@ -339,8 +367,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final blockbuster = widget.appearance.preset == UiPreset.blockbuster;
     final blockbusterWide =
         blockbuster && MediaQuery.sizeOf(context).width >= 840;
+    final blockbusterHeroItems = home.latest.take(5).toList(growable: false);
+    final effectiveHeroIndex = blockbusterHeroItems.isEmpty
+        ? 0
+        : _blockbusterHeroIndex.clamp(0, blockbusterHeroItems.length - 1);
+    final selectedBlockbusterHero = blockbusterHeroItems.isEmpty
+        ? home.resume.firstOrNull
+        : blockbusterHeroItems[effectiveHeroIndex];
     final hero = blockbuster
-        ? home.latest.firstOrNull ?? home.resume.firstOrNull
+        ? selectedBlockbusterHero
         : home.resume.firstOrNull ?? home.latest.firstOrNull;
     final continueWatching = home.resume.isEmpty
         ? null
@@ -388,6 +423,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             sectionOrder: 1,
           );
     final playlistRails = [?continueWatching, ?latestMedia, ?myMedia];
+    _blockbusterFirstPlaylistRail = playlistRails.firstOrNull?.title;
     final overlayPlaylistRails =
         blockbusterWide && hero != null && playlistRails.isNotEmpty;
     final hasFocusedRail = blockbusterWide && _blockbusterFocusedRail != null;
@@ -407,7 +443,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
             onOpen: () => _open(heroContentItem),
             onHeroFocused: blockbuster
-                ? () => _restoreFullHero(heroContentItem)
+                ? () => _restoreFullHero(selectedBlockbusterHero!)
+                : null,
+            focusNode: blockbusterWide ? _blockbusterHeroFocusNode : null,
+            heroIndex: blockbusterWide ? effectiveHeroIndex : null,
+            heroCount: blockbusterWide ? blockbusterHeroItems.length : null,
+            onPreviousHero: blockbusterHeroItems.length > 1
+                ? () => _moveBlockbusterHero(blockbusterHeroItems, -1)
+                : null,
+            onNextHero: blockbusterHeroItems.length > 1
+                ? () => _moveBlockbusterHero(blockbusterHeroItems, 1)
                 : null,
             showBackdrop: !blockbusterWide,
             showContent: !hasFocusedRail,
@@ -483,6 +528,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
             item: heroContentItem!,
             userName: widget.session.userName,
             onOpen: () => _open(heroContentItem),
+            focusNode: _blockbusterHeroFocusNode,
+            onFocused: () => _restoreFullHero(selectedBlockbusterHero!),
           ),
       ],
     );
@@ -1305,6 +1352,11 @@ class _FruityHero extends StatelessWidget {
     required this.image,
     required this.onOpen,
     this.onHeroFocused,
+    this.focusNode,
+    this.heroIndex,
+    this.heroCount,
+    this.onPreviousHero,
+    this.onNextHero,
     this.showBackdrop = true,
     this.showContent = true,
   });
@@ -1315,6 +1367,11 @@ class _FruityHero extends StatelessWidget {
   final Future<Uint8List?> image;
   final VoidCallback onOpen;
   final VoidCallback? onHeroFocused;
+  final FocusNode? focusNode;
+  final int? heroIndex;
+  final int? heroCount;
+  final VoidCallback? onPreviousHero;
+  final VoidCallback? onNextHero;
   final bool showBackdrop;
   final bool showContent;
 
@@ -1436,10 +1493,25 @@ class _FruityHero extends StatelessWidget {
                       ],
                       const SizedBox(height: 18),
                       if (blockbuster)
-                        _BlockbusterHeroAction(
-                          key: const ValueKey('fruity-hero-open'),
-                          onPressed: onOpen,
-                          onFocused: onHeroFocused,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _BlockbusterHeroAction(
+                              key: const ValueKey('fruity-hero-open'),
+                              onPressed: onOpen,
+                              onFocused: onHeroFocused,
+                              focusNode: focusNode,
+                              onPrevious: onPreviousHero,
+                              onNext: onNextHero,
+                            ),
+                            if (heroCount case final count? when count > 1) ...[
+                              const SizedBox(height: 16),
+                              _BlockbusterHeroDots(
+                                currentIndex: heroIndex ?? 0,
+                                count: count,
+                              ),
+                            ],
+                          ],
                         )
                       else
                         FilledButton.icon(
@@ -1454,6 +1526,43 @@ class _FruityHero extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlockbusterHeroDots extends StatelessWidget {
+  const _BlockbusterHeroDots({required this.currentIndex, required this.count});
+
+  final int currentIndex;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Featured item ${currentIndex + 1} of $count',
+      child: Row(
+        key: const ValueKey('blockbuster-hero-dots'),
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < count; index++) ...[
+            if (index > 0) const SizedBox(width: 8),
+            AnimatedContainer(
+              key: ValueKey('blockbuster-hero-dot-$index'),
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 140),
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(
+                  alpha: index == currentIndex ? 0.82 : 0.3,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1578,12 +1687,16 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
     required this.item,
     required this.userName,
     required this.onOpen,
+    required this.focusNode,
+    required this.onFocused,
     super.key,
   });
 
   final JellyfinItem item;
   final String userName;
   final VoidCallback onOpen;
+  final FocusNode focusNode;
+  final VoidCallback onFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -1624,6 +1737,8 @@ class _BlockbusterPinnedHeroCopy extends StatelessWidget {
             _BlockbusterHeroAction(
               key: const ValueKey('fruity-hero-open'),
               onPressed: onOpen,
+              onFocused: onFocused,
+              focusNode: focusNode,
               autofocus: false,
             ),
           ],
@@ -1637,12 +1752,18 @@ class _BlockbusterHeroAction extends StatefulWidget {
   const _BlockbusterHeroAction({
     required this.onPressed,
     this.onFocused,
+    this.focusNode,
+    this.onPrevious,
+    this.onNext,
     this.autofocus = true,
     super.key,
   });
 
   final VoidCallback onPressed;
   final VoidCallback? onFocused;
+  final FocusNode? focusNode;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
   final bool autofocus;
 
   @override
@@ -1655,53 +1776,74 @@ class _BlockbusterHeroActionState extends State<_BlockbusterHeroAction> {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return FocusableActionDetector(
-      autofocus: widget.autofocus,
-      onFocusChange: (focused) {
-        if (focused) widget.onFocused?.call();
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+            widget.onPrevious != null) {
+          widget.onPrevious!();
+          return KeyEventResult.handled;
+        }
+        if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
+            widget.onNext != null) {
+          widget.onNext!();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
       },
-      onShowFocusHighlight: (focused) => setState(() => _focused = focused),
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            widget.onPressed();
-            return null;
-          },
-        ),
-      },
-      child: Semantics(
-        button: true,
-        label: 'More info',
-        child: GestureDetector(
-          onTap: widget.onPressed,
-          child: AnimatedContainer(
-            key: const ValueKey('blockbuster-hero-more-info-surface'),
-            duration: reduceMotion
-                ? Duration.zero
-                : const Duration(milliseconds: 120),
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            decoration: BoxDecoration(
-              color: _focused ? Colors.white : const Color(0xB36D6D6E),
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  PhosphorIconsRegular.info,
-                  size: 20,
-                  color: _focused ? Colors.black : Colors.white,
-                ),
-                const SizedBox(width: 9),
-                Text(
-                  'More info',
-                  style: TextStyle(
+      child: FocusableActionDetector(
+        focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
+        onFocusChange: (focused) {
+          if (focused) widget.onFocused?.call();
+        },
+        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed();
+              return null;
+            },
+          ),
+        },
+        child: Semantics(
+          button: true,
+          label: 'More info',
+          child: GestureDetector(
+            onTap: widget.onPressed,
+            child: AnimatedContainer(
+              key: const ValueKey('blockbuster-hero-more-info-surface'),
+              duration: reduceMotion
+                  ? Duration.zero
+                  : const Duration(milliseconds: 120),
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 15),
+              decoration: BoxDecoration(
+                color: _focused ? Colors.white : const Color(0xB36D6D6E),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    PhosphorIconsRegular.info,
+                    size: 20,
                     color: _focused ? Colors.black : Colors.white,
-                    fontWeight: FontWeight.w700,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 9),
+                  Text(
+                    'More info',
+                    style: TextStyle(
+                      color: _focused ? Colors.black : Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

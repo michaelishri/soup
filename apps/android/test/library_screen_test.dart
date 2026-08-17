@@ -515,6 +515,9 @@ void main() {
             .first,
       );
 
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+
       for (var index = 0; index < 8; index++) {
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
         await tester.pumpAndSettle();
@@ -528,6 +531,121 @@ void main() {
 
       expect(latestRow.position.pixels, 0);
       expect(tester.getTopLeft(firstCard).dx, 104);
+    },
+  );
+
+  testWidgets(
+    'cycles the latest five Blockbuster heroes and returns focus above playlists',
+    (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+      final latest = List.generate(
+        6,
+        (index) => JellyfinItem(
+          id: 'hero-$index',
+          name: 'Hero $index',
+          type: index.isEven ? 'Movie' : 'Episode',
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LibraryScreen(
+            source: FakeLibrarySource(
+              JellyfinHome(
+                libraries: const [],
+                resume: const [
+                  JellyfinItem(
+                    id: 'resume',
+                    name: 'Resume item',
+                    type: 'Movie',
+                  ),
+                ],
+                latest: latest,
+              ),
+            ),
+            session: session,
+            appearance: const AppearanceSettings(preset: UiPreset.blockbuster),
+            onSignOut: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      String heroTitle() => tester
+          .widget<Text>(find.byKey(const ValueKey('fruity-hero-title')))
+          .data!;
+
+      expect(heroTitle(), 'Hero 0');
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'blockbuster-hero-carousel',
+      );
+      expect(
+        find.byKey(const ValueKey('blockbuster-hero-dots')),
+        findsOneWidget,
+      );
+      for (var index = 0; index < 5; index++) {
+        expect(
+          find.byKey(ValueKey('blockbuster-hero-dot-$index')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.byKey(const ValueKey('blockbuster-hero-dot-5')),
+        findsNothing,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+
+      expect(heroTitle(), 'Hero 1');
+      expect(
+        find.byKey(const ValueKey('blockbuster-background-hero-1')),
+        findsOneWidget,
+      );
+      final selectedDot = tester.widget<AnimatedContainer>(
+        find.byKey(const ValueKey('blockbuster-hero-dot-1')),
+      );
+      expect(
+        (selectedDot.decoration! as BoxDecoration).color,
+        Colors.white.withValues(alpha: 0.82),
+      );
+
+      for (var index = 0; index < 4; index++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pumpAndSettle();
+      }
+      expect(heroTitle(), 'Hero 0');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+
+      expect(heroTitle(), 'Resume item');
+      expect(find.byKey(const ValueKey('blockbuster-hero-dots')), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+
+      expect(heroTitle(), 'Hero 0');
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'blockbuster-hero-carousel',
+      );
+      expect(
+        find.byKey(const ValueKey('blockbuster-hero-dots')),
+        findsOneWidget,
+      );
+      final homeScroll = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('library-home')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(homeScroll.position.pixels, 0);
     },
   );
 
