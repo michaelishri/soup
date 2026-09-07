@@ -11,6 +11,20 @@ import 'package:soup/src/features/shared/soup_mark.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('native launcher background matches the onboarding slate', () async {
+    final xml = await File(
+      'android/app/src/main/res/values/colors.xml',
+    ).readAsString();
+    final value = RegExp(
+      r'<color name="soup_icon_background">#([A-Fa-f0-9]{6})</color>',
+    ).firstMatch(xml)?.group(1);
+    expect(value, isNotNull);
+    expect(
+      Color(int.parse('FF$value', radix: 16)),
+      SoupTheme.onboardingBackground,
+    );
+  });
+
   test('Flutter and Android use the same square generated artwork', () async {
     final data = await rootBundle.load(SoupMark.assetName);
     final bytes = data.buffer.asUint8List();

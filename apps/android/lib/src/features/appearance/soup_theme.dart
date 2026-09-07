@@ -4,8 +4,9 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 class SoupTheme {
   const SoupTheme._();
 
-  static const onboardingBackground = Color(0xFF203C40);
-  static const onboardingGlow = Color(0xFF355653);
+  static const onboardingBackground = Color(0xFF202936);
+  static const onboardingGlow = Color(0xFF343F50);
+  static const onboardingShade = Color(0xFF1B2330);
   static const onboardingAccent = Color(0xFFAFD9EA);
 
   static ThemeData get onboarding {
@@ -15,12 +16,12 @@ class SoupTheme {
           brightness: Brightness.dark,
         ).copyWith(
           primary: onboardingAccent,
-          onPrimary: const Color(0xFF193D48),
+          onPrimary: const Color(0xFF1B2C40),
           surface: onboardingBackground,
-          surfaceContainerHighest: const Color(0xFF3B5557),
-          onSurface: const Color(0xFFF5F0E8),
-          onSurfaceVariant: const Color(0xFFC8D5D0),
-          outlineVariant: const Color(0xFF69817E),
+          surfaceContainerHighest: const Color(0xFF394658),
+          onSurface: const Color(0xFFF2F5FA),
+          onSurfaceVariant: const Color(0xFFCBD3DF),
+          outlineVariant: const Color(0xFF7C899C),
         );
     return ThemeData(
       brightness: Brightness.dark,
@@ -46,7 +47,7 @@ class SoupTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF304C4F),
+        fillColor: const Color(0xFF2B3748),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 18,

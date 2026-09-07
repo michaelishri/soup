@@ -1,10 +1,10 @@
 # Onboarding review screenshots
 
-Current direction: a full-screen muted teal canvas, warm ivory typography and
-mist-blue controls, with a generated geometric S app badge. TV uses a
+Current direction: a full-screen cool slate canvas, soft white typography and
+mist-blue controls, with a generated cinema-ticket/play app badge. TV uses a
 side-by-side heading and form; phone uses a stacked
 layout. There is no floating modal/card shell. These replace the earlier
-charcoal-and-orange and apricot-accent captures (SOUP-84/85).
+charcoal-and-orange, apricot-accent and teal/S-badge captures (SOUP-84/85/86).
 
 These images render the production Flutter onboarding widgets using SDK Roboto
 fonts and fake connection/server responses. They are headless UI renders, not

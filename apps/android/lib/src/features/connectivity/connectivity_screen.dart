@@ -166,7 +166,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                 colors: [
                   SoupTheme.onboardingGlow,
                   SoupTheme.onboardingBackground,
-                  Color(0xFF1E363C),
+                  SoupTheme.onboardingShade,
                 ],
               ),
             ),

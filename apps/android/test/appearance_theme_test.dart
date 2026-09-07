@@ -4,12 +4,29 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 
 void main() {
+  test('approved mist blue is preserved on cool slate surfaces', () {
+    final theme = SoupTheme.onboarding;
+    expect(theme.colorScheme.primary, const Color(0xFFAFD9EA));
+    for (final surface in [
+      SoupTheme.onboardingBackground,
+      SoupTheme.onboardingGlow,
+      SoupTheme.onboardingShade,
+      theme.colorScheme.surfaceContainerHighest,
+      theme.inputDecorationTheme.fillColor!,
+    ]) {
+      expect(surface.b, greaterThanOrEqualTo(surface.g));
+      expect(surface.g, greaterThanOrEqualTo(surface.r));
+    }
+  });
+
   test('onboarding text and focus contrast across the full-screen canvas', () {
     final colors = SoupTheme.onboarding.colorScheme;
     for (final background in [
       SoupTheme.onboardingBackground,
       SoupTheme.onboardingGlow,
+      SoupTheme.onboardingShade,
       colors.surfaceContainerHighest,
+      SoupTheme.onboarding.inputDecorationTheme.fillColor!,
     ]) {
       expect(
         _contrast(colors.onSurface, background),
