@@ -96,6 +96,8 @@ flutter build apk --debug
 ```
 
 The debug APK is written to `apps/android/build/app/outputs/flutter-apk/app-debug.apk`.
+See [headless Linux setup](docs/development/android-linux.md) for SDK configuration
+and building on a machine with limited memory.
 The build hook compiles the pinned upstream `libtailscale` source with Go and
 the Android NDK for every ABI requested by Flutter. Android 12 / API 31 is the
 minimum supported version.
