@@ -1,5 +1,10 @@
 # Onboarding review screenshots
 
+Current direction: a full-screen muted teal canvas, warm ivory typography and
+apricot controls. TV uses a side-by-side heading and form; phone uses a stacked
+layout. There is no floating modal/card shell. These replace the earlier
+charcoal-and-orange captures (SOUP-84).
+
 These images render the production Flutter onboarding widgets using SDK Roboto
 fonts and fake connection/server responses. They are headless UI renders, not
 Android emulator captures. The QR codes contain demonstration URLs and do not

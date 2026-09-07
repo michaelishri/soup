@@ -4,27 +4,48 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 class SoupTheme {
   const SoupTheme._();
 
+  static const onboardingBackground = Color(0xFF203C40);
+  static const onboardingGlow = Color(0xFF355653);
+
   static ThemeData get onboarding {
     final colors =
         ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFC7814),
+          seedColor: const Color(0xFFEFB98F),
           brightness: Brightness.dark,
         ).copyWith(
-          primary: const Color(0xFFFC7814),
-          onPrimary: const Color(0xFF211006),
-          surface: const Color(0xFF1C1A18),
-          onSurface: const Color(0xFFF6F1EC),
-          onSurfaceVariant: const Color(0xFFC7BEB6),
-          outlineVariant: const Color(0xFF494039),
+          primary: const Color(0xFFEFB98F),
+          onPrimary: const Color(0xFF293831),
+          surface: onboardingBackground,
+          surfaceContainerHighest: const Color(0xFF3B5557),
+          onSurface: const Color(0xFFF5F0E8),
+          onSurfaceVariant: const Color(0xFFC8D5D0),
+          outlineVariant: const Color(0xFF69817E),
         );
     return ThemeData(
       brightness: Brightness.dark,
       colorScheme: colors,
-      scaffoldBackgroundColor: const Color(0xFF11100F),
+      scaffoldBackgroundColor: onboardingBackground,
       useMaterial3: true,
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colors.primary
+              : colors.surfaceContainerHighest,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? colors.onPrimary
+              : colors.onSurfaceVariant,
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Colors.transparent
+              : colors.outlineVariant,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF24211E),
+        fillColor: const Color(0xFF304C4F),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 18,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -62,6 +63,15 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       switch (model.phase) {
         case SetupPhase.connection:
           _switchFocus.requestFocus();
+          final switchContext = _switchFocus.context;
+          if (switchContext != null) {
+            unawaited(
+              Scrollable.ensureVisible(
+                switchContext,
+                alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+              ),
+            );
+          }
         case SetupPhase.server:
           _serverFocus.requestFocus();
         case SetupPhase.credentials:
@@ -137,7 +147,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: model,
     builder: (context, _) {
-      final colors = Theme.of(context).colorScheme;
       final duration = MediaQuery.disableAnimationsOf(context)
           ? Duration.zero
           : const Duration(milliseconds: 250);
@@ -148,168 +157,114 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         },
         child: Scaffold(
           body: DecoratedBox(
+            key: const ValueKey('setup-canvas'),
             decoration: const BoxDecoration(
-              gradient: RadialGradient(
-                center: Alignment(-0.7, -0.8),
-                radius: 1.5,
-                colors: [Color(0xFF241A13), Color(0xFF11100F)],
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  SoupTheme.onboardingGlow,
+                  SoupTheme.onboardingBackground,
+                  Color(0xFF1E363C),
+                ],
               ),
             ),
-            child: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final short = constraints.maxHeight < 650;
-                  final inset = short ? 12.0 : 24.0;
-                  final padding = short ? 20.0 : 32.0;
-                  final content = Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Image.asset(
-                            'assets/branding/soup-sidebar-mark.png',
-                            width: 26,
-                            height: 26,
-                            color: colors.primary,
-                            excludeFromSemantics: true,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Soup',
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              switch (model.phase) {
-                                SetupPhase.connection => 'Connection · 1 / 3',
-                                SetupPhase.server => 'Server · 2 / 3',
-                                SetupPhase.credentials ||
-                                SetupPhase.ready => 'Sign in · 3 / 3',
-                              },
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(color: colors.onSurfaceVariant),
-                              textAlign: TextAlign.end,
-                            ),
-                          ),
-                        ],
+            child: Material(
+              type: MaterialType.transparency,
+              child: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final short = constraints.maxHeight < 650;
+                    final wide =
+                        constraints.maxWidth >= 840 &&
+                        constraints.maxHeight >= 420 &&
+                        MediaQuery.textScalerOf(context).scale(16) <= 22.4;
+                    final horizontal = constraints.maxWidth < 600 ? 24.0 : 48.0;
+                    // A keyboard or very short window can leave less space than
+                    // the fixed chrome needs. Let the whole page scroll then.
+                    final tiny = constraints.maxHeight < 280;
+                    final page = Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: horizontal,
+                        vertical: short ? 20 : 36,
                       ),
-                      SizedBox(height: short ? 16 : 28),
-                      if (model.error case final error?) ...[
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxHeight: constraints.maxHeight * 0.25,
-                          ),
-                          child: SingleChildScrollView(
-                            child: Semantics(
-                              liveRegion: true,
-                              child: Container(
-                                key: const ValueKey('connection-error'),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: colors.errorContainer,
-                                  borderRadius: BorderRadius.circular(12),
+                      child: Align(
+                        alignment: Alignment.topCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1280),
+                          child: FocusTraversalGroup(
+                            key: const ValueKey('root-focus-traversal'),
+                            policy: ReadingOrderTraversalPolicy(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _header(context),
+                                SizedBox(height: short ? 24 : 48),
+                                Expanded(
+                                  child: wide
+                                      ? Row(
+                                          key: const ValueKey(
+                                            'setup-wide-layout',
+                                          ),
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Expanded(
+                                              flex: 4,
+                                              child: Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: SingleChildScrollView(
+                                                  child: _intro(
+                                                    context,
+                                                    wide: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 56),
+                                            Expanded(
+                                              flex: 6,
+                                              child: _form(
+                                                context,
+                                                short,
+                                                duration,
+                                                includeIntro: false,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : _form(
+                                          context,
+                                          short,
+                                          duration,
+                                          includeIntro: true,
+                                        ),
                                 ),
-                                child: Text(
-                                  error,
-                                  style: TextStyle(
-                                    color: colors.onErrorContainer,
+                                SizedBox(height: short ? 20 : 32),
+                                LayoutBuilder(
+                                  builder: (context, bounds) => Align(
+                                    alignment: Alignment.centerRight,
+                                    child: SizedBox(
+                                      width: wide
+                                          ? (bounds.maxWidth - 56) * 0.6
+                                          : bounds.maxWidth,
+                                      child: _footer(),
+                                    ),
                                   ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                      Flexible(
-                        child: SingleChildScrollView(
-                          key: const ValueKey('setup-scroll'),
-                          controller: _scroll,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Semantics(
-                                header: true,
-                                child: Text(
-                                  switch (model.phase) {
-                                    SetupPhase.connection => 'Welcome to Soup',
-                                    SetupPhase.server =>
-                                      'Find your Jellyfin server',
-                                    SetupPhase.credentials =>
-                                      'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
-                                    SetupPhase.ready => 'You’re all set',
-                                  },
-                                  style:
-                                      (short
-                                              ? Theme.of(
-                                                  context,
-                                                ).textTheme.headlineSmall
-                                              : Theme.of(
-                                                  context,
-                                                ).textTheme.headlineMedium)
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: -0.6,
-                                          ),
-                                ),
-                              ),
-                              SizedBox(height: short ? 12 : 20),
-                              ..._fields(context, short, duration),
-                            ],
-                          ),
-                        ),
                       ),
-                      SizedBox(height: short ? 16 : 24),
-                      _footer(),
-                    ],
-                  );
-                  return Padding(
-                    padding: EdgeInsets.all(inset),
-                    child: Center(
-                      child: FocusTraversalGroup(
-                        key: const ValueKey('root-focus-traversal'),
-                        policy: ReadingOrderTraversalPolicy(),
-                        child: Container(
-                          key: const ValueKey('setup-card'),
-                          constraints: const BoxConstraints(maxWidth: 640),
-                          padding: EdgeInsets.all(padding),
-                          decoration: BoxDecoration(
-                            color: colors.surface,
-                            border: Border.all(
-                              color: colors.outlineVariant.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x24000000),
-                                blurRadius: 48,
-                                offset: Offset(0, 16),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            type: MaterialType.transparency,
-                            child: constraints.maxHeight < 280
-                                ? SingleChildScrollView(
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxHeight: 480,
-                                      ),
-                                      child: content,
-                                    ),
-                                  )
-                                : content,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                    );
+                    return tiny
+                        ? SingleChildScrollView(
+                            child: SizedBox(height: 600, child: page),
+                          )
+                        : page;
+                  },
+                ),
               ),
             ),
           ),
@@ -318,36 +273,231 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     },
   );
 
+  Widget _header(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final step = switch (model.phase) {
+      SetupPhase.connection => 1,
+      SetupPhase.server => 2,
+      SetupPhase.credentials || SetupPhase.ready => 3,
+    };
+    final label = switch (model.phase) {
+      SetupPhase.connection => 'Connection',
+      SetupPhase.server => 'Server',
+      SetupPhase.credentials || SetupPhase.ready => 'Sign in',
+    };
+    return Row(
+      children: [
+        Image.asset(
+          'assets/branding/soup-sidebar-mark.png',
+          width: 30,
+          height: 30,
+          color: colors.primary,
+          excludeFromSemantics: true,
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'Soup',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Semantics(
+              label: 'Step $step of 3: $label',
+              child: ExcludeSemantics(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$label · $step / 3',
+                      textAlign: TextAlign.end,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var index = 1; index <= 3; index++)
+                          Container(
+                            width: 24,
+                            height: 3,
+                            margin: EdgeInsets.only(left: index == 1 ? 0 : 6),
+                            decoration: BoxDecoration(
+                              color: index <= step
+                                  ? colors.primary
+                                  : colors.outlineVariant,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _intro(BuildContext context, {required bool wide}) {
+    final theme = Theme.of(context);
+    return Column(
+      key: const ValueKey('setup-intro'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          switch (model.phase) {
+            SetupPhase.connection => 'A LITTLE SETUP. A LOT TO WATCH.',
+            SetupPhase.server => 'YOUR LIBRARY STARTS HERE.',
+            SetupPhase.credentials ||
+            SetupPhase.ready => 'MAKE YOURSELF AT HOME.',
+          },
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.primary,
+            letterSpacing: 1.6,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Semantics(
+          header: true,
+          child: Text(
+            switch (model.phase) {
+              SetupPhase.connection => 'Welcome to Soup',
+              SetupPhase.server => 'Find your Jellyfin server',
+              SetupPhase.credentials =>
+                'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
+              SetupPhase.ready => 'You’re all set',
+            },
+            style: theme.textTheme.headlineLarge?.copyWith(
+              fontSize: wide ? 44 : 36,
+              fontWeight: FontWeight.w500,
+              letterSpacing: -1.3,
+              height: 1.12,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          switch (model.phase) {
+            SetupPhase.connection =>
+              'Your films, shows and favourites.\nLet’s bring them a little closer.',
+            SetupPhase.server =>
+              model.tailscaleEnabled
+                  ? 'Connect to your Jellyfin server through your Tailscale network.'
+                  : 'Connect to a Jellyfin server reachable from this device.',
+            SetupPhase.credentials =>
+              'Use your Jellyfin account. Your next favourite is waiting.',
+            SetupPhase.ready => 'Your library is ready.',
+          },
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            height: 1.6,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _form(
+    BuildContext context,
+    bool short,
+    Duration duration, {
+    required bool includeIntro,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        mainAxisAlignment: includeIntro
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.center,
+        children: [
+          if (model.error case final error?) ...[
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * 0.3,
+              ),
+              child: SingleChildScrollView(
+                child: Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    key: const ValueKey('connection-error'),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      error,
+                      style: TextStyle(color: colors.onErrorContainer),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Flexible(
+            child: SingleChildScrollView(
+              key: const ValueKey('setup-scroll'),
+              controller: _scroll,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (includeIntro) ...[
+                    _intro(context, wide: false),
+                    SizedBox(height: short ? 28 : 40),
+                  ],
+                  ..._fields(context, short, duration),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<Widget> _fields(BuildContext context, bool short, Duration duration) {
     final colors = Theme.of(context).colorScheme;
     final caption = TextStyle(color: colors.onSurfaceVariant, height: 1.45);
     return switch (model.phase) {
       SetupPhase.connection => [
-        if (!short) ...[
-          Text('Your Jellyfin library, ready when you are.', style: caption),
-          const SizedBox(height: 24),
-        ],
         ListenableBuilder(
           listenable: _switchFocus,
           builder: (context, _) => SwitchListTile.adaptive(
             key: const ValueKey('tailscale-toggle'),
             focusNode: _switchFocus,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 4,
+              horizontal: 18,
+              vertical: 10,
             ),
+            tileColor: colors.surfaceContainerHighest.withValues(alpha: 0.45),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
               side: BorderSide(
                 color: _switchFocus.hasFocus
                     ? colors.primary
-                    : colors.outlineVariant,
+                    : colors.outlineVariant.withValues(alpha: 0.65),
                 width: _switchFocus.hasFocus ? 2 : 1,
               ),
             ),
-            title: const Text('Use Tailscale'),
+            title: const Text(
+              'Use Tailscale',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: const Text(
-              'Optional · For a server on your Tailscale network',
+              'Optional · Connect through your private network',
             ),
             value: model.tailscaleEnabled,
             onChanged: model.initialized && !model.isBusy
@@ -355,6 +505,13 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                 : null,
           ),
         ),
+        if (!model.tailscaleEnabled) ...[
+          const SizedBox(height: 20),
+          Text(
+            'No Tailscale? No problem. Select Next to connect directly to Jellyfin.',
+            style: caption,
+          ),
+        ],
         _AnimatedReveal(
           duration: duration,
           child: AnimatedSwitcher(
@@ -388,13 +545,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ),
       ],
       SetupPhase.server => [
-        Text(
-          model.tailscaleEnabled
-              ? 'Enter the address of your server on Tailscale.'
-              : 'Enter the address of a Jellyfin server reachable from this device.',
-          style: caption,
-        ),
-        const SizedBox(height: 24),
         TextField(
           key: const ValueKey('server-url-field'),
           controller: _server,

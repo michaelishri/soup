@@ -4,6 +4,29 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 
 void main() {
+  test('onboarding text and focus contrast across the full-screen canvas', () {
+    final colors = SoupTheme.onboarding.colorScheme;
+    for (final background in [
+      SoupTheme.onboardingBackground,
+      SoupTheme.onboardingGlow,
+      colors.surfaceContainerHighest,
+    ]) {
+      expect(
+        _contrast(colors.onSurface, background),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        _contrast(colors.onSurfaceVariant, background),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(_contrast(colors.primary, background), greaterThanOrEqualTo(3));
+    }
+    expect(
+      _contrast(colors.onPrimary, colors.primary),
+      greaterThanOrEqualTo(4.5),
+    );
+  });
+
   test(
     'all preset and palette combinations provide accessible core colours',
     () {

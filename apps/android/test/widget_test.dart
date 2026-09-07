@@ -22,13 +22,27 @@ void main() {
     const Size(1280, 720),
     const Size(1920, 1080),
   ]) {
-    testWidgets('centered optional setup and QR fit at $size', (tester) async {
+    testWidgets('full-screen optional setup and QR fit at $size', (
+      tester,
+    ) async {
       final (model, client) = await setup(tester, size: size);
-      final panel = tester.getRect(find.byKey(const ValueKey('setup-card')));
-      expect(panel.width, lessThanOrEqualTo(640));
-      expect(panel.center.dx, size.width / 2);
+      final canvas = tester.getRect(find.byKey(const ValueKey('setup-canvas')));
+      expect(canvas, Offset.zero & size);
+      expect(find.byKey(const ValueKey('setup-card')), findsNothing);
+      final intro = tester.getRect(find.byKey(const ValueKey('setup-intro')));
+      final toggle = tester.getRect(
+        find.byKey(const ValueKey('tailscale-toggle')),
+      );
+      if (size.width >= 840) {
+        expect(intro.right, lessThan(toggle.left));
+      } else {
+        expect(intro.bottom, lessThan(toggle.top));
+      }
       expect(find.text('Welcome to Soup'), findsOneWidget);
       expect(button(tester, 'connection-next-button').onPressed, isNotNull);
+      final originalNext = tester.getRect(
+        find.byKey(const ValueKey('connection-next-button')),
+      );
       expect(client.restores, 0);
       expect(client.interactiveConnects, 0);
       expect(
@@ -58,6 +72,7 @@ void main() {
         find.byKey(const ValueKey('connection-next-button')),
       );
       expect(next.bottom, lessThan(size.height));
+      expect(next, originalNext, reason: 'QR reveal must not move navigation');
       expect(next.overlaps(code), isFalse);
       expect(tester.takeException(), isNull);
     });
@@ -92,6 +107,52 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'short wide layout handles long server names and exposes progress',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final factory = FakeJellyfinClientFactory(
+          respond: (request) {
+            final response = FakeJellyfinClientFactory.defaultResponse(request);
+            return http.Response(
+              response.body.replaceAll(
+                'Living Room',
+                'The very long name of our family films and television Jellyfin server',
+              ),
+              response.statusCode,
+            );
+          },
+        );
+        await setup(tester, size: const Size(840, 420), factory: factory);
+        expect(
+          find.bySemanticsLabel('Step 1 of 3: Connection'),
+          findsOneWidget,
+        );
+        await nextToServer(tester);
+        expect(find.bySemanticsLabel('Step 2 of 3: Server'), findsOneWidget);
+        await tester.enterText(
+          find.byKey(const ValueKey('server-url-field')),
+          'http://localhost:8096',
+        );
+        await tester.tap(find.byKey(const ValueKey('check-server-button')));
+        await tester.pumpAndSettle();
+        expect(find.bySemanticsLabel('Step 3 of 3: Sign in'), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('username-field')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('sign-in-button')).hitTestable(),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
 
   testWidgets('QR approval and success stay on connection until Next', (
     tester,
@@ -249,9 +310,9 @@ void main() {
     final error = tester.getRect(
       find.byKey(const ValueKey('connection-error')),
     );
-    final panel = tester.getRect(find.byKey(const ValueKey('setup-card')));
-    expect(panel.contains(error.topLeft), isTrue);
-    expect(panel.contains(error.bottomRight), isTrue);
+    final canvas = tester.getRect(find.byKey(const ValueKey('setup-canvas')));
+    expect(canvas.contains(error.topLeft), isTrue);
+    expect(canvas.contains(error.bottomRight), isTrue);
     expect(
       tester
           .widget<TextField>(find.byKey(const ValueKey('password-field')))
@@ -347,6 +408,8 @@ void main() {
     tester,
   ) async {
     await setup(tester, size: const Size(412, 915), accessibility: true);
+    await tester.ensureVisible(find.byKey(const ValueKey('tailscale-toggle')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.pump();
     await tester.pump();
@@ -358,6 +421,7 @@ void main() {
       find.byType(AnimatedSwitcher).first,
     );
     expect(switcher.duration, Duration.zero);
+    await tester.ensureVisible(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.pumpAndSettle();
     await nextToServer(tester);
@@ -369,6 +433,38 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  for (final size in [
+    const Size(320, 568),
+    const Size(740, 360),
+    const Size(412, 240),
+  ]) {
+    testWidgets('small viewport $size keeps setup controls reachable', (
+      tester,
+    ) async {
+      await setup(tester, size: size);
+      final toggle = find.byKey(const ValueKey('tailscale-toggle'));
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      final qr = find.byKey(const ValueKey('tailscale-authorization-qr'));
+      await tester.ensureVisible(qr);
+      await tester.pumpAndSettle();
+      expect(qr.hitTestable(), findsOneWidget);
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      final next = find.byKey(const ValueKey('connection-next-button'));
+      await tester.ensureVisible(next);
+      await tester.pumpAndSettle();
+      await tester.tap(next);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('server-url-field')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 FilledButton button(WidgetTester tester, String key) =>
