@@ -6,15 +6,16 @@ class SoupTheme {
 
   static const onboardingBackground = Color(0xFF203C40);
   static const onboardingGlow = Color(0xFF355653);
+  static const onboardingAccent = Color(0xFFAFD9EA);
 
   static ThemeData get onboarding {
     final colors =
         ColorScheme.fromSeed(
-          seedColor: const Color(0xFFEFB98F),
+          seedColor: onboardingAccent,
           brightness: Brightness.dark,
         ).copyWith(
-          primary: const Color(0xFFEFB98F),
-          onPrimary: const Color(0xFF293831),
+          primary: onboardingAccent,
+          onPrimary: const Color(0xFF193D48),
           surface: onboardingBackground,
           surfaceContainerHighest: const Color(0xFF3B5557),
           onSurface: const Color(0xFFF5F0E8),

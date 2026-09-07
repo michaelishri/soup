@@ -65,6 +65,10 @@ void main() {
       final viewport = tester.getRect(
         find.byKey(const ValueKey('setup-scroll')),
       );
+      final retry = tester.getRect(
+        find.byKey(const ValueKey('retry-tailscale-login-button')),
+      );
+      expect(retry.bottom, lessThanOrEqualTo(viewport.bottom + 1));
       final code = tester.getRect(qr);
       expect(code.top, greaterThanOrEqualTo(viewport.top - 1));
       expect(code.bottom, lessThanOrEqualTo(viewport.bottom + 1));

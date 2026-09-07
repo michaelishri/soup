@@ -10,6 +10,7 @@ import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/shared/soup_mark.dart';
 
 import 'support/connectivity_fakes.dart';
 
@@ -83,7 +84,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.runAsync(
         () => precacheImage(
-          const AssetImage('assets/branding/soup-sidebar-mark.png'),
+          const AssetImage(SoupMark.assetName),
           tester.element(find.byType(ConnectivityScreen)),
         ),
       );

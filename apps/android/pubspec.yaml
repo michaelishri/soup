@@ -71,7 +71,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/branding/soup-sidebar-mark.png
+    - assets/branding/soup-icon.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

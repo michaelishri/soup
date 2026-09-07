@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class ConnectivityScreen extends StatefulWidget {
@@ -287,13 +288,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     };
     return Row(
       children: [
-        Image.asset(
-          'assets/branding/soup-sidebar-mark.png',
-          width: 30,
-          height: 30,
-          color: colors.primary,
-          excludeFromSemantics: true,
-        ),
+        const SoupMark(),
         const SizedBox(width: 10),
         Text(
           'Soup',
@@ -605,6 +600,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   Widget _tailscaleArea(BuildContext context, bool short) {
     final status = model.status;
     final url = status.authorizationUrl;
+    final stacked = MediaQuery.sizeOf(context).width < 840;
     if (status.phase == TailscaleConnectionPhase.awaitingLogin && url != null) {
       final qr = Container(
         key: const ValueKey('tailscale-authorization-qr'),
@@ -615,7 +611,11 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ),
         child: QrImageView(
           data: url.toString(),
-          size: short ? 176 : 220,
+          size: short
+              ? 176
+              : stacked
+              ? 200
+              : 220,
           padding: const EdgeInsets.all(16),
           backgroundColor: Colors.white,
           eyeStyle: const QrEyeStyle(

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The centered S stays within the adaptive icon safe zone. The generated
+     foreground includes its own opaque teal canvas; no transparency is assumed. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/soup_icon_background" />
+    <foreground android:drawable="@drawable/soup_launcher_art" />
+</adaptive-icon>

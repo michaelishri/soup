@@ -13,6 +13,7 @@ import 'package:soup/src/features/shared/adaptive_backdrop_contrast.dart';
 import 'package:soup/src/features/shared/artwork_placeholder.dart';
 import 'package:soup/src/features/shared/fading_artwork.dart';
 import 'package:soup/src/features/shared/stale_data_banner.dart';
+import 'package:soup/src/features/shared/soup_mark.dart';
 
 enum _FruityDestination { home, tv, movies, settings }
 
@@ -1394,11 +1395,7 @@ class _FruityTopNavigation extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
         child: Row(
           children: [
-            Icon(
-              PhosphorIconsRegular.cookingPot,
-              color: colors.primary,
-              size: 30,
-            ),
+            const SoupMark(),
             const SizedBox(width: 10),
             Text('Soup', style: Theme.of(context).textTheme.titleLarge),
             const Spacer(),

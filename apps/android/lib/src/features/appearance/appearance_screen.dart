@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/features/shared/soup_mark.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({
@@ -44,11 +45,7 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        PhosphorIconsRegular.cookingPot,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 34,
-                      ),
+                      const SoupMark(size: 44),
                       const SizedBox(width: 12),
                       Text(
                         'Make Soup yours',

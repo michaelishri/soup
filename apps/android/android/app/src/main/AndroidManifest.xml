@@ -7,7 +7,8 @@
         android:name="${applicationName}"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/soup_launcher"
+        android:roundIcon="@mipmap/soup_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
