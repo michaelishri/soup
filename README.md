@@ -1,26 +1,27 @@
-# Soup — Jellyfin over Tailscale
+# Soup — Jellyfin, with optional Tailscale
 
-Soup is a Jellyfin client with Tailscale integration. This integration means users don't need to have the separate Tailscale VPN client connected before starting the Jellyfin client.
+Soup is a Jellyfin client that connects directly to your server or through an
+optional embedded Tailscale connection. Embedded Tailscale does not require a
+separate VPN app.
 
 ## Supported target
 
 - Android 12+ mobile and Android TV: Flutter/Dart in `apps/android`.
 - Embedded networking: Tailscale's C library through the FFI package in `packages/soup_tailscale`.
 
-The Android prototype includes the complete setup path: an embedded Tailscale
-node, an authenticated app-local SOCKS5 proxy, Jellyfin 10.11 discovery, and
+The Android prototype includes the complete setup path: optional embedded Tailscale,
+direct or authenticated app-local SOCKS5 networking, Jellyfin 10.11 discovery, and
 username/password sign-in. The UI depends on a substitutable `TailscaleClient`
 boundary and adapts between touch-sized phone layouts and D-pad-friendly TV
 layouts. After sign-in, Soup restores the secure session and loads My Media,
 Continue Watching, and Latest Media, including artwork, through the same
-app-local Tailscale proxy. Libraries open into browsable grids, and item details
+selected connection. Libraries open into browsable grids, and item details
 show artwork, metadata, overview, Play/Resume, plus season and episode navigation
 for series. Playback negotiates direct play with Jellyfin and falls back to HLS
 transcoding when required, with resume seeking, transport controls, progress
-reporting, and selectable WebVTT subtitles. Media remains on the embedded
-Tailscale path through an authenticated loopback playback bridge. TV setup uses
-a Tailscale authorization QR code that can be scanned with a phone, with direct
-browser opening on Android and an advanced one-time auth-key fallback. Server
+reporting, and selectable WebVTT subtitles. The authenticated loopback playback
+bridge uses the same selected connection as the rest of the app. Tailscale setup
+uses an authorization QR code scanned with another device on both mobile and TV. Server
 address paste remains available, while connection and sign-in errors stay
 pinned above the scrollable form so they remain readable at constrained heights.
 
@@ -47,15 +48,14 @@ Secrets are handled deliberately:
 
 - Interactive registration sends no Tailscale credential through Soup. The
   embedded node supplies an HTTPS authorization URL that Soup renders as a QR
-  code or opens in the device browser.
-- Advanced auth keys are submitted once to the native node and are never
-  persisted. The masked field and clipboard contents are not logged.
-- The Jellyfin password is cleared immediately after submission and is never
+  code. Browser-launch and auth-key options are not offered in Soup onboarding.
+- The Jellyfin password is cleared immediately after submission or backward navigation and is never
   persisted.
 - The Jellyfin access token and Soup device ID are stored with Android-backed
   secure storage; Android cloud backup is disabled for the app.
 - Persistent Tailscale node state lives in the app support directory so a valid
-  node can reconnect without another browser login or auth key.
+  node can reconnect without another sign-in. The connection choice is stored
+  separately; direct sessions never start the embedded Tailscale node.
 
 ## Android development
 
@@ -100,13 +100,21 @@ The build hook compiles the pinned upstream `libtailscale` source with Go and
 the Android NDK for every ABI requested by Flutter. Android 12 / API 31 is the
 minimum supported version.
 
-To use the prototype, choose **Sign in with Tailscale**, scan the QR code with a
-phone, and finish authorization in Tailscale. If the tailnet requires device
-approval, Soup waits until an administrator approves the TV. Auth keys remain
-available under **Advanced options** for pre-approved or tagged-device setups.
-After registration, enter a Jellyfin 10.11+ URL reachable from that tailnet
-(for example `http://jellyfin:8096`). Both HTTP and HTTPS server URLs are
-supported; HTTPS uses normal certificate validation.
+On first launch, **Use Tailscale** is off. Select **Next** to enter a Jellyfin
+10.11+ address reachable from your device, or enable Tailscale to reveal its
+sign-in QR code. Scan with another device and finish authorization. If device
+approval is required, Soup waits for the administrator; after connection,
+select **Next**. You can turn Tailscale off at any point in that connection step.
+
+Soup checks the server before asking for your username and password. **Back**
+lets you edit the server or connection choice. Both HTTP and HTTPS URLs are
+supported, with normal certificate validation and no automatic fallback from
+Tailscale to direct networking. Existing saved accounts remain on Tailscale
+until you explicitly change the connection choice.
+
+The warm, centered onboarding panel supports touch, D-pad focus, reduced motion,
+and constrained TV heights. [Review screenshots and regeneration instructions](docs/screenshots/onboarding/README.md)
+are available for the actual Flutter widgets rendered with demonstration data.
 
 ## Jellyfin API generation
 

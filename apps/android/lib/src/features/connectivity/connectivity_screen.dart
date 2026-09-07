@@ -1,838 +1,663 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/services.dart';
-import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
-import 'package:soup/src/platform/authorization_url_launcher.dart';
-import 'package:soup_tailscale/soup_tailscale.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup_tailscale/soup_tailscale.dart';
 
 class ConnectivityScreen extends StatefulWidget {
-  const ConnectivityScreen({
-    required this.viewModel,
-    this.authorizationUrlLauncher = const ExternalAuthorizationUrlLauncher(),
-    super.key,
-  });
-
+  const ConnectivityScreen({required this.viewModel, super.key});
   final ConnectivityViewModel viewModel;
-  final AuthorizationUrlLauncher authorizationUrlLauncher;
 
   @override
   State<ConnectivityScreen> createState() => _ConnectivityScreenState();
 }
 
 class _ConnectivityScreenState extends State<ConnectivityScreen> {
-  final _authKeyController = TextEditingController();
-  final _serverController = TextEditingController();
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _advancedAuthKeyExpanded = false;
+  final _server = TextEditingController();
+  final _username = TextEditingController();
+  final _password = TextEditingController();
+  final _switchFocus = FocusNode(debugLabel: 'use Tailscale');
+  final _serverFocus = FocusNode(debugLabel: 'Jellyfin server');
+  final _usernameFocus = FocusNode(debugLabel: 'Jellyfin username');
+  final _scroll = ScrollController();
+  late SetupPhase _lastPhase;
+  ConnectivityViewModel get model => widget.viewModel;
 
   @override
-  void dispose() {
-    _authKeyController.dispose();
-    _serverController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _lastPhase = model.phase;
+    _server.text = model.serverUrl?.toString() ?? '';
+    model.addListener(_changed);
+    _focusStep();
   }
 
-  Future<void> _connectWithAuthKey() async {
-    final authKey = _authKeyController.text;
-    _authKeyController.clear();
-    await widget.viewModel.connectWithAuthKey(authKey);
-  }
-
-  Future<void> _connectInteractively() {
-    return widget.viewModel.connectInteractively();
-  }
-
-  Future<void> _retryInteractive() async {
-    await widget.viewModel.cancelTailscaleConnection();
-    await widget.viewModel.connectInteractively();
-  }
-
-  Future<void> _openAuthorizationUrl() async {
-    final url = widget.viewModel.status.authorizationUrl;
-    if (url == null) return;
-    final opened = await widget.authorizationUrlLauncher.open(url);
-    if (mounted && !opened) {
-      _showClipboardMessage(
-        'No browser is available. Scan the QR code instead.',
-      );
+  @override
+  void didUpdateWidget(covariant ConnectivityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.viewModel != model) {
+      oldWidget.viewModel.removeListener(_changed);
+      model.addListener(_changed);
+      _changed();
     }
   }
 
-  Future<void> _pasteAuthKey() async {
-    await _pasteText(
-      controller: _authKeyController,
-      emptyMessage: 'Clipboard does not contain an auth key.',
-      successMessage: 'Auth key pasted.',
-    );
+  void _changed() {
+    if (model.phase == _lastPhase) return;
+    _password.clear();
+    _lastPhase = model.phase;
+    if (_server.text.isEmpty && model.serverUrl != null) {
+      _server.text = model.serverUrl.toString();
+    }
+    _focusStep();
   }
 
-  Future<void> _pasteServerUrl() async {
-    await _pasteText(
-      controller: _serverController,
-      emptyMessage: 'Clipboard does not contain a server address.',
-      successMessage: 'Server address pasted.',
-    );
-  }
-
-  Future<void> _pasteText({
-    required TextEditingController controller,
-    required String emptyMessage,
-    required String successMessage,
-  }) async {
-    try {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
+  void _focusStep() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      switch (model.phase) {
+        case SetupPhase.connection:
+          _switchFocus.requestFocus();
+        case SetupPhase.server:
+          _serverFocus.requestFocus();
+        case SetupPhase.credentials:
+          _usernameFocus.requestFocus();
+        case SetupPhase.ready:
+          break;
+      }
+    });
+  }
 
-      final text = data?.text?.trim() ?? '';
+  void _back() {
+    if (model.isBusy) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    _password.clear();
+    model.back();
+  }
+
+  Future<void> _pasteServer() async {
+    try {
+      final text =
+          (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
+      if (!mounted) return;
       if (text.isEmpty) {
-        _showClipboardMessage(emptyMessage);
+        _message('Clipboard does not contain a server address.');
         return;
       }
-
-      controller.value = TextEditingValue(
+      _server.value = TextEditingValue(
         text: text,
         selection: TextSelection.collapsed(offset: text.length),
       );
-      _showClipboardMessage(successMessage);
+      _message('Server address pasted.');
     } on PlatformException {
-      if (mounted) {
-        _showClipboardMessage('Unable to read the clipboard.');
-      }
+      if (mounted) _message('Unable to read the clipboard.');
     }
   }
 
-  void _showClipboardMessage(String message) {
+  void _message(String value) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(value)));
   }
 
-  Future<void> _checkServer() async {
+  Future<void> _next() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    await widget.viewModel.checkServer(_serverController.text);
-  }
-
-  Future<void> _signIn() async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    final password = _passwordController.text;
-    _passwordController.clear();
-    await widget.viewModel.signIn(
-      username: _usernameController.text,
-      password: password,
-    );
+    switch (model.phase) {
+      case SetupPhase.connection:
+        await model.continueConnection();
+      case SetupPhase.server:
+        await model.checkServer(_server.text);
+      case SetupPhase.credentials:
+        final password = _password.text;
+        _password.clear();
+        await model.signIn(username: _username.text, password: password);
+      case SetupPhase.ready:
+        break;
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: widget.viewModel,
-      builder: (context, _) {
-        final wide = MediaQuery.sizeOf(context).width >= 840;
-        final introduction = _IntroductionCard(status: widget.viewModel.status);
-        final setup = _SetupCard(
-          authKeyController: _authKeyController,
-          serverController: _serverController,
-          usernameController: _usernameController,
-          passwordController: _passwordController,
-          viewModel: widget.viewModel,
-          busy: widget.viewModel.isBusy,
-          advancedAuthKeyExpanded: _advancedAuthKeyExpanded,
-          onAdvancedAuthKeyChanged: (value) {
-            setState(() => _advancedAuthKeyExpanded = value);
-          },
-          onConnectInteractively: _connectInteractively,
-          onConnectWithAuthKey: _connectWithAuthKey,
-          onOpenAuthorizationUrl: _openAuthorizationUrl,
-          onCancelConnection: widget.viewModel.cancelTailscaleConnection,
-          onRetryInteractive: _retryInteractive,
-          onPasteAuthKey: _pasteAuthKey,
-          onPasteServerUrl: _pasteServerUrl,
-          onCheckServer: _checkServer,
-          onSignIn: _signIn,
-        );
+  void dispose() {
+    model.removeListener(_changed);
+    _server.dispose();
+    _username.dispose();
+    _password.dispose();
+    _switchFocus.dispose();
+    _serverFocus.dispose();
+    _usernameFocus.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
 
-        return Scaffold(
-          body: SafeArea(
-            child: FocusTraversalGroup(
-              key: const ValueKey('root-focus-traversal'),
-              policy: OrderedTraversalPolicy(),
-              child: Padding(
-                padding: EdgeInsets.all(wide ? 48 : 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _BrandHeader(),
-                    SizedBox(height: wide ? 40 : 24),
-                    Expanded(
-                      key: ValueKey(wide ? 'wide-layout' : 'compact-layout'),
-                      child: wide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(child: introduction),
-                                const SizedBox(width: 24),
-                                Expanded(child: setup),
-                              ],
-                            )
-                          : ListView(
-                              children: [
-                                introduction,
-                                const SizedBox(height: 16),
-                                setup,
-                              ],
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: model,
+    builder: (context, _) {
+      final colors = Theme.of(context).colorScheme;
+      final duration = MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 250);
+      return PopScope(
+        canPop: model.phase == SetupPhase.connection && !model.isBusy,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _back();
+        },
+        child: Scaffold(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(-0.7, -0.8),
+                radius: 1.5,
+                colors: [Color(0xFF241A13), Color(0xFF11100F)],
+              ),
+            ),
+            child: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final short = constraints.maxHeight < 650;
+                  final inset = short ? 12.0 : 24.0;
+                  final padding = short ? 20.0 : 32.0;
+                  final content = Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Image.asset(
+                            'assets/branding/soup-sidebar-mark.png',
+                            width: 26,
+                            height: 26,
+                            color: colors.primary,
+                            excludeFromSemantics: true,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Soup',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              switch (model.phase) {
+                                SetupPhase.connection => 'Connection · 1 / 3',
+                                SetupPhase.server => 'Server · 2 / 3',
+                                SetupPhase.credentials ||
+                                SetupPhase.ready => 'Sign in · 3 / 3',
+                              },
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: colors.onSurfaceVariant),
+                              textAlign: TextAlign.end,
                             ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: short ? 16 : 28),
+                      if (model.error case final error?) ...[
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxHeight: constraints.maxHeight * 0.25,
+                          ),
+                          child: SingleChildScrollView(
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Container(
+                                key: const ValueKey('connection-error'),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: colors.errorContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  error,
+                                  style: TextStyle(
+                                    color: colors.onErrorContainer,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      Flexible(
+                        child: SingleChildScrollView(
+                          key: const ValueKey('setup-scroll'),
+                          controller: _scroll,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Semantics(
+                                header: true,
+                                child: Text(
+                                  switch (model.phase) {
+                                    SetupPhase.connection => 'Welcome to Soup',
+                                    SetupPhase.server =>
+                                      'Find your Jellyfin server',
+                                    SetupPhase.credentials =>
+                                      'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
+                                    SetupPhase.ready => 'You’re all set',
+                                  },
+                                  style:
+                                      (short
+                                              ? Theme.of(
+                                                  context,
+                                                ).textTheme.headlineSmall
+                                              : Theme.of(
+                                                  context,
+                                                ).textTheme.headlineMedium)
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: -0.6,
+                                          ),
+                                ),
+                              ),
+                              SizedBox(height: short ? 12 : 20),
+                              ..._fields(context, short, duration),
+                            ],
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: short ? 16 : 24),
+                      _footer(),
+                    ],
+                  );
+                  return Padding(
+                    padding: EdgeInsets.all(inset),
+                    child: Center(
+                      child: FocusTraversalGroup(
+                        key: const ValueKey('root-focus-traversal'),
+                        policy: ReadingOrderTraversalPolicy(),
+                        child: Container(
+                          key: const ValueKey('setup-card'),
+                          constraints: const BoxConstraints(maxWidth: 640),
+                          padding: EdgeInsets.all(padding),
+                          decoration: BoxDecoration(
+                            color: colors.surface,
+                            border: Border.all(
+                              color: colors.outlineVariant.withValues(
+                                alpha: 0.5,
+                              ),
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x24000000),
+                                blurRadius: 48,
+                                offset: Offset(0, 16),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: constraints.maxHeight < 280
+                                ? SingleChildScrollView(
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxHeight: 480,
+                                      ),
+                                      child: content,
+                                    ),
+                                  )
+                                : content,
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-}
+        ),
+      );
+    },
+  );
 
-class _BrandHeader extends StatelessWidget {
-  const _BrandHeader();
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => Row(
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.all(10),
-              child: Icon(
-                PhosphorIconsRegular.cookingPot,
-                color: Color(0xFF08111F),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text('Soup', style: Theme.of(context).textTheme.headlineSmall),
-          if (constraints.maxWidth >= 520) ...[
-            const Spacer(),
-            const Text('Jellyfin over Tailscale'),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _IntroductionCard extends StatelessWidget {
-  const _IntroductionCard({required this.status});
-
-  final TailscaleStatus status;
-
-  @override
-  Widget build(BuildContext context) {
+  List<Widget> _fields(BuildContext context, bool short, Duration duration) {
     final colors = Theme.of(context).colorScheme;
-    return Card(
-      color: const Color(0xFF101C2E),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact =
-                constraints.hasBoundedHeight && constraints.maxHeight < 400;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Your Jellyfin library, without a separate VPN app.',
-                  style: compact
-                      ? Theme.of(context).textTheme.titleLarge
-                      : Theme.of(context).textTheme.headlineMedium,
-                ),
-                SizedBox(height: compact ? 10 : 16),
-                Text(
-                  'Soup creates an app-local Tailscale connection and keeps your media traffic private.',
-                  style: compact
-                      ? Theme.of(context).textTheme.bodyMedium
-                      : Theme.of(context).textTheme.bodyLarge,
-                ),
-                SizedBox(height: compact ? 16 : 28),
-                Semantics(
-                  label: 'Tailscale status ${status.label}',
-                  child: Chip(
-                    avatar: Icon(
-                      status.icon,
-                      color: colors.onSecondaryContainer,
-                    ),
-                    label: Text(
-                      status.label,
-                      key: const ValueKey('connection-status'),
-                    ),
-                  ),
-                ),
-                if (status.detail case final detail?) ...[
-                  const SizedBox(height: 12),
-                  Text(detail, key: const ValueKey('connection-detail')),
-                ],
-              ],
-            );
-          },
+    final caption = TextStyle(color: colors.onSurfaceVariant, height: 1.45);
+    return switch (model.phase) {
+      SetupPhase.connection => [
+        if (!short) ...[
+          Text('Your Jellyfin library, ready when you are.', style: caption),
+          const SizedBox(height: 24),
+        ],
+        ListenableBuilder(
+          listenable: _switchFocus,
+          builder: (context, _) => SwitchListTile.adaptive(
+            key: const ValueKey('tailscale-toggle'),
+            focusNode: _switchFocus,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 4,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: _switchFocus.hasFocus
+                    ? colors.primary
+                    : colors.outlineVariant,
+                width: _switchFocus.hasFocus ? 2 : 1,
+              ),
+            ),
+            title: const Text('Use Tailscale'),
+            subtitle: const Text(
+              'Optional · For a server on your Tailscale network',
+            ),
+            value: model.tailscaleEnabled,
+            onChanged: model.initialized && !model.isBusy
+                ? (value) => unawaited(model.setTailscaleEnabled(value))
+                : null,
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _SetupCard extends StatelessWidget {
-  const _SetupCard({
-    required this.authKeyController,
-    required this.serverController,
-    required this.usernameController,
-    required this.passwordController,
-    required this.viewModel,
-    required this.busy,
-    required this.advancedAuthKeyExpanded,
-    required this.onAdvancedAuthKeyChanged,
-    required this.onConnectInteractively,
-    required this.onConnectWithAuthKey,
-    required this.onOpenAuthorizationUrl,
-    required this.onCancelConnection,
-    required this.onRetryInteractive,
-    required this.onPasteAuthKey,
-    required this.onPasteServerUrl,
-    required this.onCheckServer,
-    required this.onSignIn,
-  });
-
-  final TextEditingController authKeyController;
-  final TextEditingController serverController;
-  final TextEditingController usernameController;
-  final TextEditingController passwordController;
-  final ConnectivityViewModel viewModel;
-  final bool busy;
-  final bool advancedAuthKeyExpanded;
-  final ValueChanged<bool> onAdvancedAuthKeyChanged;
-  final VoidCallback onConnectInteractively;
-  final VoidCallback onConnectWithAuthKey;
-  final VoidCallback onOpenAuthorizationUrl;
-  final VoidCallback onCancelConnection;
-  final VoidCallback onRetryInteractive;
-  final VoidCallback onPasteAuthKey;
-  final VoidCallback onPasteServerUrl;
-  final VoidCallback onCheckServer;
-  final VoidCallback onSignIn;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      key: const ValueKey('setup-card'),
-      color: const Color(0xFF101C2E),
-      child: Padding(
-        padding: const EdgeInsets.all(28),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final phase = SingleChildScrollView(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                child: Column(
-                  key: ValueKey(viewModel.phase),
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: _phaseContent(
-                    context,
-                    availableHeight: constraints.hasBoundedHeight
-                        ? constraints.maxHeight
-                        : null,
+        _AnimatedReveal(
+          duration: duration,
+          child: AnimatedSwitcher(
+            duration: duration,
+            transitionBuilder: (child, animation) => AnimatedBuilder(
+              animation: animation,
+              builder: (context, _) => ExcludeFocus(
+                excluding: animation.status == AnimationStatus.reverse,
+                child: ExcludeSemantics(
+                  excluding: animation.status == AnimationStatus.reverse,
+                  child: IgnorePointer(
+                    ignoring: animation.status == AnimationStatus.reverse,
+                    child: FadeTransition(opacity: animation, child: child),
                   ),
                 ),
               ),
-            );
-            final children = <Widget>[
-              if (viewModel.error case final error?) ...[
-                _ErrorBanner(message: error),
-                const SizedBox(height: 16),
-              ],
-              if (constraints.hasBoundedHeight)
-                Expanded(child: phase)
-              else
-                phase,
-            ];
-            return Column(
-              mainAxisSize: constraints.hasBoundedHeight
-                  ? MainAxisSize.max
-                  : MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: children,
-            );
-          },
+            ),
+            child: model.tailscaleEnabled
+                ? Padding(
+                    key: ValueKey(
+                      Object.hash(
+                        model.status.phase,
+                        model.status.authorizationUrl,
+                      ),
+                    ),
+                    padding: const EdgeInsets.only(top: 16),
+                    child: _tailscaleArea(context, short),
+                  )
+                : const SizedBox.shrink(key: ValueKey('direct-connection')),
+          ),
         ),
-      ),
-    );
-  }
-
-  List<Widget> _phaseContent(
-    BuildContext context, {
-    required double? availableHeight,
-  }) => switch (viewModel.phase) {
-    SetupPhase.tailscale => _tailscaleContent(
-      context,
-      availableHeight: availableHeight,
-    ),
-    SetupPhase.server => [
-      Text(
-        'Find your Jellyfin server',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'Use its Tailscale name or IP. Soup sends this check through its private proxy.',
-      ),
-      const SizedBox(height: 24),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(1),
-        child: TextField(
+      ],
+      SetupPhase.server => [
+        Text(
+          model.tailscaleEnabled
+              ? 'Enter the address of your server on Tailscale.'
+              : 'Enter the address of a Jellyfin server reachable from this device.',
+          style: caption,
+        ),
+        const SizedBox(height: 24),
+        TextField(
           key: const ValueKey('server-url-field'),
-          controller: serverController,
+          controller: _server,
+          focusNode: _serverFocus,
+          enabled: !model.isBusy,
           keyboardType: TextInputType.url,
           autocorrect: false,
           textInputAction: TextInputAction.done,
-          onSubmitted: busy ? null : (_) => onCheckServer(),
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'Jellyfin server',
-            hintText: 'http://jellyfin:8096',
+          onSubmitted: model.isBusy ? null : (_) => _next(),
+          decoration: InputDecoration(
+            labelText: 'Server address',
+            hintText: model.tailscaleEnabled
+                ? 'http://jellyfin:8096'
+                : 'http://192.168.1.10:8096',
           ),
         ),
-      ),
-      const SizedBox(height: 12),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(2),
-        child: OutlinedButton.icon(
-          key: const ValueKey('paste-server-url-button'),
-          onPressed: busy ? null : onPasteServerUrl,
-          icon: const Icon(PhosphorIconsRegular.clipboardText),
-          label: const Text('Paste server address'),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('paste-server-url-button'),
+            onPressed: model.isBusy ? null : _pasteServer,
+            icon: const Icon(PhosphorIconsRegular.clipboardText, size: 18),
+            label: const Text('Paste server address'),
+          ),
         ),
-      ),
-      const SizedBox(height: 16),
-      _ActionButton(
-        order: 3,
-        keyValue: 'check-server-button',
-        busy: busy,
-        onPressed: onCheckServer,
-        icon: PhosphorIconsRegular.database,
-        label: 'Check server',
-      ),
-    ],
-    SetupPhase.credentials => [
-      Text(
-        'Sign in to ${viewModel.serverInfo?.name ?? 'Jellyfin'}',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 12),
-      Text('Server ${viewModel.serverInfo?.version ?? ''} is ready.'),
-      const SizedBox(height: 24),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(1),
-        child: TextField(
+      ],
+      SetupPhase.credentials => [
+        Text(model.serverUrl?.toString() ?? '', style: caption),
+        const SizedBox(height: 24),
+        TextField(
           key: const ValueKey('username-field'),
-          controller: usernameController,
+          controller: _username,
+          focusNode: _usernameFocus,
+          enabled: !model.isBusy,
+          autocorrect: false,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'Username',
-          ),
+          autofillHints: const [AutofillHints.username],
+          decoration: const InputDecoration(labelText: 'Username'),
         ),
-      ),
-      const SizedBox(height: 14),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(2),
-        child: TextField(
+        const SizedBox(height: 16),
+        TextField(
           key: const ValueKey('password-field'),
-          controller: passwordController,
+          controller: _password,
+          enabled: !model.isBusy,
           obscureText: true,
           enableSuggestions: false,
           autocorrect: false,
           textInputAction: TextInputAction.done,
-          onSubmitted: busy ? null : (_) => onSignIn(),
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
-            labelText: 'Password',
-          ),
+          onSubmitted: model.isBusy ? null : (_) => _next(),
+          decoration: const InputDecoration(labelText: 'Password'),
         ),
-      ),
-      const SizedBox(height: 16),
-      _ActionButton(
-        order: 3,
-        keyValue: 'sign-in-button',
-        busy: busy,
-        onPressed: onSignIn,
-        icon: PhosphorIconsRegular.signIn,
-        label: 'Sign in',
-      ),
-    ],
-    SetupPhase.ready => [
-      Icon(
-        PhosphorIconsFill.checkCircle,
-        size: 42,
-        color: Theme.of(context).colorScheme.primary,
-      ),
-      const SizedBox(height: 16),
-      Text(
-        'Ready for your library',
-        style: Theme.of(context).textTheme.titleLarge,
-      ),
-      const SizedBox(height: 12),
-      Text('Signed in as ${viewModel.session?.userName ?? 'Jellyfin user'}'),
-      const SizedBox(height: 4),
-      Text(viewModel.serverUrl?.toString() ?? ''),
-      const SizedBox(height: 20),
-      FocusTraversalOrder(
-        order: const NumericFocusOrder(1),
-        child: OutlinedButton.icon(
-          key: const ValueKey('sign-out-button'),
-          onPressed: busy ? null : viewModel.signOut,
-          icon: const Icon(PhosphorIconsRegular.signOut),
-          label: const Text('Change server or account'),
-        ),
-      ),
-    ],
-  };
+      ],
+      SetupPhase.ready => [Text('Your library is ready.', style: caption)],
+    };
+  }
 
-  List<Widget> _tailscaleContent(
-    BuildContext context, {
-    required double? availableHeight,
-  }) {
-    final status = viewModel.status;
-    switch (status.phase) {
-      case TailscaleConnectionPhase.awaitingLogin:
-        final authorizationUrl = status.authorizationUrl;
-        final compact = availableHeight != null && availableHeight < 460;
-        final qrSize = compact
-            ? (availableHeight - 186).clamp(110.0, 160.0).toDouble()
-            : 230.0;
-        final contentGap = compact ? 8.0 : 14.0;
-        return [
+  Widget _tailscaleArea(BuildContext context, bool short) {
+    final status = model.status;
+    final url = status.authorizationUrl;
+    if (status.phase == TailscaleConnectionPhase.awaitingLogin && url != null) {
+      final qr = Container(
+        key: const ValueKey('tailscale-authorization-qr'),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: QrImageView(
+          data: url.toString(),
+          size: short ? 176 : 220,
+          padding: const EdgeInsets.all(16),
+          backgroundColor: Colors.white,
+          eyeStyle: const QrEyeStyle(
+            eyeShape: QrEyeShape.square,
+            color: Colors.black,
+          ),
+          dataModuleStyle: const QrDataModuleStyle(
+            dataModuleShape: QrDataModuleShape.square,
+            color: Colors.black,
+          ),
+          semanticsLabel: 'Tailscale sign-in QR code',
+        ),
+      );
+      final instructions = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Text(
-            'Finish signing in on another device',
-            style: Theme.of(context).textTheme.titleLarge,
+            'Scan to sign in',
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          SizedBox(height: compact ? 6 : 10),
+          const SizedBox(height: 8),
           const Text(
-            'Scan this code with your phone and sign in to Tailscale.',
+            'Scan this code with another device and sign in to Tailscale.',
           ),
-          if (authorizationUrl != null) ...[
-            SizedBox(height: compact ? 8 : 16),
-            Center(
-              child: DecoratedBox(
-                key: const ValueKey('tailscale-authorization-qr'),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: QrImageView(
-                  data: authorizationUrl.toString(),
-                  version: QrVersions.auto,
-                  size: qrSize,
-                  padding: const EdgeInsets.all(10),
-                  backgroundColor: Colors.white,
-                  semanticsLabel: 'Tailscale sign-in QR code',
-                ),
-              ),
+          const SizedBox(height: 8),
+          Semantics(
+            liveRegion: true,
+            child: const Text(
+              'Waiting for sign-in',
+              key: ValueKey('connection-status'),
             ),
-            SizedBox(height: contentGap),
-            if (!compact)
-              _ActionButton(
-                order: 1,
-                keyValue: 'open-tailscale-login-button',
-                busy: false,
-                onPressed: onOpenAuthorizationUrl,
-                icon: PhosphorIconsRegular.arrowSquareOut,
-                label: 'Open sign-in page',
-              ),
-          ],
-          if (!compact) const SizedBox(height: 10),
-          _TailscaleLoginActions(
-            compact: compact,
-            showOpenAction: authorizationUrl != null,
-            onOpenAuthorizationUrl: onOpenAuthorizationUrl,
-            onRetryInteractive: onRetryInteractive,
-            onCancelConnection: onCancelConnection,
           ),
-        ];
-      case TailscaleConnectionPhase.awaitingApproval:
-        return [
-          Text(
-            'Approve this TV',
-            style: Theme.of(context).textTheme.titleLarge,
+          const SizedBox(height: 8),
+          TextButton(
+            key: const ValueKey('retry-tailscale-login-button'),
+            onPressed: model.isBusy ? null : model.retryTailscale,
+            child: const Text('Get a new code'),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'Your tailnet requires device approval. Approve this TV in the Tailscale admin console; Soup will continue automatically.',
-          ),
-          const SizedBox(height: 24),
-          const Center(child: CircularProgressIndicator()),
-          const SizedBox(height: 20),
-          OutlinedButton(
-            key: const ValueKey('cancel-tailscale-login-button'),
-            onPressed: onCancelConnection,
-            child: const Text('Cancel'),
-          ),
-        ];
-      case TailscaleConnectionPhase.starting:
-        return [
-          Text(
-            'Preparing secure sign-in…',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 20),
-          const Center(child: CircularProgressIndicator()),
-          const SizedBox(height: 20),
-          OutlinedButton(
-            key: const ValueKey('cancel-tailscale-login-button'),
-            onPressed: onCancelConnection,
-            child: const Text('Cancel'),
-          ),
-        ];
-      case TailscaleConnectionPhase.disconnected:
-      case TailscaleConnectionPhase.failed:
-        return [
-          Text(
-            'Connect Soup to your tailnet',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Sign in on your phone by scanning a QR code. No auth key is needed.',
-          ),
-          const SizedBox(height: 22),
-          _ActionButton(
-            order: 1,
-            keyValue: 'connect-interactively-button',
-            busy: false,
-            onPressed: onConnectInteractively,
-            icon: PhosphorIconsRegular.qrCode,
-            label: status.phase == TailscaleConnectionPhase.failed
-                ? 'Try again'
-                : 'Sign in with Tailscale',
-          ),
-          const SizedBox(height: 14),
-          ExpansionTile(
-            key: const ValueKey('advanced-auth-key'),
-            initiallyExpanded: advancedAuthKeyExpanded,
-            onExpansionChanged: onAdvancedAuthKeyChanged,
-            tilePadding: EdgeInsets.zero,
-            childrenPadding: EdgeInsets.zero,
-            title: const Text('Advanced options'),
-            children: [
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Use a one-time auth key for pre-approved or tagged-device setups. Soup never saves it.',
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                key: const ValueKey('auth-key-field'),
-                controller: authKeyController,
-                obscureText: true,
-                enableSuggestions: false,
-                autocorrect: false,
-                textInputAction: TextInputAction.done,
-                onSubmitted: busy ? null : (_) => onConnectWithAuthKey(),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: 'One-time auth key',
-                  hintText: 'tskey-auth-…',
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
+        ],
+      );
+      return LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth >= 440
+            ? Row(
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const ValueKey('paste-auth-key-button'),
-                      onPressed: busy ? null : onPasteAuthKey,
-                      icon: const Icon(PhosphorIconsRegular.clipboardText),
-                      label: const Text('Paste auth key'),
-                    ),
+                  qr,
+                  const SizedBox(width: 24),
+                  Expanded(child: instructions),
+                ],
+              )
+            : Column(children: [qr, const SizedBox(height: 16), instructions]),
+      );
+    }
+    final connected = model.tailscaleConnected;
+    final failed =
+        status.phase == TailscaleConnectionPhase.failed ||
+        status.phase == TailscaleConnectionPhase.disconnected;
+    final approval = status.phase == TailscaleConnectionPhase.awaitingApproval;
+    return Semantics(
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (connected || failed)
+              Icon(
+                connected
+                    ? PhosphorIconsRegular.checkCircle
+                    : PhosphorIconsRegular.warningCircle,
+                color: Theme.of(context).colorScheme.primary,
+                size: 28,
+              )
+            else
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    connected
+                        ? 'Connected to Tailscale'
+                        : failed
+                        ? 'Unable to connect'
+                        : approval
+                        ? 'Waiting for device approval'
+                        : 'Preparing sign-in…',
+                    key: const ValueKey('connection-status'),
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      key: const ValueKey('connect-button'),
-                      onPressed: busy ? null : onConnectWithAuthKey,
-                      icon: const Icon(PhosphorIconsRegular.key),
-                      label: const Text('Use auth key'),
-                    ),
+                  const SizedBox(height: 6),
+                  Text(
+                    connected
+                        ? 'Select Next to continue.'
+                        : failed
+                        ? 'Try again, or turn off Tailscale to connect directly.'
+                        : approval
+                        ? 'Ask your administrator to approve this device in Tailscale. You can continue once it is approved.'
+                        : 'Your sign-in code will appear here.',
                   ),
+                  if (failed)
+                    TextButton(
+                      key: const ValueKey('retry-tailscale-login-button'),
+                      onPressed: model.isBusy ? null : model.retryTailscale,
+                      child: const Text('Retry'),
+                    ),
                 ],
               ),
-            ],
-          ),
-        ];
-      case TailscaleConnectionPhase.connected:
-        return const [];
-    }
+            ),
+          ],
+        ),
+      ),
+    );
   }
-}
 
-class _TailscaleLoginActions extends StatelessWidget {
-  const _TailscaleLoginActions({
-    required this.compact,
-    required this.showOpenAction,
-    required this.onOpenAuthorizationUrl,
-    required this.onRetryInteractive,
-    required this.onCancelConnection,
-  });
-
-  final bool compact;
-  final bool showOpenAction;
-  final VoidCallback onOpenAuthorizationUrl;
-  final VoidCallback onRetryInteractive;
-  final VoidCallback onCancelConnection;
-
-  @override
-  Widget build(BuildContext context) {
-    final actions = <Widget>[
-      if (compact && showOpenAction)
-        Expanded(
-          child: FilledButton.icon(
-            key: const ValueKey('open-tailscale-login-button'),
-            onPressed: onOpenAuthorizationUrl,
-            icon: const Icon(PhosphorIconsRegular.arrowSquareOut),
-            label: const Text('Open'),
-          ),
-        ),
-      Expanded(
-        child: OutlinedButton(
-          key: const ValueKey('retry-tailscale-login-button'),
-          onPressed: onRetryInteractive,
-          child: Text(compact ? 'New code' : 'Get a new code'),
-        ),
-      ),
-      Expanded(
-        child: OutlinedButton(
-          key: const ValueKey('cancel-tailscale-login-button'),
-          onPressed: onCancelConnection,
-          child: const Text('Cancel'),
-        ),
-      ),
-    ];
-
+  Widget _footer() {
+    final connection = model.phase == SetupPhase.connection;
+    final enabled = connection
+        ? model.canContinueConnection
+        : model.initialized && !model.isBusy;
     return Row(
       children: [
-        for (var index = 0; index < actions.length; index++) ...[
-          if (index > 0) const SizedBox(width: 10),
-          actions[index],
+        if (!connection) ...[
+          TextButton(
+            key: const ValueKey('onboarding-back-button'),
+            onPressed: model.isBusy ? null : _back,
+            child: const Text('Back'),
+          ),
+          const SizedBox(width: 16),
         ],
+        Expanded(
+          child: FilledButton(
+            key: ValueKey(switch (model.phase) {
+              SetupPhase.connection => 'connection-next-button',
+              SetupPhase.server => 'check-server-button',
+              SetupPhase.credentials || SetupPhase.ready => 'sign-in-button',
+            }),
+            onPressed: enabled ? _next : null,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (model.isBusy) ...[
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Flexible(
+                  child: Text(
+                    model.isBusy
+                        ? switch (model.phase) {
+                            SetupPhase.connection => 'Preparing…',
+                            SetupPhase.server => 'Checking…',
+                            _ => 'Signing in…',
+                          }
+                        : model.phase == SetupPhase.credentials
+                        ? 'Sign in'
+                        : 'Next',
+                  ),
+                ),
+                if (!model.isBusy) ...[
+                  const SizedBox(width: 10),
+                  const Icon(PhosphorIconsRegular.arrowRight, size: 18),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Semantics(
-      liveRegion: true,
-      child: DecoratedBox(
-        key: const ValueKey('setup-error'),
-        decoration: BoxDecoration(
-          color: colors.errorContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                PhosphorIconsRegular.warningCircle,
-                color: colors.onErrorContainer,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: TextStyle(color: colors.onErrorContainer),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.order,
-    required this.keyValue,
-    required this.busy,
-    required this.onPressed,
-    required this.icon,
-    required this.label,
-  });
-
-  final double order;
-  final String keyValue;
-  final bool busy;
-  final VoidCallback onPressed;
-  final IconData icon;
-  final String label;
+class _AnimatedReveal extends StatelessWidget {
+  const _AnimatedReveal({required this.duration, required this.child});
+  final Duration duration;
+  final Widget child;
 
   @override
-  Widget build(BuildContext context) {
-    return FocusTraversalOrder(
-      order: NumericFocusOrder(order),
-      child: FilledButton.icon(
-        key: ValueKey(keyValue),
-        onPressed: busy ? null : onPressed,
-        icon: busy
-            ? const SizedBox.square(
-                dimension: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Icon(icon),
-        label: Text(busy ? 'Working…' : label),
-      ),
-    );
-  }
-}
-
-extension on TailscaleStatus {
-  String get label => switch (phase) {
-    TailscaleConnectionPhase.disconnected => 'Not connected',
-    TailscaleConnectionPhase.starting => 'Starting secure sign-in',
-    TailscaleConnectionPhase.awaitingLogin => 'Waiting for sign-in',
-    TailscaleConnectionPhase.awaitingApproval => 'Waiting for approval',
-    TailscaleConnectionPhase.connected =>
-      hostname == null ? 'Connected' : 'Connected as $hostname',
-    TailscaleConnectionPhase.failed => 'Connection failed',
-  };
-
-  IconData get icon => switch (phase) {
-    TailscaleConnectionPhase.disconnected => PhosphorIconsRegular.cloudSlash,
-    TailscaleConnectionPhase.starting => PhosphorIconsRegular.arrowsClockwise,
-    TailscaleConnectionPhase.awaitingLogin => PhosphorIconsRegular.qrCode,
-    TailscaleConnectionPhase.awaitingApproval => PhosphorIconsRegular.clock,
-    TailscaleConnectionPhase.connected => PhosphorIconsRegular.cloudCheck,
-    TailscaleConnectionPhase.failed => PhosphorIconsRegular.warningCircle,
-  };
+  Widget build(BuildContext context) => duration == Duration.zero
+      ? child
+      : AnimatedSize(
+          duration: duration,
+          alignment: Alignment.topCenter,
+          curve: Curves.easeInOutCubic,
+          child: child,
+        );
 }

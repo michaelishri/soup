@@ -31,6 +31,10 @@ proxy after connection. Persistent node state lives in the host-provided private
 directory, allowing `restore()` to reconnect without another registration when
 the state remains valid.
 
+Soup's Android onboarding exposes only interactive QR sign-in, and starts this
+adapter only when Tailscale is selected. The auth-key API remains available to
+other hosts of this package.
+
 ```sh
 flutter analyze
 flutter test

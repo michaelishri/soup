@@ -8,6 +8,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/appearance/appearance_controller.dart';
@@ -16,7 +17,6 @@ import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup/src/features/playback/playback_screen.dart';
-import 'package:soup/src/platform/authorization_url_launcher.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -24,18 +24,18 @@ class SoupApp extends StatefulWidget {
     required this.tailscaleClient,
     this.jellyfinClientFactory = const DefaultJellyfinClientFactory(),
     this.sessionStore = const SecureSessionStore(),
+    this.connectionStore,
     this.appearanceStore,
     this.database,
-    this.authorizationUrlLauncher = const ExternalAuthorizationUrlLauncher(),
     super.key,
   });
 
   final TailscaleClient tailscaleClient;
   final JellyfinClientFactory jellyfinClientFactory;
   final SessionStore sessionStore;
+  final ConnectionPreferencesStore? connectionStore;
   final AppearanceStore? appearanceStore;
   final SoupDatabase? database;
-  final AuthorizationUrlLauncher authorizationUrlLauncher;
 
   @override
   State<SoupApp> createState() => _SoupAppState();
@@ -56,6 +56,8 @@ class _SoupAppState extends State<SoupApp> {
       widget.tailscaleClient,
       jellyfinClientFactory: widget.jellyfinClientFactory,
       sessionStore: widget.sessionStore,
+      connectionStore:
+          widget.connectionStore ?? SharedPreferencesConnectionStore(),
     )..initialize();
     _appearanceController = AppearanceController(
       widget.appearanceStore ?? SharedPreferencesAppearanceStore(),
@@ -110,10 +112,7 @@ class _SoupAppState extends State<SoupApp> {
                   database: _database ??= SoupDatabase(),
                 );
               }
-              return ConnectivityScreen(
-                viewModel: _viewModel,
-                authorizationUrlLauncher: widget.authorizationUrlLauncher,
-              );
+              return ConnectivityScreen(viewModel: _viewModel);
             },
           ),
         );

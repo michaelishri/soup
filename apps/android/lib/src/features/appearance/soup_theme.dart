@@ -5,15 +5,63 @@ class SoupTheme {
   const SoupTheme._();
 
   static ThemeData get onboarding {
-    final colors = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF7DD3FC),
-      brightness: Brightness.dark,
-    );
+    final colors =
+        ColorScheme.fromSeed(
+          seedColor: const Color(0xFFFC7814),
+          brightness: Brightness.dark,
+        ).copyWith(
+          primary: const Color(0xFFFC7814),
+          onPrimary: const Color(0xFF211006),
+          surface: const Color(0xFF1C1A18),
+          onSurface: const Color(0xFFF6F1EC),
+          onSurfaceVariant: const Color(0xFFC7BEB6),
+          outlineVariant: const Color(0xFF494039),
+        );
     return ThemeData(
       brightness: Brightness.dark,
       colorScheme: colors,
-      scaffoldBackgroundColor: const Color(0xFF08111F),
+      scaffoldBackgroundColor: const Color(0xFF11100F),
       useMaterial3: true,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: const Color(0xFF24211E),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 18,
+        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colors.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: colors.primary, width: 2),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.focused)
+                ? BorderSide(color: colors.onSurface, width: 2)
+                : BorderSide.none,
+          ),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          side: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.focused)
+                ? BorderSide(color: colors.primary, width: 2)
+                : BorderSide.none,
+          ),
+        ),
+      ),
     );
   }
 

@@ -1,42 +1,49 @@
 # Soup for Android
 
-Flutter prototype for Android mobile and Android TV. It embeds a Tailscale node
-inside the application and routes Jellyfin discovery and login over the node's
-authenticated loopback SOCKS5 proxy.
+Flutter client for Android 12+ mobile and Android TV, with direct Jellyfin
+networking and an optional embedded Tailscale node.
 
-## Tailscale registration
+## Onboarding
 
-Soup normally registers its embedded node through Tailscale's interactive web
-login. On Android TV it displays the one-time HTTPS authorization URL as a QR
-code for a phone to scan; Android devices can also open the same URL in an
-installed browser. Soup follows the connection automatically and shows a
-separate waiting state when the tailnet requires administrator approval.
+The centered, warm charcoal/orange panel guides users through connection,
+server validation, and Jellyfin sign-in. On first launch **Use Tailscale** is
+off; **Next** immediately opens server setup without starting Tailscale.
 
-For pre-approved or tagged-device environments, **Advanced options** retains a
-masked one-time auth-key field and clipboard paste action. The field is cleared
-before submission, and Soup never persists or logs the key. Successful node
-state remains in the app's private support directory for future reconnects.
+Enabling Tailscale reveals a QR code for sign-in on another device. Soup shows
+preparation, sign-in, administrator approval, and connection success in place.
+**Next** becomes available when connected. **Get a new code** restarts sign-in;
+turning the switch off cancels it and allows direct setup. Browser launch and
+auth-key entry are no longer offered by the app.
 
-## Run locally
+Server-address paste remains available. **Back** preserves address and username
+drafts, while passwords are cleared on submission or backward navigation.
+Changing the connection requires server validation again. Errors stay above the
+scrollable form and navigation stays below it. The interface supports touch,
+keyboard/D-pad focus, reduced motion, and small TV viewports.
 
-From the repository root, initialize the pinned native source first:
+Connection mode is stored separately from the secure Jellyfin session. Direct
+sessions restore without touching the native node. Existing accounts without
+a saved choice retain Tailscale. Tailscale sessions reconnect using saved node
+state; there is no automatic fallback to direct networking. JSON, artwork,
+subtitles, and the authenticated playback bridge all use the selected transport.
+
+After the first successful sign-in, the existing appearance setup lets the user
+choose their library layout, palette, and brightness.
+
+## Development
+
+Use the root Taskfile, or:
 
 ```sh
 git submodule update --init --recursive
 cd apps/android
 flutter pub get
+flutter analyze
 flutter test
-flutter run
+flutter build apk --debug
 ```
 
-The target device must run Android 12 (API 31) or newer. The same application
-supports touch input and Android TV D-pad focus traversal.
-
-The current prototype includes the complete connection and sign-in flow plus an
-authenticated home screen for libraries, Continue Watching, and Latest Media.
-JSON and artwork are fetched through the embedded Tailscale connection, and the
-TV interface has explicit, ordered D-pad traversal. Library folders open into
-poster grids; movie and episode details expose exact Play/Resume positions, and
-series provide season and episode navigation. The player negotiates direct play
-or HLS transcoding, routes media through the embedded Tailscale connection,
-reports playback progress, and supports selectable subtitles.
+The native Android build requires the Android SDK/NDK and Go. Flutter widget and
+transport tests run headlessly without an Android emulator. See
+[onboarding screenshots](../../docs/screenshots/onboarding/README.md) for
+reproducible UI review captures and their validation limits.
