@@ -78,6 +78,9 @@ class SoupTheme {
       textButtonTheme: TextButtonThemeData(
         style: ButtonStyle(
           minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
           side: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.focused)
                 ? BorderSide(color: colors.primary, width: 2)

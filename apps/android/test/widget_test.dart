@@ -112,6 +112,155 @@ void main() {
     );
   });
 
+  testWidgets('step motion keeps one form and stationary navigation', (
+    tester,
+  ) async {
+    await setup(tester);
+    final footer = find.byKey(const ValueKey('setup-footer'));
+    final originalFooter = tester.getRect(footer);
+    final transition = find.byKey(const ValueKey('setup-step-transition'));
+    double opacity() => tester.widget<FadeTransition>(transition).opacity.value;
+    double offset() => tester
+        .widget<Transform>(find.byKey(const ValueKey('setup-step-offset')))
+        .transform
+        .getTranslation()
+        .x;
+    expect(opacity(), 1, reason: 'Do not animate the initial page');
+    await tester.tap(find.byKey(const ValueKey('connection-next-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(opacity(), inExclusiveRange(0, 1));
+    expect(offset(), inExclusiveRange(0, 12));
+    expect(tester.getRect(footer), originalFooter);
+    expect(find.byKey(const ValueKey('tailscale-toggle')), findsNothing);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('server-url-field')))
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+
+    // Back is usable during the entrance, without an outgoing form retaining
+    // the same scroll controller or focus nodes.
+    await tester.tap(find.byKey(const ValueKey('onboarding-back-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(opacity(), inExclusiveRange(0, 1));
+    expect(offset(), inExclusiveRange(-12, 0));
+    expect(tester.getRect(footer), originalFooter);
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const ValueKey('tailscale-toggle')),
+          )
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+    await tester.pumpAndSettle();
+    expect(opacity(), 1);
+    expect(offset(), 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('QR retires accessibly while success fades in without advancing', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      final (model, client) = await setup(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      final next = find.byKey(const ValueKey('connection-next-button'));
+      final originalNext = tester.getRect(next);
+      client.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      final success = find.byKey(const ValueKey('tailscale-connected'));
+      expect(success, findsOneWidget);
+      expect(
+        tester
+            .widgetList<FadeTransition>(
+              find.ancestor(of: success, matching: find.byType(FadeTransition)),
+            )
+            .any((fade) => fade.opacity.value > 0 && fade.opacity.value < 1),
+        isTrue,
+      );
+      final oldQr = find.byKey(const ValueKey('tailscale-authorization-qr'));
+      expect(oldQr, findsOneWidget, reason: 'The old QR is still fading out');
+      expect(
+        tester
+            .widgetList<ExcludeFocus>(
+              find.ancestor(of: oldQr, matching: find.byType(ExcludeFocus)),
+            )
+            .any((widget) => widget.excluding),
+        isTrue,
+      );
+      expect(find.semantics.byLabel('Tailscale sign-in QR code'), findsNothing);
+      expect(find.semantics.byLabel('Get a new code'), findsNothing);
+      expect(
+        find.semantics.byLabel(RegExp('Connected to Tailscale')),
+        findsOne,
+      );
+      expect(button(tester, 'connection-next-button').onPressed, isNotNull);
+      expect(tester.getRect(next), originalNext);
+      expect(model.phase, SetupPhase.connection);
+      await tester.pumpAndSettle();
+      expect(oldQr, findsNothing);
+      expect(tester.getRect(next), originalNext);
+      final toggle = find.byKey(const ValueKey('tailscale-toggle'));
+      final material = tester
+          .element(toggle)
+          .findAncestorWidgetOfExactType<Material>()!;
+      expect(material.key, const ValueKey('tailscale-tile-material'));
+      expect(material.clipBehavior, Clip.antiAlias);
+      expect(tester.getRect(find.byKey(material.key!)), tester.getRect(toggle));
+      // Success must not steal focus from the switch. Down still reaches Next.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect(model.phase, SetupPhase.server);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets('remote focus ring animates without resizing the toggle', (
+    tester,
+  ) async {
+    await setup(tester);
+    final ring = find.byKey(const ValueKey('tailscale-focus-ring'));
+    final toggle = find.byKey(const ValueKey('tailscale-toggle'));
+    final originalToggle = tester.getRect(toggle);
+    Border border() {
+      final paint = tester.widget<DecoratedBox>(
+        find.descendant(of: ring, matching: find.byType(DecoratedBox)).first,
+      );
+      return (paint.decoration as BoxDecoration).border! as Border;
+    }
+
+    expect(border().top.width, 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(border().top.width, inExclusiveRange(1, 2));
+    expect(tester.getRect(toggle), originalToggle);
+    expect(
+      button(tester, 'connection-next-button').style!.animationDuration,
+      const Duration(milliseconds: 200),
+    );
+    await tester.pumpAndSettle();
+    expect(border().top.width, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(border().top.width, 2);
+    expect(tester.getRect(toggle), originalToggle);
+  });
+
   testWidgets(
     'short wide layout handles long server names and exposes progress',
     (tester) async {
@@ -425,10 +574,40 @@ void main() {
       find.byType(AnimatedSwitcher).first,
     );
     expect(switcher.duration, Duration.zero);
+    expect(
+      tester
+          .widget<AnimatedContainer>(
+            find.byKey(const ValueKey('tailscale-focus-ring')),
+          )
+          .duration,
+      Duration.zero,
+    );
+    expect(
+      button(tester, 'connection-next-button').style!.animationDuration,
+      Duration.zero,
+    );
     await tester.ensureVisible(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.pumpAndSettle();
-    await nextToServer(tester);
+    await tester.tap(find.byKey(const ValueKey('connection-next-button')));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FadeTransition>(
+            find.byKey(const ValueKey('setup-step-transition')),
+          )
+          .opacity
+          .value,
+      1,
+    );
+    expect(
+      tester
+          .widget<Transform>(find.byKey(const ValueKey('setup-step-offset')))
+          .transform
+          .getTranslation()
+          .x,
+      0,
+    );
     tester.view.viewInsets = const FakeViewPadding(bottom: 320);
     await tester.pumpAndSettle();
     expect(

@@ -112,6 +112,7 @@ void main() {
       await capture('tailscale-qr');
       client.complete();
       await tester.pumpAndSettle();
+      await capture('tailscale-connected');
       await tester.tap(find.byKey(const ValueKey('connection-next-button')));
       await tester.pumpAndSettle();
       await capture('jellyfin-server');

@@ -202,44 +202,49 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                                 _header(context),
                                 SizedBox(height: short ? 24 : 48),
                                 Expanded(
-                                  child: wide
-                                      ? Row(
-                                          key: const ValueKey(
-                                            'setup-wide-layout',
-                                          ),
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
-                                          children: [
-                                            Expanded(
-                                              flex: 4,
-                                              child: Align(
-                                                alignment: Alignment.centerLeft,
-                                                child: SingleChildScrollView(
-                                                  child: _intro(
-                                                    context,
-                                                    wide: true,
+                                  child: _StepTransition(
+                                    phase: model.phase,
+                                    duration: duration,
+                                    child: wide
+                                        ? Row(
+                                            key: const ValueKey(
+                                              'setup-wide-layout',
+                                            ),
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Expanded(
+                                                flex: 4,
+                                                child: Align(
+                                                  alignment:
+                                                      Alignment.centerLeft,
+                                                  child: SingleChildScrollView(
+                                                    child: _intro(
+                                                      context,
+                                                      wide: true,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 56),
-                                            Expanded(
-                                              flex: 6,
-                                              child: _form(
-                                                context,
-                                                short,
-                                                duration,
-                                                includeIntro: false,
+                                              const SizedBox(width: 56),
+                                              Expanded(
+                                                flex: 6,
+                                                child: _form(
+                                                  context,
+                                                  short,
+                                                  duration,
+                                                  includeIntro: false,
+                                                ),
                                               ),
-                                            ),
-                                          ],
-                                        )
-                                      : _form(
-                                          context,
-                                          short,
-                                          duration,
-                                          includeIntro: true,
-                                        ),
+                                            ],
+                                          )
+                                        : _form(
+                                            context,
+                                            short,
+                                            duration,
+                                            includeIntro: true,
+                                          ),
+                                  ),
                                 ),
                                 SizedBox(height: short ? 20 : 32),
                                 LayoutBuilder(
@@ -451,7 +456,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                 children: [
                   if (includeIntro) ...[
                     _intro(context, wide: false),
-                    SizedBox(height: short ? 28 : 40),
+                    SizedBox(height: short ? 28 : 32),
                   ],
                   ..._fields(context, short, duration),
                 ],
@@ -470,47 +475,66 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       SetupPhase.connection => [
         ListenableBuilder(
           listenable: _switchFocus,
-          builder: (context, _) => SwitchListTile.adaptive(
-            key: const ValueKey('tailscale-toggle'),
-            focusNode: _switchFocus,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 10,
-            ),
-            tileColor: colors.surfaceContainerHighest.withValues(alpha: 0.45),
-            shape: RoundedRectangleBorder(
+          builder: (context, _) => AnimatedContainer(
+            key: const ValueKey('tailscale-focus-ring'),
+            duration: _focusDuration,
+            curve: Curves.easeOutCubic,
+            foregroundDecoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              side: BorderSide(
+              border: Border.all(
                 color: _switchFocus.hasFocus
                     ? colors.primary
                     : colors.outlineVariant.withValues(alpha: 0.65),
                 width: _switchFocus.hasFocus ? 2 : 1,
               ),
             ),
-            title: const Text(
-              'Use Tailscale',
-              style: TextStyle(fontWeight: FontWeight.w600),
+            // Give ink a local canvas so it follows the tile when the QR area
+            // changes height or the whole step slides into place.
+            child: Material(
+              key: const ValueKey('tailscale-tile-material'),
+              type: MaterialType.transparency,
+              borderRadius: BorderRadius.circular(16),
+              clipBehavior: Clip.antiAlias,
+              child: SwitchListTile.adaptive(
+                key: const ValueKey('tailscale-toggle'),
+                focusNode: _switchFocus,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 10,
+                ),
+                tileColor: colors.surfaceContainerHighest.withValues(
+                  alpha: 0.45,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                title: const Text(
+                  'Use Tailscale',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text('Optional · Use your private network'),
+                value: model.tailscaleEnabled,
+                onChanged: model.initialized && !model.isBusy
+                    ? (value) => unawaited(model.setTailscaleEnabled(value))
+                    : null,
+              ),
             ),
-            subtitle: const Text(
-              'Optional · Connect through your private network',
-            ),
-            value: model.tailscaleEnabled,
-            onChanged: model.initialized && !model.isBusy
-                ? (value) => unawaited(model.setTailscaleEnabled(value))
-                : null,
           ),
         ),
         if (!model.tailscaleEnabled) ...[
           const SizedBox(height: 20),
-          Text(
-            'No Tailscale? No problem. Select Next to connect directly to Jellyfin.',
-            style: caption,
-          ),
+          Text('Select Next to connect directly to Jellyfin.', style: caption),
         ],
         _AnimatedReveal(
           duration: duration,
           child: AnimatedSwitcher(
             duration: duration,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.topCenter,
+              children: [...previous, ?current],
+            ),
             transitionBuilder: (child, animation) => AnimatedBuilder(
               animation: animation,
               builder: (context, _) => ExcludeFocus(
@@ -561,6 +585,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
             key: const ValueKey('paste-server-url-button'),
+            style: _buttonMotion,
             onPressed: model.isBusy ? null : _pasteServer,
             icon: const Icon(PhosphorIconsRegular.clipboardText, size: 18),
             label: const Text('Paste server address'),
@@ -598,6 +623,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   Widget _tailscaleArea(BuildContext context, bool short) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final status = model.status;
     final url = status.authorizationUrl;
     final stacked = MediaQuery.sizeOf(context).width < 840;
@@ -629,29 +656,34 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           semanticsLabel: 'Tailscale sign-in QR code',
         ),
       );
-      final instructions = Column(
+      Widget instructions({required bool centered}) => Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: centered
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.start,
         children: [
-          Text(
-            'Scan to sign in',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
+          Text('Scan to sign in', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
-          const Text(
-            'Scan this code with another device and sign in to Tailscale.',
+          Text(
+            'Use another device to sign in to Tailscale.',
+            textAlign: centered ? TextAlign.center : TextAlign.start,
+            style: TextStyle(color: colors.onSurfaceVariant, height: 1.45),
           ),
           const SizedBox(height: 8),
           Semantics(
             liveRegion: true,
-            child: const Text(
+            child: Text(
               'Waiting for sign-in',
-              key: ValueKey('connection-status'),
+              key: const ValueKey('connection-status'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           TextButton(
             key: const ValueKey('retry-tailscale-login-button'),
+            style: _buttonMotion,
             onPressed: model.isBusy ? null : model.retryTailscale,
             child: const Text('Get a new code'),
           ),
@@ -663,13 +695,71 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                 children: [
                   qr,
                   const SizedBox(width: 24),
-                  Expanded(child: instructions),
+                  Expanded(child: instructions(centered: false)),
                 ],
               )
-            : Column(children: [qr, const SizedBox(height: 16), instructions]),
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(child: qr),
+                  const SizedBox(height: 12),
+                  instructions(centered: true),
+                ],
+              ),
       );
     }
-    final connected = model.tailscaleConnected;
+    if (model.tailscaleConnected) {
+      return Semantics(
+        liveRegion: true,
+        child: Container(
+          key: const ValueKey('tailscale-connected'),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: colors.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  PhosphorIconsRegular.check,
+                  color: colors.primary,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Connected to Tailscale',
+                      key: const ValueKey('connection-status'),
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Select Next to find your Jellyfin server.',
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final failed =
         status.phase == TailscaleConnectionPhase.failed ||
         status.phase == TailscaleConnectionPhase.disconnected;
@@ -681,12 +771,10 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (connected || failed)
+            if (failed)
               Icon(
-                connected
-                    ? PhosphorIconsRegular.checkCircle
-                    : PhosphorIconsRegular.warningCircle,
-                color: Theme.of(context).colorScheme.primary,
+                PhosphorIconsRegular.warningCircle,
+                color: colors.primary,
                 size: 28,
               )
             else
@@ -701,21 +789,17 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    connected
-                        ? 'Connected to Tailscale'
-                        : failed
+                    failed
                         ? 'Unable to connect'
                         : approval
                         ? 'Waiting for device approval'
                         : 'Preparing sign-in…',
                     key: const ValueKey('connection-status'),
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: theme.textTheme.titleSmall,
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    connected
-                        ? 'Select Next to continue.'
-                        : failed
+                    failed
                         ? 'Try again, or turn off Tailscale to connect directly.'
                         : approval
                         ? 'Ask your administrator to approve this device in Tailscale. You can continue once it is approved.'
@@ -724,6 +808,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                   if (failed)
                     TextButton(
                       key: const ValueKey('retry-tailscale-login-button'),
+                      style: _buttonMotion,
                       onPressed: model.isBusy ? null : model.retryTailscale,
                       child: const Text('Retry'),
                     ),
@@ -742,10 +827,12 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ? model.canContinueConnection
         : model.initialized && !model.isBusy;
     return Row(
+      key: const ValueKey('setup-footer'),
       children: [
         if (!connection) ...[
           TextButton(
             key: const ValueKey('onboarding-back-button'),
+            style: _buttonMotion,
             onPressed: model.isBusy ? null : _back,
             child: const Text('Back'),
           ),
@@ -753,6 +840,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ],
         Expanded(
           child: FilledButton(
+            style: _buttonMotion,
             key: ValueKey(switch (model.phase) {
               SetupPhase.connection => 'connection-next-button',
               SetupPhase.server => 'check-server-button',
@@ -794,6 +882,75 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       ],
     );
   }
+
+  Duration get _focusDuration => MediaQuery.disableAnimationsOf(context)
+      ? Duration.zero
+      : const Duration(milliseconds: 200);
+
+  ButtonStyle get _buttonMotion =>
+      ButtonStyle(animationDuration: _focusDuration);
+}
+
+// Animate only the incoming step. Keeping a single mounted form avoids sharing
+// text controllers, focus nodes or scroll positions with an outgoing copy.
+class _StepTransition extends StatefulWidget {
+  const _StepTransition({
+    required this.phase,
+    required this.duration,
+    required this.child,
+  });
+
+  final SetupPhase phase;
+  final Duration duration;
+  final Widget child;
+
+  @override
+  State<_StepTransition> createState() => _StepTransitionState();
+}
+
+class _StepTransitionState extends State<_StepTransition>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(vsync: this, value: 1);
+  late final _opacity = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  double _direction = 1;
+
+  @override
+  void didUpdateWidget(covariant _StepTransition oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.duration = widget.duration;
+    if (widget.duration == Duration.zero) {
+      _controller.value = 1;
+    } else if (oldWidget.phase != widget.phase) {
+      _direction = widget.phase.index > oldWidget.phase.index ? 1 : -1;
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _opacity.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    key: const ValueKey('setup-step-transition'),
+    opacity: _opacity,
+    alwaysIncludeSemantics: true,
+    child: AnimatedBuilder(
+      animation: _opacity,
+      child: widget.child,
+      builder: (context, child) => Transform.translate(
+        key: const ValueKey('setup-step-offset'),
+        offset: Offset(12 * _direction * (1 - _opacity.value), 0),
+        child: child,
+      ),
+    ),
+  );
 }
 
 class _AnimatedReveal extends StatelessWidget {
