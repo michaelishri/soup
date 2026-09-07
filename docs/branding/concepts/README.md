@@ -2,6 +2,9 @@
 
 SOUP-88: review-only exploration, generated on 2026-09-08.
 
+The follow-up [classic red-and-cream label variant](soup-can-play-v2-campbells.md)
+is tracked in SOUP-89 and preserves this original for comparison.
+
 ![Soup can with play cutout](soup-can-play-v1.png)
 
 The current cinema-ticket logo remains the selected production mark. This
@@ -26,4 +29,3 @@ Colour palette: mist blue #AFD9EA on opaque cool slate #202936, only these two c
 Composition: one centred can, upright with no tilt, seen mostly from the front with just enough view of the top ellipse to read as a cylinder. Symbol approximately 48 percent of canvas width and 60 percent of height with generous margins for an app badge. Solid slate extends edge to edge.
 Constraints: no ticket notches, no chain links, no interlocking elements, no S monogram, no lock or shield, no shark fin. No soup bowl, spoon, steam, pull-tab or food illustration. No label text, lettering, words, watermark, mockup or presentation board. No photorealistic metal, lighting, shadows, textures or 3D rendering. Output only the actual square logo concept. Keep the prominent negative-space play symbol as the visual connection to the approved mark.
 ```
-
