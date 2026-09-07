@@ -22,7 +22,7 @@ import 'package:soup_tailscale/soup_tailscale.dart';
 class SoupApp extends StatefulWidget {
   const SoupApp({
     required this.tailscaleClient,
-    this.jellyfinClientFactory = const SocksJellyfinClientFactory(),
+    this.jellyfinClientFactory = const DefaultJellyfinClientFactory(),
     this.sessionStore = const SecureSessionStore(),
     this.appearanceStore,
     this.database,

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 enum SetupPhase { tailscale, server, credentials, ready }
@@ -175,7 +176,10 @@ class ConnectivityViewModel extends ChangeNotifier {
     if (proxy == null) {
       throw const JellyfinApiException('Connect to Tailscale first.');
     }
-    _httpClient ??= jellyfinClientFactory.create(proxy);
+    _httpClient ??= jellyfinClientFactory.create(
+      mode: ConnectionMode.tailscale,
+      proxy: proxy,
+    );
     return JellyfinApi(_httpClient!, deviceId: await sessionStore.deviceId());
   }
 

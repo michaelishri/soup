@@ -14,6 +14,7 @@ import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/platform/authorization_url_launcher.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -567,7 +568,8 @@ class FakeJellyfinClientFactory implements JellyfinClientFactory {
   final http.Client client;
 
   @override
-  http.Client create(TailscaleProxy proxy) => client;
+  http.Client create({required ConnectionMode mode, TailscaleProxy? proxy}) =>
+      client;
 }
 
 class MemorySessionStore implements SessionStore {

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:socks5_proxy/socks_server.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 void main() {
@@ -32,8 +33,9 @@ void main() {
         (connection) => unawaited(connection.forward()),
       );
       final proxyPort = proxy.proxies.keys.single;
-      final client = const SocksJellyfinClientFactory().create(
-        TailscaleProxy(
+      final client = const DefaultJellyfinClientFactory().create(
+        mode: ConnectionMode.tailscale,
+        proxy: TailscaleProxy(
           host: InternetAddress.loopbackIPv4.address,
           port: proxyPort,
           password: 'loopback-secret',
@@ -88,13 +90,14 @@ void main() {
     );
     var sawTestCertificate = false;
     final client =
-        SocksJellyfinClientFactory(
+        DefaultJellyfinClientFactory(
           badCertificateCallback: (certificate) {
             sawTestCertificate = certificate.subject.contains('CN=localhost');
             return sawTestCertificate;
           },
         ).create(
-          TailscaleProxy(
+          mode: ConnectionMode.tailscale,
+          proxy: TailscaleProxy(
             host: InternetAddress.loopbackIPv4.address,
             port: proxy.proxies.keys.single,
             password: 'loopback-secret',
