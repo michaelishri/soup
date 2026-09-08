@@ -73,3 +73,6 @@ unverified on this host.
 
 The [onboarding screenshots](../screenshots/onboarding/README.md) can be regenerated
 using the headless Flutter test renderer without an emulator.
+
+The remaining phone/TV runtime checks are consolidated in
+[Android acceptance — SOUP-18](android-acceptance.md).
