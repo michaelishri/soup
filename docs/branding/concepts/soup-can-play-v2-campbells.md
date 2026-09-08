@@ -1,6 +1,7 @@
 # Soup can / play — classic label variant
 
-SOUP-89: review-only refinement of SOUP-88, generated on 2026-09-08.
+SOUP-89: selected production identity, generated on 2026-09-08 and adopted on
+2026-09-08.
 
 ![Soup can with classic red-and-cream label and play cutout](soup-can-play-v2-campbells.png)
 
@@ -9,9 +10,9 @@ upper label, warm ivory lower label, and simple tin rims. It retains the origina
 can study's rounded geometry, prominent slate play cutout, and cool slate canvas.
 The pale mist-blue lid and rims connect it to the existing Soup palette.
 
-The [original can study](README.md) remains available for comparison. This is a
-visual option for review; the production cinema-ticket logo and Android launcher
-remain unchanged.
+The [original can study](README.md) remains available for comparison. Following
+user approval, this version is now copied byte-for-byte into the production
+Flutter asset and Android launcher artwork.
 
 ## Generation provenance
 
@@ -21,11 +22,10 @@ is copied unchanged into this versioned 1254 × 1254 opaque RGB PNG. The request
 colours below describe the prompt; they are not a guarantee of exact colour
 values in the raster output.
 
-Validation: visually inspected the generated image for the two-part label, can
-rims, rounded side play cutout, and consistent composition. Verified the PNG
-format and dimensions, byte-for-byte equality with the generated output, and
-clean whitespace with `git diff --check`. No application code or production
-assets change, so application tests were not run for this concept-only update.
+Initial concept validation visually inspected the two-part label, can rims,
+rounded side play cutout, and consistent composition. Production adoption also
+checks that this selected master, the Flutter asset and Android launcher artwork
+remain byte-identical.
 
 ## Final generation prompt
 

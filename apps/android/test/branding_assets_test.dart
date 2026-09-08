@@ -31,7 +31,15 @@ void main() {
     final native = await File(
       'android/app/src/main/res/drawable-nodpi/soup_launcher_art.png',
     ).readAsBytes();
+    final selected = await File(
+      '../../docs/branding/concepts/soup-can-play-v2-campbells.png',
+    ).readAsBytes();
     expect(listEquals(bytes, native), isTrue);
+    expect(
+      listEquals(bytes, selected),
+      isTrue,
+      reason: 'Production artwork must match the SOUP-89 selection',
+    );
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     try {

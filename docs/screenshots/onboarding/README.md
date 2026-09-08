@@ -1,7 +1,8 @@
 # Onboarding review screenshots
 
 Current direction: a full-screen cool slate canvas, soft white typography and
-mist-blue controls, with a generated cinema-ticket/play app badge. TV uses a
+mist-blue controls, with the generated red-and-cream soup-can/play app badge
+selected in SOUP-89. TV uses a
 side-by-side heading and form; phone uses a stacked
 layout. There is no floating modal/card shell. These replace the earlier
 charcoal-and-orange, apricot-accent and teal/S-badge captures (SOUP-84/85/86).
@@ -11,8 +12,8 @@ instructions. Step content enters with a 250ms fade and a 12px directional slide
 header and navigation stay outside that animation. Only the current form is
 mounted, preserving focus and controller ownership. The custom toggle focus ring
 and button feedback use 200ms transitions. These custom animations are immediate
-when reduced motion is enabled. The existing cinema-ticket logo remains active;
-the separate soup-can study in SOUP-88 is not integrated.
+when reduced motion is enabled. The SOUP-89 soup-can identity replaces the
+cinema-ticket logo; layout and interaction behaviour are unchanged.
 
 These images render the production Flutter onboarding widgets using SDK Roboto
 fonts and fake connection/server responses. They are headless UI renders, not

@@ -7,10 +7,9 @@ is tracked in SOUP-89 and preserves this original for comparison.
 
 ![Soup can with play cutout](soup-can-play-v1.png)
 
-The current cinema-ticket logo remains the selected production mark. This
-alternative is not bundled in Flutter or referenced by the Android launcher.
-It keeps the approved rounded play cutout and mist-blue / cool-slate direction,
-with a simple can silhouette and elliptical rim in place of the ticket.
+This first can study remains available for comparison. Its red-and-cream SOUP-89
+refinement is the selected production mark; this mist-blue-only version is not
+bundled in Flutter or referenced by the Android launcher.
 
 Generated using the built-in image generation tool via the imagegen skill,
 with the current `apps/android/assets/branding/soup-icon.png` as a style reference.
