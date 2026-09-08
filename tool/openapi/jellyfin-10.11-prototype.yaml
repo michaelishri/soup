@@ -37,8 +37,102 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthenticationResult'
+  /QuickConnect/Enabled:
+    get:
+      tags: [QuickConnect]
+      operationId: getQuickConnectEnabled
+      responses:
+        '200':
+          description: Whether Quick Connect is enabled.
+          content:
+            application/json:
+              schema:
+                type: boolean
+  /QuickConnect/Initiate:
+    post:
+      tags: [QuickConnect]
+      operationId: initiateQuickConnect
+      responses:
+        '200':
+          description: A new Quick Connect request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickConnectResult'
+        '401':
+          description: Quick Connect is disabled.
+  /QuickConnect/Connect:
+    get:
+      tags: [QuickConnect]
+      operationId: getQuickConnectState
+      parameters:
+        - name: secret
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The current request state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuickConnectResult'
+        '401':
+          description: Quick Connect is disabled.
+        '404':
+          description: The request is unknown or expired.
+  /Users/AuthenticateWithQuickConnect:
+    post:
+      tags: [Authentication]
+      operationId: authenticateWithQuickConnect
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickConnectDto'
+      responses:
+        '200':
+          description: Successful user authentication.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationResult'
+        '400':
+          description: The request has not been authorized.
+        '401':
+          description: Quick Connect is disabled.
+        '404':
+          description: The request is unknown or expired.
 components:
   schemas:
+    QuickConnectDto:
+      type: object
+      required: [Secret]
+      properties:
+        Secret:
+          type: string
+    QuickConnectResult:
+      type: object
+      properties:
+        Authenticated:
+          type: boolean
+        Secret:
+          type: string
+        Code:
+          type: string
+        DateAdded:
+          type: string
+          format: date-time
+        DeviceId:
+          type: string
+        DeviceName:
+          type: string
+        AppName:
+          type: string
+        AppVersion:
+          type: string
     PublicSystemInfo:
       type: object
       properties:

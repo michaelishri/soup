@@ -1,5 +1,4 @@
 .gitignore
-.openapi-generator-ignore
 .travis.yml
 README.md
 analysis_options.yaml
@@ -7,11 +6,15 @@ doc/AuthenticateUserByName.md
 doc/AuthenticationApi.md
 doc/AuthenticationResult.md
 doc/PublicSystemInfo.md
+doc/QuickConnectApi.md
+doc/QuickConnectDto.md
+doc/QuickConnectResult.md
 doc/SystemApi.md
 doc/UserDto.md
 git_push.sh
 lib/api.dart
 lib/api/authentication_api.dart
+lib/api/quick_connect_api.dart
 lib/api/system_api.dart
 lib/api_client.dart
 lib/api_exception.dart
@@ -24,11 +27,7 @@ lib/auth/oauth.dart
 lib/model/authenticate_user_by_name.dart
 lib/model/authentication_result.dart
 lib/model/public_system_info.dart
+lib/model/quick_connect_dto.dart
+lib/model/quick_connect_result.dart
 lib/model/user_dto.dart
 pubspec.yaml
-test/authenticate_user_by_name_test.dart
-test/authentication_api_test.dart
-test/authentication_result_test.dart
-test/public_system_info_test.dart
-test/system_api_test.dart
-test/user_dto_test.dart

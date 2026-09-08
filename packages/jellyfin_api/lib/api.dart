@@ -29,11 +29,14 @@ part 'auth/http_basic_auth.dart';
 part 'auth/http_bearer_auth.dart';
 
 part 'api/authentication_api.dart';
+part 'api/quick_connect_api.dart';
 part 'api/system_api.dart';
 
 part 'model/authenticate_user_by_name.dart';
 part 'model/authentication_result.dart';
 part 'model/public_system_info.dart';
+part 'model/quick_connect_dto.dart';
+part 'model/quick_connect_result.dart';
 part 'model/user_dto.dart';
 
 /// An [ApiClient] instance that uses the default values obtained from

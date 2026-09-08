@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:socks5_proxy/socks_server.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -15,7 +16,11 @@ void main() {
       final targetSubscription = target.listen((request) async {
         request.response
           ..statusCode = HttpStatus.ok
-          ..write('through-socks');
+          ..write(
+            request.uri.path == '/base/QuickConnect/Enabled'
+                ? 'true'
+                : 'through-socks',
+          );
         await request.response.close();
       });
 
@@ -49,6 +54,13 @@ void main() {
         expect(response.statusCode, HttpStatus.ok);
         expect(response.body, 'through-socks');
         expect(authenticated, isTrue);
+        final api = JellyfinApi(client, deviceId: 'socks-device');
+        expect(
+          await api.isQuickConnectEnabled(
+            Uri.parse('http://${target.address.address}:${target.port}/base/'),
+          ),
+          isTrue,
+        );
       } finally {
         client.close();
         await connectionSubscription.cancel();

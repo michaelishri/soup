@@ -51,6 +51,9 @@ class FakeJellyfinClientFactory implements JellyfinClientFactory {
   }
 
   static http.Response defaultResponse(http.Request request) {
+    if (request.url.path.endsWith('/QuickConnect/Enabled')) {
+      return http.Response('false', 200);
+    }
     if (request.url.path.endsWith('/System/Info/Public')) {
       return http.Response(
         '{"ServerName":"Living Room","Version":"10.11.2","Id":"server-1"}',

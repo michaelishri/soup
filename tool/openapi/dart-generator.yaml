@@ -1,0 +1,5 @@
+pubName: jellyfin_api
+pubVersion: 0.1.0
+pubDescription: Generated Jellyfin 10.11 API subset for Soup.
+pubHomepage: https://github.com/michaelishri/soup
+serializationLibrary: native_serialization

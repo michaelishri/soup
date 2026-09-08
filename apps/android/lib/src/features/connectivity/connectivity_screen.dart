@@ -23,7 +23,8 @@ class ConnectivityScreen extends StatefulWidget {
   State<ConnectivityScreen> createState() => _ConnectivityScreenState();
 }
 
-class _ConnectivityScreenState extends State<ConnectivityScreen> {
+class _ConnectivityScreenState extends State<ConnectivityScreen>
+    with WidgetsBindingObserver {
   final _server = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
@@ -51,7 +52,26 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     _wasInitialized = model.initialized;
     _server.text = model.serverUrl?.toString() ?? '';
     model.addListener(_changed);
+    WidgetsBinding.instance.addObserver(this);
+    _usernameFocus.addListener(_credentialFocusChanged);
+    _passwordFocus.addListener(_credentialFocusChanged);
     unawaited(_initializeInput());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    model.setForeground(state == AppLifecycleState.resumed);
+  }
+
+  void _credentialFocusChanged() {
+    if (!_tv && (_usernameFocus.hasFocus || _passwordFocus.hasFocus)) {
+      model.pauseQuickConnect();
+    }
+  }
+
+  void _resumeQuickConnect({bool newCode = false}) {
+    if (!_tv) FocusManager.instance.primaryFocus?.unfocus();
+    unawaited(model.startQuickConnect(newCode: newCode));
   }
 
   Future<void> _initializeInput() async {
@@ -120,6 +140,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         case SetupPhase.server:
           _serverFocus.requestFocus();
         case SetupPhase.credentials:
+          if (!_tv && !retry) return;
           (retry && _username.text.trim().isNotEmpty
                   ? _passwordFocus
                   : _usernameFocus)
@@ -131,7 +152,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   void _back() {
-    if (model.isBusy) return;
+    if (model.isBusy && model.phase != SetupPhase.credentials) return;
     FocusManager.instance.primaryFocus?.unfocus();
     _password.clear();
     model.back();
@@ -193,6 +214,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }) async {
     if (_editingTv || model.isBusy) return;
     final phase = model.phase;
+    if (phase == SetupPhase.credentials) model.pauseQuickConnect();
     _editingTv = true;
     final generation = _editGeneration;
     TvTextEdit? result;
@@ -237,6 +259,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   @override
   void dispose() {
     if (_editingTv) unawaited(widget.tvTextInput.dismiss());
+    WidgetsBinding.instance.removeObserver(this);
     model.removeListener(_changed);
     _server.dispose();
     _username.dispose();
@@ -312,7 +335,14 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                                   child: _StepTransition(
                                     phase: model.phase,
                                     duration: duration,
-                                    child: wide
+                                    child: model.phase == SetupPhase.credentials
+                                        ? _signInForm(
+                                            context,
+                                            wide: wide,
+                                            short: short,
+                                            duration: duration,
+                                          )
+                                        : wide
                                         ? Row(
                                             key: const ValueKey(
                                               'setup-wide-layout',
@@ -359,7 +389,10 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
                                     alignment: Alignment.centerRight,
                                     child: SizedBox(
                                       width: wide
-                                          ? (bounds.maxWidth - 56) * 0.6
+                                          ? model.phase ==
+                                                    SetupPhase.credentials
+                                                ? (bounds.maxWidth - 24) * 0.5
+                                                : (bounds.maxWidth - 56) * 0.6
                                           : bounds.maxWidth,
                                       child: _footer(),
                                     ),
@@ -718,8 +751,6 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ),
       ],
       SetupPhase.credentials => [
-        Text(model.serverUrl?.toString() ?? '', style: caption),
-        const SizedBox(height: 24),
         if (_tv)
           TvTextField(
             key: const ValueKey('username-field'),
@@ -739,6 +770,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             key: const ValueKey('username-field'),
             controller: _username,
             focusNode: _usernameFocus,
+            onTap: model.pauseQuickConnect,
+            onChanged: (_) => model.pauseQuickConnect(),
             enabled: !model.isBusy,
             autocorrect: false,
             textInputAction: TextInputAction.next,
@@ -766,6 +799,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
             key: const ValueKey('password-field'),
             controller: _password,
             focusNode: _passwordFocus,
+            onTap: model.pauseQuickConnect,
+            onChanged: (_) => model.pauseQuickConnect(),
             enabled: !model.isBusy,
             obscureText: true,
             enableSuggestions: false,
@@ -777,6 +812,180 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       ],
       SetupPhase.ready => [Text('Your library is ready.', style: caption)],
     };
+  }
+
+  Widget _signInForm(
+    BuildContext context, {
+    required bool wide,
+    required bool short,
+    required Duration duration,
+  }) {
+    final theme = Theme.of(context);
+    Widget panel(String key, List<Widget> children) => Container(
+      key: ValueKey(key),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+    final quick = panel('quick-connect-panel', _quickConnectContent(context));
+    final password = panel('password-panel', [
+      Text('Username and password', style: theme.textTheme.titleMedium),
+      const SizedBox(height: 16),
+      ..._fields(context, short, duration),
+      if (model.error case final error?) ...[
+        const SizedBox(height: 12),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            error,
+            key: const ValueKey('connection-error'),
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      ],
+    ]);
+    return SingleChildScrollView(
+      key: const ValueKey('setup-scroll'),
+      controller: _scroll,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
+            style: theme.textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            model.serverUrl?.toString() ?? '',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (wide)
+            Row(
+              key: const ValueKey('sign-in-split-layout'),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: quick),
+                const SizedBox(width: 24),
+                Expanded(child: password),
+              ],
+            )
+          else ...[
+            quick,
+            const SizedBox(height: 16),
+            password,
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _quickConnectContent(BuildContext context) {
+    final theme = Theme.of(context);
+    final phase = model.quickConnectPhase;
+    final code = model.quickConnectCode;
+    final waiting = phase == QuickConnectPhase.waiting;
+    final paused = phase == QuickConnectPhase.paused;
+    final checking =
+        phase == QuickConnectPhase.checking || phase == QuickConnectPhase.idle;
+    final completing = phase == QuickConnectPhase.completing;
+    final unavailable = phase == QuickConnectPhase.unavailable;
+    final expired = phase == QuickConnectPhase.expired;
+    final message = switch (phase) {
+      QuickConnectPhase.idle ||
+      QuickConnectPhase.checking => 'Preparing Quick Connect…',
+      QuickConnectPhase.waiting => 'Waiting for approval',
+      QuickConnectPhase.paused =>
+        'Paused while you use another sign-in method.',
+      QuickConnectPhase.expired =>
+        'This code has expired. Get a new code to continue.',
+      QuickConnectPhase.unavailable =>
+        'Quick Connect is disabled on this server. You can sign in with your username and password.',
+      QuickConnectPhase.error =>
+        model.quickConnectError ?? 'Unable to use Quick Connect. Please retry.',
+      QuickConnectPhase.completing => 'Approved. Signing in…',
+    };
+    return [
+      Text('Quick Connect', style: theme.textTheme.titleMedium),
+      const SizedBox(height: 12),
+      if (!unavailable) ...[
+        Text(
+          'On a device already signed in to Jellyfin, open Settings → Quick Connect and enter this code.',
+          style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
+        ),
+        if (code != null) ...[
+          const SizedBox(height: 8),
+          Semantics(
+            label: 'Quick Connect code: ${code.split('').join(' ')}',
+            child: ExcludeSemantics(
+              child: Text(
+                code,
+                key: const ValueKey('quick-connect-code'),
+                style: theme.textTheme.displaySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontSize: 40,
+                  letterSpacing: 6,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+      ],
+      Semantics(
+        liveRegion: true,
+        child: Text(
+          message,
+          key: const ValueKey('quick-connect-status'),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          key: const ValueKey('quick-connect-action'),
+          style: _buttonMotion,
+          // Keep the selected action focused while its label shows progress.
+          // Repeated presses are ignored until the current request completes.
+          onPressed: model.isBusy && !completing
+              ? null
+              : () {
+                  if (checking || completing) return;
+                  _resumeQuickConnect(
+                    newCode: waiting || expired || unavailable,
+                  );
+                },
+          child: Text(
+            waiting || expired
+                ? 'Get a new code'
+                : paused
+                ? 'Resume Quick Connect'
+                : unavailable
+                ? 'Check again'
+                : checking
+                ? 'Preparing…'
+                : completing
+                ? 'Signing in…'
+                : 'Retry',
+          ),
+        ),
+      ),
+    ];
   }
 
   Widget _tailscaleArea(BuildContext context, bool short) {
@@ -990,7 +1199,9 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           TextButton(
             key: const ValueKey('onboarding-back-button'),
             style: _buttonMotion,
-            onPressed: model.isBusy ? null : _back,
+            onPressed: model.isBusy && model.phase != SetupPhase.credentials
+                ? null
+                : _back,
             child: const Text('Back'),
           ),
           const SizedBox(width: 16),

@@ -17,6 +17,7 @@ import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 import 'support/connectivity_fakes.dart';
+import 'support/quick_connect_fixture.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -690,68 +691,84 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  for (final mode in ConnectionMode.values) {
-    testWidgets('complete $mode onboarding reaches appearance and library', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(1280, 720);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      final client = FakeTailscaleClient()..immediateConnect = true;
-      final store = MemorySessionStore();
-      final preferences = MemoryConnectionPreferencesStore();
-      final factory = FakeJellyfinClientFactory();
-      final database = SoupDatabase.forTesting(
-        DatabaseConnection(
-          NativeDatabase.memory(),
-          closeStreamsSynchronously: true,
-        ),
+  for (final quickConnect in [false, true]) {
+    for (final mode in ConnectionMode.values) {
+      testWidgets(
+        'complete $mode onboarding with Quick Connect=$quickConnect reaches appearance and library',
+        (tester) async {
+          tester.view.physicalSize = const Size(1280, 720);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          final client = FakeTailscaleClient()..immediateConnect = true;
+          final store = MemorySessionStore();
+          final preferences = MemoryConnectionPreferencesStore();
+          final quickFixture = QuickConnectFixture();
+          final factory = quickConnect
+              ? quickFixture.factory
+              : FakeJellyfinClientFactory();
+          final database = SoupDatabase.forTesting(
+            DatabaseConnection(
+              NativeDatabase.memory(),
+              closeStreamsSynchronously: true,
+            ),
+          );
+          addTearDown(client.dispose);
+          addTearDown(database.close);
+          await tester.pumpWidget(
+            SoupApp(
+              tailscaleClient: client,
+              jellyfinClientFactory: factory,
+              sessionStore: store,
+              connectionStore: preferences,
+              appearanceStore: MemoryAppearanceStore(),
+              database: database,
+            ),
+          );
+          await tester.pumpAndSettle();
+          if (mode == ConnectionMode.tailscale) {
+            await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
+            await tester.pumpAndSettle();
+          }
+          await nextToServer(tester);
+          await tester.enterText(
+            find.byKey(const ValueKey('server-url-field')),
+            'http://jellyfin:8096',
+          );
+          await tester.tap(find.byKey(const ValueKey('check-server-button')));
+          await tester.pumpAndSettle();
+          if (quickConnect) {
+            expect(tester.testTextInput.isVisible, isFalse);
+            quickFixture.approved = true;
+            await tester.pump(const Duration(seconds: 5));
+            await tester.pumpAndSettle();
+          } else {
+            await tester.enterText(
+              find.byKey(const ValueKey('username-field')),
+              'Michael',
+            );
+            await tester.enterText(
+              find.byKey(const ValueKey('password-field')),
+              'not-stored',
+            );
+            await tester.tap(find.byKey(const ValueKey('sign-in-button')));
+            await tester.pumpAndSettle();
+          }
+          expect(find.text('Make Soup yours'), findsOneWidget);
+          await tester.tap(find.byKey(const ValueKey('appearance-continue')));
+          await tester.pumpAndSettle();
+          expect(find.text('No playlists yet'), findsOneWidget);
+          expect(preferences.mode, mode);
+          expect(
+            store.session?.accessToken,
+            quickConnect ? 'test-token' : 'token',
+          );
+          expect(factory.modes, [mode]);
+          if (mode == ConnectionMode.direct) expect(client.restores, 0);
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpAndSettle();
+        },
       );
-      addTearDown(client.dispose);
-      addTearDown(database.close);
-      await tester.pumpWidget(
-        SoupApp(
-          tailscaleClient: client,
-          jellyfinClientFactory: factory,
-          sessionStore: store,
-          connectionStore: preferences,
-          appearanceStore: MemoryAppearanceStore(),
-          database: database,
-        ),
-      );
-      await tester.pumpAndSettle();
-      if (mode == ConnectionMode.tailscale) {
-        await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
-        await tester.pumpAndSettle();
-      }
-      await nextToServer(tester);
-      await tester.enterText(
-        find.byKey(const ValueKey('server-url-field')),
-        'http://jellyfin:8096',
-      );
-      await tester.tap(find.byKey(const ValueKey('check-server-button')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('username-field')),
-        'Michael',
-      );
-      await tester.enterText(
-        find.byKey(const ValueKey('password-field')),
-        'not-stored',
-      );
-      await tester.tap(find.byKey(const ValueKey('sign-in-button')));
-      await tester.pumpAndSettle();
-      expect(find.text('Make Soup yours'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('appearance-continue')));
-      await tester.pumpAndSettle();
-      expect(find.text('No playlists yet'), findsOneWidget);
-      expect(preferences.mode, mode);
-      expect(store.session?.accessToken, 'token');
-      expect(factory.modes, [mode]);
-      if (mode == ConnectionMode.direct) expect(client.restores, 0);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
-    });
+    }
   }
 
   testWidgets('D-pad can toggle Tailscale and reach Next after cancellation', (

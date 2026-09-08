@@ -298,12 +298,25 @@ abstract interface class JellyfinDetailsSource {
 }
 
 class JellyfinApiException implements Exception {
-  const JellyfinApiException(this.message);
+  const JellyfinApiException(this.message, {this.statusCode});
 
   final String message;
+  final int? statusCode;
 
   @override
   String toString() => message;
+}
+
+/// A short-lived request. Its secret must remain in memory and out of logs.
+class JellyfinQuickConnectRequest {
+  const JellyfinQuickConnectRequest({
+    required this.code,
+    required this.secret,
+    required this.authenticated,
+  });
+  final String code;
+  final String secret;
+  final bool authenticated;
 }
 
 class JellyfinApi
@@ -386,22 +399,127 @@ class JellyfinApi
                 ),
               )
               .timeout(const Duration(seconds: 15));
-      final token = result?.accessToken;
-      final user = result?.user;
-      if (result == null || token == null || token.isEmpty || user == null) {
-        throw const JellyfinApiException(
-          'Jellyfin returned an incomplete sign-in response.',
-        );
-      }
-      return JellyfinSession(
-        serverUrl: serverUrl,
-        serverId: result.serverId ?? '',
-        userId: user.id ?? '',
-        userName: user.name ?? username,
-        accessToken: token,
-      );
+      return _sessionFromResult(result, serverUrl, fallbackName: username);
     } on generated.ApiException catch (error) {
       throw _mapGeneratedError(error, operation: 'sign in');
+    }
+  }
+
+  Future<bool> isQuickConnectEnabled(
+    Uri serverUrl,
+  ) => _quickConnectCall(() async {
+    final response = await generated.QuickConnectApi(
+      _generatedClient(serverUrl),
+    ).getQuickConnectEnabledWithHttpInfo();
+    if (response.statusCode >= 400) {
+      throw generated.ApiException(response.statusCode, '');
+    }
+    // The generator coerces arbitrary JSON to false for boolean responses.
+    // Validate here so malformed responses are reported as errors, not disabled.
+    final enabled = jsonDecode(response.body);
+    if (enabled is! bool) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an invalid Quick Connect status.',
+      );
+    }
+    return enabled;
+  });
+
+  Future<JellyfinQuickConnectRequest> initiateQuickConnect(Uri serverUrl) =>
+      _quickConnectCall(
+        () async => _quickConnectRequest(
+          await generated.QuickConnectApi(
+            _generatedClient(serverUrl),
+          ).initiateQuickConnect(),
+        ),
+      );
+
+  Future<JellyfinQuickConnectRequest> getQuickConnectState({
+    required Uri serverUrl,
+    required String secret,
+  }) => _quickConnectCall(
+    () async => _quickConnectRequest(
+      await generated.QuickConnectApi(
+        _generatedClient(serverUrl),
+      ).getQuickConnectState(secret),
+    ),
+  );
+
+  Future<JellyfinSession> authenticateWithQuickConnect({
+    required Uri serverUrl,
+    required String secret,
+  }) => _quickConnectCall(
+    () async => _sessionFromResult(
+      await generated.AuthenticationApi(
+        _generatedClient(serverUrl),
+      ).authenticateWithQuickConnect(generated.QuickConnectDto(secret: secret)),
+      serverUrl,
+    ),
+  );
+
+  static JellyfinQuickConnectRequest _quickConnectRequest(
+    generated.QuickConnectResult? result,
+  ) {
+    if (result == null ||
+        result.code == null ||
+        result.code!.trim().isEmpty ||
+        result.secret == null ||
+        result.secret!.trim().isEmpty ||
+        result.authenticated == null) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an incomplete Quick Connect response.',
+      );
+    }
+    return JellyfinQuickConnectRequest(
+      code: result.code!,
+      secret: result.secret!,
+      authenticated: result.authenticated!,
+    );
+  }
+
+  static JellyfinSession _sessionFromResult(
+    generated.AuthenticationResult? result,
+    Uri serverUrl, {
+    String fallbackName = 'Jellyfin user',
+  }) {
+    final token = result?.accessToken;
+    final user = result?.user;
+    if (result == null ||
+        token == null ||
+        token.isEmpty ||
+        user == null ||
+        user.id == null ||
+        user.id!.isEmpty) {
+      throw const JellyfinApiException(
+        'Jellyfin returned an incomplete sign-in response.',
+      );
+    }
+    return JellyfinSession(
+      serverUrl: serverUrl,
+      serverId: result.serverId ?? '',
+      userId: user.id!,
+      userName: user.name ?? fallbackName,
+      accessToken: token,
+    );
+  }
+
+  // Never surface raw response bodies or transport exceptions: they can contain
+  // the polling URI (including the secret), or an authentication token.
+  static Future<T> _quickConnectCall<T>(Future<T> Function() request) async {
+    try {
+      return await request().timeout(const Duration(seconds: 15));
+    } on generated.ApiException catch (error) {
+      throw JellyfinApiException(switch (error.code) {
+        401 => 'Quick Connect is disabled on this server.',
+        404 => 'This Quick Connect code has expired.',
+        _ => 'Unable to use Quick Connect. Please retry.',
+      }, statusCode: error.code);
+    } on JellyfinApiException {
+      rethrow;
+    } on Object {
+      throw const JellyfinApiException(
+        'Unable to reach Quick Connect. Please retry.',
+      );
     }
   }
 
@@ -1002,6 +1120,9 @@ class JellyfinApi
     final reason = error.code == 401
         ? 'Check your username and password.'
         : 'Jellyfin returned HTTP ${error.code}.';
-    return JellyfinApiException('Could not $operation. $reason');
+    return JellyfinApiException(
+      'Could not $operation. $reason',
+      statusCode: error.code,
+    );
   }
 }

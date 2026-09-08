@@ -4,7 +4,8 @@
 
 name: 'jellyfin_api'
 version: '0.1.0'
-description: 'Generated Jellyfin 10.11 API subset for the Soup prototype.'
+description: 'Generated Jellyfin 10.11 API subset for Soup.'
+homepage: 'https://github.com/michaelishri/soup'
 environment:
   sdk: '>=2.12.0 <4.0.0'
 dependencies:

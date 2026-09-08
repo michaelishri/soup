@@ -10,6 +10,17 @@ import 'package:soup_tailscale/soup_tailscale.dart';
 
 enum SetupPhase { connection, server, credentials, ready }
 
+enum QuickConnectPhase {
+  idle,
+  checking,
+  waiting,
+  paused,
+  expired,
+  unavailable,
+  error,
+  completing,
+}
+
 class ConnectivityViewModel extends ChangeNotifier {
   ConnectivityViewModel(
     this._tailscaleClient, {
@@ -26,6 +37,18 @@ class ConnectivityViewModel extends ChangeNotifier {
   http.Client? _httpClient;
   Future<void> _connectionTask = Future.value();
   Future<void> _disconnectTask = Future.value();
+  Future<void> _quickConnectTask = Future.value();
+  Future<void> _sessionTask = Future.value();
+  Timer? _quickConnectTimer;
+  int _quickConnectGeneration = 0;
+  JellyfinQuickConnectRequest? _quickConnectRequest;
+  QuickConnectPhase _quickConnectPhase = QuickConnectPhase.idle;
+  QuickConnectPhase get quickConnectPhase => _quickConnectPhase;
+  String? get quickConnectCode => _quickConnectRequest?.code;
+  String? _quickConnectError;
+  String? get quickConnectError => _quickConnectError;
+  bool _foreground = true;
+  bool _resumeOnForeground = false;
   int _connectionGeneration = 0;
   int _formGeneration = 0;
   bool _acceptStatuses = false;
@@ -96,6 +119,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     if (!initialized || isBusy || enabled == tailscaleEnabled) {
       return Future.value();
     }
+    _stopQuickConnect(clear: true);
     _mode = enabled ? ConnectionMode.tailscale : ConnectionMode.direct;
     _session = null;
     _serverInfo = null;
@@ -189,7 +213,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     _notify();
     try {
       // Clear an old account before persisting a changed transport.
-      if (_session == null) await sessionStore.clear();
+      if (_session == null) await _mutateSession(sessionStore.clear);
       await connectionStore.write(mode);
       if (!_disposed && (!tailscaleEnabled || tailscaleConnected)) {
         _phase = _session == null ? SetupPhase.server : SetupPhase.ready;
@@ -203,8 +227,10 @@ class ConnectivityViewModel extends ChangeNotifier {
   }
 
   void back() {
-    if (isBusy) return;
+    if (isBusy && _phase != SetupPhase.credentials) return;
+    _stopQuickConnect(clear: true);
     _formGeneration++;
+    _isBusy = false;
     _error = null;
     if (_phase == SetupPhase.credentials) {
       _serverInfo = null;
@@ -235,8 +261,21 @@ class ConnectivityViewModel extends ChangeNotifier {
         _error = _friendlyError(error);
       }
     } finally {
-      _isBusy = false;
-      _notify();
+      if (!_disposed && generation == _formGeneration) {
+        _isBusy = false;
+        _notify();
+      }
+    }
+    if (!_disposed &&
+        generation == _formGeneration &&
+        _phase == SetupPhase.credentials) {
+      if (_foreground) {
+        unawaited(startQuickConnect());
+      } else {
+        _resumeOnForeground = true;
+        _quickConnectPhase = QuickConnectPhase.paused;
+        _notify();
+      }
     }
   }
 
@@ -247,39 +286,42 @@ class ConnectivityViewModel extends ChangeNotifier {
     if (isBusy || _serverUrl == null || _phase != SetupPhase.credentials) {
       return;
     }
+    pauseQuickConnect();
     if (username.trim().isEmpty || password.isEmpty) {
       _error = 'Enter your Jellyfin username and password.';
       _notify();
       return;
     }
     final generation = ++_formGeneration;
+    final url = _serverUrl!;
     _error = null;
     _isBusy = true;
     _notify();
     try {
       final api = await authenticatedApi();
+      if (!_formCurrent(generation, url)) return;
       final session = await api.authenticate(
-        serverUrl: _serverUrl!,
+        serverUrl: url,
         username: username.trim(),
         password: password,
       );
-      if (_disposed || generation != _formGeneration) return;
-      await sessionStore.write(session);
-      if (_disposed || generation != _formGeneration) return;
-      _session = session;
-      _phase = SetupPhase.ready;
+      await _commitSession(session, generation, url);
     } on Object catch (error) {
       if (!_disposed && generation == _formGeneration) {
         _error = _friendlyError(error);
       }
     } finally {
-      _isBusy = false;
-      _notify();
+      if (!_disposed && generation == _formGeneration) {
+        _isBusy = false;
+        _notify();
+      }
     }
   }
 
   Future<void> signOut() async {
-    await sessionStore.clear();
+    _stopQuickConnect(clear: true);
+    _formGeneration++;
+    await _mutateSession(sessionStore.clear);
     _session = null;
     _serverInfo = null;
     _phase = tailscaleEnabled && !tailscaleConnected
@@ -288,6 +330,196 @@ class ConnectivityViewModel extends ChangeNotifier {
     _error = null;
     _notify();
   }
+
+  /// Editing, rather than merely focusing a TV field, claims password sign-in.
+  void pauseQuickConnect() {
+    if (_phase != SetupPhase.credentials) return;
+    _resumeOnForeground = false;
+    _stopQuickConnect();
+    if (_quickConnectPhase != QuickConnectPhase.unavailable) {
+      _quickConnectPhase = QuickConnectPhase.paused;
+    }
+    _notify();
+  }
+
+  void setForeground(bool foreground) {
+    if (_foreground == foreground) return;
+    _foreground = foreground;
+    if (!foreground) {
+      _resumeOnForeground =
+          _phase == SetupPhase.credentials &&
+          {
+            QuickConnectPhase.checking,
+            QuickConnectPhase.waiting,
+            QuickConnectPhase.completing,
+          }.contains(_quickConnectPhase);
+      if (_resumeOnForeground) {
+        _stopQuickConnect();
+        _quickConnectPhase = QuickConnectPhase.paused;
+        _notify();
+      }
+    } else if (_resumeOnForeground) {
+      _resumeOnForeground = false;
+      unawaited(startQuickConnect());
+    }
+  }
+
+  /// Resume checks the existing request first. New-code explicitly replaces it.
+  Future<void> startQuickConnect({bool newCode = false}) {
+    if (_disposed ||
+        !_foreground ||
+        isBusy ||
+        _phase != SetupPhase.credentials ||
+        _serverUrl == null) {
+      return Future.value();
+    }
+    _stopQuickConnect();
+    if (newCode) _quickConnectRequest = null;
+    _resumeOnForeground = false;
+    _quickConnectError = null;
+    _quickConnectPhase = QuickConnectPhase.checking;
+    final generation = _quickConnectGeneration;
+    final url = _serverUrl!;
+    _notify();
+    return _queueQuickConnect(generation, url, resume: true);
+  }
+
+  bool _quickConnectCurrent(int generation, Uri url) =>
+      !_disposed &&
+      _foreground &&
+      _phase == SetupPhase.credentials &&
+      _serverUrl == url &&
+      generation == _quickConnectGeneration;
+
+  Future<void> _queueQuickConnect(
+    int generation,
+    Uri url, {
+    bool resume = false,
+  }) {
+    // A paused/replaced HTTP request may still be unwinding. Do not overlap it
+    // with a new poll, even when Resume is selected repeatedly.
+    _quickConnectTask = _quickConnectTask.then((_) async {
+      if (!_quickConnectCurrent(generation, url)) return;
+      try {
+        final api = await authenticatedApi();
+        if (!_quickConnectCurrent(generation, url)) return;
+        var request = _quickConnectRequest;
+        if (request == null) {
+          final enabled = await api.isQuickConnectEnabled(url);
+          if (!_quickConnectCurrent(generation, url)) return;
+          if (!enabled) {
+            _quickConnectPhase = QuickConnectPhase.unavailable;
+            return;
+          }
+          request = await api.initiateQuickConnect(url);
+        } else {
+          try {
+            request = await api.getQuickConnectState(
+              serverUrl: url,
+              secret: request.secret,
+            );
+          } on JellyfinApiException catch (error) {
+            if (!_quickConnectCurrent(generation, url)) return;
+            if (!resume || error.statusCode != 404) rethrow;
+            // Explicit resume transparently replaces an expired request.
+            _quickConnectRequest = null;
+            request = await api.initiateQuickConnect(url);
+          }
+        }
+        if (!_quickConnectCurrent(generation, url)) return;
+        _quickConnectRequest = request;
+        if (request.authenticated) {
+          _quickConnectPhase = QuickConnectPhase.completing;
+          _error = null;
+          _isBusy = true;
+          final authGeneration = ++_formGeneration;
+          _notify();
+          try {
+            final session = await api.authenticateWithQuickConnect(
+              serverUrl: url,
+              secret: request.secret,
+            );
+            if (!_quickConnectCurrent(generation, url)) return;
+            await _commitSession(session, authGeneration, url);
+          } finally {
+            if (!_disposed && authGeneration == _formGeneration) {
+              _isBusy = false;
+            }
+          }
+        } else {
+          _quickConnectPhase = QuickConnectPhase.waiting;
+          _quickConnectTimer = Timer(const Duration(seconds: 5), () {
+            unawaited(_queueQuickConnect(generation, url));
+          });
+        }
+      } on Object catch (error) {
+        if (!_quickConnectCurrent(generation, url)) return;
+        final status = error is JellyfinApiException ? error.statusCode : null;
+        _quickConnectPhase = switch (status) {
+          401 => QuickConnectPhase.unavailable,
+          404 => QuickConnectPhase.expired,
+          _ => QuickConnectPhase.error,
+        };
+        if (status == 401 || status == 404) _quickConnectRequest = null;
+        _quickConnectError = error is JellyfinApiException
+            ? error.message
+            : 'Unable to finish Quick Connect. Please retry.';
+      } finally {
+        if (!_disposed) _notify();
+      }
+    });
+    return _quickConnectTask;
+  }
+
+  void _stopQuickConnect({bool clear = false}) {
+    _quickConnectTimer?.cancel();
+    _quickConnectTimer = null;
+    _quickConnectGeneration++;
+    if (_quickConnectPhase == QuickConnectPhase.completing) {
+      _formGeneration++;
+      _isBusy = false;
+    }
+    if (clear) {
+      _quickConnectRequest = null;
+      _quickConnectError = null;
+      _quickConnectPhase = QuickConnectPhase.idle;
+      _resumeOnForeground = false;
+    }
+  }
+
+  bool _formCurrent(int generation, Uri url) =>
+      !_disposed &&
+      generation == _formGeneration &&
+      _phase == SetupPhase.credentials &&
+      _serverUrl == url;
+
+  Future<void> _mutateSession(Future<void> Function() action) {
+    final task = _sessionTask.then((_) => action());
+    _sessionTask = task.catchError((Object _) {});
+    return task;
+  }
+
+  Future<void> _commitSession(JellyfinSession value, int generation, Uri url) =>
+      _mutateSession(() async {
+        if (!_formCurrent(generation, url)) return;
+        try {
+          await sessionStore.write(value);
+        } on Object {
+          // A storage write can fail after partially persisting a session.
+          await sessionStore.clear();
+          rethrow;
+        }
+        if (!_formCurrent(generation, url)) {
+          // Complete cleanup before any subsequent login is allowed to write.
+          await sessionStore.clear();
+          return;
+        }
+        _session = value;
+        _phase = SetupPhase.ready;
+        _stopQuickConnect(clear: true);
+        _isBusy = false;
+        _notify();
+      });
 
   Future<JellyfinApi> authenticatedApi() async {
     if (tailscaleEnabled && !tailscaleConnected) {
@@ -308,6 +540,13 @@ class ConnectivityViewModel extends ChangeNotifier {
         oldProxy?.port != proxy?.port ||
         oldProxy?.password != proxy?.password) {
       _closeTransport();
+      if (_phase == SetupPhase.credentials) {
+        _stopQuickConnect(clear: true);
+        _formGeneration++;
+        _isBusy = false;
+        _phase = SetupPhase.server;
+        _serverInfo = null;
+      }
     }
     _status = value;
     if (value.phase == TailscaleConnectionPhase.failed) _error = value.detail;
@@ -341,6 +580,8 @@ class ConnectivityViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _formGeneration++;
+    _stopQuickConnect(clear: true);
     _acceptStatuses = false;
     _connectionGeneration++;
     _statusSubscription?.cancel();

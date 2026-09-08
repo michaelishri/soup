@@ -235,6 +235,10 @@ class ApiClient {
           return AuthenticationResult.fromJson(value);
         case 'PublicSystemInfo':
           return PublicSystemInfo.fromJson(value);
+        case 'QuickConnectDto':
+          return QuickConnectDto.fromJson(value);
+        case 'QuickConnectResult':
+          return QuickConnectResult.fromJson(value);
         case 'UserDto':
           return UserDto.fromJson(value);
         default:

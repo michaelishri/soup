@@ -28,6 +28,12 @@ tickets does not establish that native acceptance passed.
   [Chromecast session report](android-tv-2026-09-08.md). Phone access and the
   remaining account-dependent checks are still outstanding.
 
+SOUP-91 subsequently adds Quick Connect alongside password sign-in. Its
+[Guest Room TV acceptance report](android-tv-quick-connect-2026-09-08.md) records
+real Jellyfin 10.11.1 approval over embedded Tailscale, native editor pause/resume,
+and the feature's current APK and 210 passing tests. This is additional
+onboarding evidence; it does not replace the remaining media and phone checks.
+
 The local debug artifact checked during housekeeping is
 `apps/android/build/app/outputs/flutter-apk/app-debug.apk` (275,923,962 bytes),
 with SHA-256:

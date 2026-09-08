@@ -60,6 +60,10 @@ All URIs are relative to *http://localhost*
 Class | Method | HTTP request | Description
 ------------ | ------------- | ------------- | -------------
 *AuthenticationApi* | [**authenticateUserByName**](doc//AuthenticationApi.md#authenticateuserbyname) | **POST** /Users/AuthenticateByName |
+*AuthenticationApi* | [**authenticateWithQuickConnect**](doc//AuthenticationApi.md#authenticatewithquickconnect) | **POST** /Users/AuthenticateWithQuickConnect |
+*QuickConnectApi* | [**getQuickConnectEnabled**](doc//QuickConnectApi.md#getquickconnectenabled) | **GET** /QuickConnect/Enabled |
+*QuickConnectApi* | [**getQuickConnectState**](doc//QuickConnectApi.md#getquickconnectstate) | **GET** /QuickConnect/Connect |
+*QuickConnectApi* | [**initiateQuickConnect**](doc//QuickConnectApi.md#initiatequickconnect) | **POST** /QuickConnect/Initiate |
 *SystemApi* | [**getPublicSystemInfo**](doc//SystemApi.md#getpublicsysteminfo) | **GET** /System/Info/Public |
 
 
@@ -68,6 +72,8 @@ Class | Method | HTTP request | Description
  - [AuthenticateUserByName](doc//AuthenticateUserByName.md)
  - [AuthenticationResult](doc//AuthenticationResult.md)
  - [PublicSystemInfo](doc//PublicSystemInfo.md)
+ - [QuickConnectDto](doc//QuickConnectDto.md)
+ - [QuickConnectResult](doc//QuickConnectResult.md)
  - [UserDto](doc//UserDto.md)
 
 
