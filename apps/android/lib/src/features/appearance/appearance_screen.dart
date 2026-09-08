@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
@@ -266,6 +267,7 @@ class _PaletteChoice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (palette) {
+      PaletteFamily.festival => ('Festival', SoupTheme.onboardingAccent),
       PaletteFamily.soup => ('Soup', const Color(0xFFFC7814)),
       PaletteFamily.ocean => ('Ocean', const Color(0xFF1E88E5)),
       PaletteFamily.grove => ('Grove', const Color(0xFF2E7D32)),

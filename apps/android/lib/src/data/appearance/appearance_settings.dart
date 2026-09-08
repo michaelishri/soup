@@ -2,15 +2,15 @@ import 'dart:convert';
 
 enum UiPreset { fruity, blockbuster }
 
-enum PaletteFamily { soup, ocean, grove, mono }
+enum PaletteFamily { festival, soup, ocean, grove, mono }
 
 enum AppearanceBrightness { light, dark }
 
 class AppearanceSettings {
   const AppearanceSettings({
     this.preset = UiPreset.fruity,
-    this.palette = PaletteFamily.soup,
-    this.brightness = AppearanceBrightness.dark,
+    this.palette = PaletteFamily.festival,
+    this.brightness = AppearanceBrightness.light,
   });
 
   static const schemaVersion = 1;

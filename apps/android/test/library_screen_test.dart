@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
+import 'support/onboarding_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -10,6 +12,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 
 void main() {
+  setUpAll(loadOnboardingFonts);
   final session = JellyfinSession(
     serverUrl: Uri.parse('http://jellyfin/'),
     serverId: 'server',
@@ -1338,7 +1341,7 @@ void main() {
 
   testWidgets('fits both presets at 1080p with enlarged text', (tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
-    tester.view.devicePixelRatio = 1;
+    tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
     final source = FakeLibrarySource(
       const JellyfinHome(
@@ -1358,6 +1361,7 @@ void main() {
     for (final preset in UiPreset.values) {
       await tester.pumpWidget(
         MaterialApp(
+          theme: SoupTheme.authenticated(AppearanceSettings(preset: preset)),
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(
               context,

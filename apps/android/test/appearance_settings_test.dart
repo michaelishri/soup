@@ -4,6 +4,27 @@ import 'package:soup/src/data/appearance/appearance_store.dart';
 import 'package:soup/src/features/appearance/appearance_controller.dart';
 
 void main() {
+  test('new devices default to the light Festival theme', () {
+    expect(AppearanceSettings.defaults.palette, PaletteFamily.festival);
+    expect(AppearanceSettings.defaults.brightness, AppearanceBrightness.light);
+  });
+
+  test('existing serialized choices keep their palette and brightness', () {
+    for (final preset in UiPreset.values) {
+      for (final palette in PaletteFamily.values) {
+        for (final brightness in AppearanceBrightness.values) {
+          final encoded =
+              '{"version":1,"preset":"${preset.name}","palette":"${palette.name}","brightness":"${brightness.name}"}';
+          final settings = AppearanceSettings.tryDecode(encoded)!;
+          expect(settings.preset, preset);
+          expect(settings.palette, palette);
+          expect(settings.brightness, brightness);
+          expect(AppearanceSettings.tryDecode(settings.encode()), settings);
+        }
+      }
+    }
+  });
+
   test('round-trips every appearance value', () {
     const settings = AppearanceSettings(
       preset: UiPreset.blockbuster,

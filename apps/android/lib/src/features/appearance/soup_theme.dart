@@ -11,33 +11,63 @@ class SoupTheme {
   static const onboardingInk = Color(0xFF1C2027);
   static const onboardingMuted = Color(0xFF515867);
 
-  static ThemeData get onboarding {
+  static ThemeData get onboarding => _festival(Brightness.light);
+
+  static ThemeData _festival(Brightness brightness) {
+    final dark = brightness == Brightness.dark;
     final colors =
         ColorScheme.fromSeed(
           seedColor: onboardingAccent,
-          brightness: Brightness.light,
+          brightness: brightness,
         ).copyWith(
-          primary: onboardingAccent,
-          onPrimary: onboardingSurface,
-          secondary: onboardingInk,
-          onSecondary: onboardingSurface,
-          secondaryContainer: onboardingSignal,
-          onSecondaryContainer: onboardingInk,
-          surface: onboardingBackground,
-          surfaceContainerHighest: const Color(0xFFE5E7E9),
-          onSurface: onboardingInk,
-          onSurfaceVariant: onboardingMuted,
-          outline: const Color(0xFF7C8391),
-          outlineVariant: const Color(0xFFAEB2B9),
+          primary: dark ? onboardingSignal : onboardingAccent,
+          onPrimary: dark ? onboardingInk : onboardingSurface,
+          primaryContainer: onboardingAccent,
+          onPrimaryContainer: onboardingSurface,
+          secondary: dark ? onboardingSignal : onboardingInk,
+          onSecondary: dark ? onboardingInk : onboardingSurface,
+          secondaryContainer: dark ? onboardingAccent : onboardingSignal,
+          onSecondaryContainer: dark ? onboardingSurface : onboardingInk,
+          surface: dark ? const Color(0xFF15181E) : onboardingBackground,
+          surfaceDim: dark ? const Color(0xFF101318) : const Color(0xFFDBDCD5),
+          surfaceBright: dark ? const Color(0xFF373C47) : onboardingSurface,
+          surfaceContainerLowest: dark
+              ? const Color(0xFF101318)
+              : onboardingSurface,
+          surfaceContainerLow: dark ? onboardingInk : onboardingSurface,
+          surfaceContainer: dark
+              ? const Color(0xFF242932)
+              : const Color(0xFFEEEDE5),
+          surfaceContainerHigh: dark
+              ? const Color(0xFF2B313C)
+              : const Color(0xFFE9E9E1),
+          surfaceContainerHighest: dark
+              ? const Color(0xFF343B48)
+              : const Color(0xFFE5E7E9),
+          onSurface: dark ? onboardingBackground : onboardingInk,
+          onSurfaceVariant: dark ? const Color(0xFFC5CAD4) : onboardingMuted,
+          outline: dark ? const Color(0xFF929BAA) : const Color(0xFF7C8391),
+          outlineVariant: dark
+              ? const Color(0xFF5B6474)
+              : const Color(0xFFAEB2B9),
         );
     final base = ThemeData(
-      brightness: Brightness.light,
+      brightness: brightness,
       colorScheme: colors,
-      scaffoldBackgroundColor: onboardingBackground,
+      scaffoldBackgroundColor: colors.surface,
       useMaterial3: true,
     );
     return base.copyWith(
       textTheme: base.textTheme.copyWith(
+        displaySmall: base.textTheme.displaySmall?.copyWith(
+          fontFamily: 'BarlowCondensed',
+          fontWeight: FontWeight.w800,
+          height: 1.05,
+        ),
+        headlineSmall: base.textTheme.headlineSmall?.copyWith(
+          fontFamily: 'BarlowCondensed',
+          fontWeight: FontWeight.w800,
+        ),
         headlineLarge: base.textTheme.headlineLarge?.copyWith(
           fontFamily: 'BarlowCondensed',
           fontWeight: FontWeight.w800,
@@ -78,7 +108,7 @@ class SoupTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: onboardingSurface,
+        fillColor: colors.surfaceContainerLow,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 18,
@@ -99,8 +129,8 @@ class SoupTheme {
           backgroundColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.disabled)) return null;
             return states.contains(WidgetState.focused)
-                ? colors.primary
-                : colors.onSurface;
+                ? onboardingAccent
+                : onboardingInk;
           }),
           foregroundColor: WidgetStateProperty.resolveWith(
             (states) =>
@@ -113,6 +143,58 @@ class SoupTheme {
             (states) => states.contains(WidgetState.focused)
                 ? BorderSide(color: colors.onSurface, width: 2)
                 : BorderSide.none,
+          ),
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: colors.surfaceContainerLow,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+          side: BorderSide(color: colors.outlineVariant),
+        ),
+      ),
+      chipTheme: base.chipTheme.copyWith(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        selectedColor: colors.secondaryContainer,
+        labelStyle: base.textTheme.labelLarge?.copyWith(
+          color: colors.onSurface,
+        ),
+        checkmarkColor: colors.onSecondaryContainer,
+        side: BorderSide(color: colors.outline),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colors.surfaceContainerLow,
+        indicatorColor: colors.secondaryContainer,
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colors.surfaceContainerLow,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+          side: WidgetStateProperty.resolveWith(
+            (states) => BorderSide(
+              color: states.contains(WidgetState.focused)
+                  ? colors.primary
+                  : colors.outline,
+              width: states.contains(WidgetState.focused) ? 2 : 1,
+            ),
+          ),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
         ),
       ),
@@ -136,7 +218,25 @@ class SoupTheme {
     final brightness = settings.brightness == AppearanceBrightness.dark
         ? Brightness.dark
         : Brightness.light;
+    if (settings.palette == PaletteFamily.festival) {
+      final theme = _festival(brightness);
+      return theme.copyWith(
+        extensions: [
+          AuthenticatedThemeTokens(
+            preset: settings.preset,
+            festival: true,
+            heroScrimStart: theme.scaffoldBackgroundColor.withValues(
+              alpha: 0.25,
+            ),
+            heroScrimEnd: theme.scaffoldBackgroundColor,
+            playbackChrome: const Color(0xF215181E),
+            focusGlow: theme.colorScheme.primary,
+          ),
+        ],
+      );
+    }
     final seed = switch (settings.palette) {
+      PaletteFamily.festival => onboardingAccent,
       PaletteFamily.soup => const Color(0xFFFC7814),
       PaletteFamily.ocean => const Color(0xFF1E88E5),
       PaletteFamily.grove => const Color(0xFF2E7D32),
@@ -173,6 +273,31 @@ class SoupTheme {
       extensions: [tokens],
     );
   }
+
+  static bool isFestival(BuildContext context) =>
+      Theme.of(context).extension<AuthenticatedThemeTokens>()?.festival ??
+      false;
+
+  static ThemeData playback(ThemeData theme) {
+    final tokens = theme.extension<AuthenticatedThemeTokens>();
+    if (tokens?.festival ?? false) {
+      return authenticated(
+        AppearanceSettings(
+          preset: tokens!.preset,
+          brightness: AppearanceBrightness.dark,
+        ),
+      );
+    }
+    return ThemeData(
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: theme.colorScheme.primary,
+        brightness: Brightness.dark,
+      ),
+      useMaterial3: true,
+      extensions: [?tokens],
+    );
+  }
 }
 
 @immutable
@@ -184,9 +309,11 @@ class AuthenticatedThemeTokens
     required this.heroScrimEnd,
     required this.playbackChrome,
     required this.focusGlow,
+    this.festival = false,
   });
 
   final UiPreset preset;
+  final bool festival;
   final Color heroScrimStart;
   final Color heroScrimEnd;
   final Color playbackChrome;
@@ -195,6 +322,7 @@ class AuthenticatedThemeTokens
   @override
   AuthenticatedThemeTokens copyWith({
     UiPreset? preset,
+    bool? festival,
     Color? heroScrimStart,
     Color? heroScrimEnd,
     Color? playbackChrome,
@@ -202,6 +330,7 @@ class AuthenticatedThemeTokens
   }) {
     return AuthenticatedThemeTokens(
       preset: preset ?? this.preset,
+      festival: festival ?? this.festival,
       heroScrimStart: heroScrimStart ?? this.heroScrimStart,
       heroScrimEnd: heroScrimEnd ?? this.heroScrimEnd,
       playbackChrome: playbackChrome ?? this.playbackChrome,
@@ -217,6 +346,7 @@ class AuthenticatedThemeTokens
     if (other == null) return this;
     return AuthenticatedThemeTokens(
       preset: t < 0.5 ? preset : other.preset,
+      festival: t < 0.5 ? festival : other.festival,
       heroScrimStart: Color.lerp(heroScrimStart, other.heroScrimStart, t)!,
       heroScrimEnd: Color.lerp(heroScrimEnd, other.heroScrimEnd, t)!,
       playbackChrome: Color.lerp(playbackChrome, other.playbackChrome, t)!,

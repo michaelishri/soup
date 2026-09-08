@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:soup/src/features/library/festival_hero.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
@@ -71,6 +72,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   int _blockbusterHeroIndex = 0;
   int _blockbusterFocusRevision = 0;
   Timer? _blockbusterBackdropTimer;
+  final _applyAppearanceFocus = FocusNode(debugLabel: 'apply-appearance');
   bool _savingAppearance = false;
   bool _clearingArtwork = false;
 
@@ -112,6 +114,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _blockbusterBackdropTimer?.cancel();
     _homeScrollController.dispose();
     _blockbusterHeroFocusNode.dispose();
+    _applyAppearanceFocus.dispose();
     _blockbusterContentScopeNode.dispose();
     _viewModel.dispose();
     if (_ownsMetadataRepository) {
@@ -224,10 +227,21 @@ class _LibraryScreenState extends State<LibraryScreen> {
   Future<void> _saveAppearance() async {
     final save = widget.onSaveAppearance;
     if (save == null || _savingAppearance) return;
+    final restoreFocus = _applyAppearanceFocus.hasFocus;
     setState(() => _savingAppearance = true);
     await save(_appearanceDraft);
     if (!mounted) return;
     setState(() => _savingAppearance = false);
+    if (restoreFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _applyAppearanceFocus.requestFocus();
+        final target = _applyAppearanceFocus.context;
+        if (target != null) {
+          Scrollable.ensureVisible(target, alignment: 0.5);
+        }
+      });
+    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Appearance updated.')));
@@ -824,7 +838,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         blockbuster ? _blockbusterContentInset : 40,
         16,
         40,
-        24,
+        96, // Keep the final actions above the save confirmation.
       ),
       children: [
         Text('Settings', style: Theme.of(context).textTheme.headlineMedium),
@@ -833,7 +847,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 12),
-        Text('Appearance', style: Theme.of(context).textTheme.titleLarge),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Appearance',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('reset-appearance'),
+              onPressed: _savingAppearance
+                  ? null
+                  : () => setState(
+                      () => _appearanceDraft = AppearanceSettings.defaults,
+                    ),
+              child: const Text('Use default'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         Text('Layout', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 6),
@@ -968,6 +1000,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           children: [
             FilledButton.icon(
               key: const ValueKey('apply-appearance'),
+              focusNode: _applyAppearanceFocus,
               onPressed: widget.onSaveAppearance == null || _savingAppearance
                   ? null
                   : _saveAppearance,
@@ -998,6 +1031,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   static String _paletteLabel(PaletteFamily palette) => switch (palette) {
+    PaletteFamily.festival => 'Festival',
     PaletteFamily.soup => 'Soup',
     PaletteFamily.ocean => 'Ocean',
     PaletteFamily.grove => 'Grove',
@@ -1005,6 +1039,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   };
 
   static Color _paletteColor(PaletteFamily palette) => switch (palette) {
+    PaletteFamily.festival => SoupTheme.onboardingAccent,
     PaletteFamily.soup => const Color(0xFFFC7814),
     PaletteFamily.ocean => const Color(0xFF1E88E5),
     PaletteFamily.grove => const Color(0xFF2E7D32),
@@ -1391,59 +1426,73 @@ class _FruityTopNavigation extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Material(
       color: colors.surface.withValues(alpha: 0.78),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-        child: Row(
-          children: [
-            const SoupMark(),
-            const SizedBox(width: 10),
-            Text('Soup', style: Theme.of(context).textTheme.titleLarge),
-            const Spacer(),
-            _TopNavItem(
-              key: const ValueKey('fruity-nav-home'),
-              order: 1,
-              selected: destination == _FruityDestination.home,
-              tooltip: 'Home',
-              onPressed: () => onSelected(_FruityDestination.home),
-              child: const Icon(PhosphorIconsRegular.house),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: SoupTheme.isFestival(context)
+                  ? colors.outlineVariant
+                  : Colors.transparent,
             ),
-            const SizedBox(width: 8),
-            _TopNavItem(
-              key: const ValueKey('fruity-nav-tv'),
-              order: 2,
-              selected: destination == _FruityDestination.tv,
-              tooltip: 'TV',
-              onPressed: () => onSelected(_FruityDestination.tv),
-              child: const Text('TV'),
-            ),
-            const SizedBox(width: 8),
-            _TopNavItem(
-              key: const ValueKey('fruity-nav-movies'),
-              order: 3,
-              selected: destination == _FruityDestination.movies,
-              tooltip: 'Movies',
-              onPressed: () => onSelected(_FruityDestination.movies),
-              child: const Text('Movies'),
-            ),
-            const SizedBox(width: 8),
-            _TopNavItem(
-              key: const ValueKey('fruity-nav-settings'),
-              order: 4,
-              selected: destination == _FruityDestination.settings,
-              tooltip: 'Settings',
-              onPressed: () => onSelected(_FruityDestination.settings),
-              child: const Text('Settings'),
-            ),
-            const Spacer(),
-            CircleAvatar(
-              backgroundColor: colors.primaryContainer,
-              child: Text(
-                userName.isEmpty
-                    ? '?'
-                    : userName.characters.first.toUpperCase(),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+          child: Row(
+            children: [
+              const SoupMark(),
+              const SizedBox(width: 10),
+              Text(
+                SoupTheme.isFestival(context) ? 'SOUP' : 'Soup',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            ),
-          ],
+              const Spacer(),
+              _TopNavItem(
+                key: const ValueKey('fruity-nav-home'),
+                order: 1,
+                selected: destination == _FruityDestination.home,
+                tooltip: 'Home',
+                onPressed: () => onSelected(_FruityDestination.home),
+                child: const Icon(PhosphorIconsRegular.house),
+              ),
+              const SizedBox(width: 8),
+              _TopNavItem(
+                key: const ValueKey('fruity-nav-tv'),
+                order: 2,
+                selected: destination == _FruityDestination.tv,
+                tooltip: 'TV',
+                onPressed: () => onSelected(_FruityDestination.tv),
+                child: const Text('TV'),
+              ),
+              const SizedBox(width: 8),
+              _TopNavItem(
+                key: const ValueKey('fruity-nav-movies'),
+                order: 3,
+                selected: destination == _FruityDestination.movies,
+                tooltip: 'Movies',
+                onPressed: () => onSelected(_FruityDestination.movies),
+                child: const Text('Movies'),
+              ),
+              const SizedBox(width: 8),
+              _TopNavItem(
+                key: const ValueKey('fruity-nav-settings'),
+                order: 4,
+                selected: destination == _FruityDestination.settings,
+                tooltip: 'Settings',
+                onPressed: () => onSelected(_FruityDestination.settings),
+                child: const Text('Settings'),
+              ),
+              const Spacer(),
+              CircleAvatar(
+                backgroundColor: colors.primaryContainer,
+                child: Text(
+                  userName.isEmpty
+                      ? '?'
+                      : userName.characters.first.toUpperCase(),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1476,6 +1525,8 @@ class _TopNavItemState extends State<_TopNavItem> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final festival = SoupTheme.isFestival(context);
+    final radius = BorderRadius.circular(festival ? 4 : 999);
     return FocusTraversalOrder(
       order: NumericFocusOrder(widget.order),
       child: Tooltip(
@@ -1496,7 +1547,7 @@ class _TopNavItemState extends State<_TopNavItem> {
             label: widget.tooltip,
             child: InkWell(
               onTap: widget.onPressed,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: radius,
               child: AnimatedContainer(
                 duration: MediaQuery.disableAnimationsOf(context)
                     ? Duration.zero
@@ -1508,9 +1559,11 @@ class _TopNavItemState extends State<_TopNavItem> {
                   color: _focused
                       ? colors.primary
                       : widget.selected
-                      ? colors.primaryContainer.withValues(alpha: 0.72)
+                      ? (festival
+                            ? colors.secondaryContainer
+                            : colors.primaryContainer.withValues(alpha: 0.72))
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: radius,
                   border: Border.all(
                     color: _focused
                         ? colors.onPrimary
@@ -1522,14 +1575,22 @@ class _TopNavItemState extends State<_TopNavItem> {
                 ),
                 child: DefaultTextStyle.merge(
                   style: TextStyle(
-                    color: _focused ? colors.onPrimary : null,
+                    color: _focused
+                        ? colors.onPrimary
+                        : (festival && widget.selected
+                              ? colors.onSecondaryContainer
+                              : null),
                     fontWeight: widget.selected
                         ? FontWeight.w700
                         : FontWeight.w500,
                   ),
                   child: IconTheme.merge(
                     data: IconThemeData(
-                      color: _focused ? colors.onPrimary : null,
+                      color: _focused
+                          ? colors.onPrimary
+                          : (festival && widget.selected
+                                ? colors.onSecondaryContainer
+                                : null),
                     ),
                     child: widget.child,
                   ),
@@ -1580,6 +1641,14 @@ class _FruityHero extends StatelessWidget {
     final wide = size.width >= 840;
     final theme = Theme.of(context);
     final tokens = theme.extension<AuthenticatedThemeTokens>();
+    if ((tokens?.festival ?? false) && !blockbuster) {
+      return FestivalHero(
+        item: item,
+        userName: userName,
+        image: image,
+        onOpen: onOpen,
+      );
+    }
     final heroHeight = blockbuster && wide
         ? size.height
         : (wide ? 300.0 : 330.0);
@@ -2348,6 +2417,7 @@ class _MediaCardState extends State<_MediaCard> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final tokens = theme.extension<AuthenticatedThemeTokens>();
+    final festival = tokens?.festival ?? false;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return SizedBox(
       width: widget.width,
@@ -2371,7 +2441,7 @@ class _MediaCardState extends State<_MediaCard> {
             duration: reduceMotion
                 ? Duration.zero
                 : const Duration(milliseconds: 140),
-            scale: _focused && !reduceMotion
+            scale: _focused && !reduceMotion && !festival
                 ? (widget.blockbuster ? 1.035 : 1.055)
                 : 1,
             child: Column(
@@ -2385,15 +2455,26 @@ class _MediaCardState extends State<_MediaCard> {
                   decoration: BoxDecoration(
                     color: colors.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(
-                      widget.blockbuster ? 2 : 16,
+                      festival ? 4 : (widget.blockbuster ? 2 : 16),
                     ),
                     border: Border.all(
                       color: _focused
-                          ? (widget.blockbuster ? Colors.white : colors.primary)
+                          ? (festival
+                                ? colors.primary
+                                : (widget.blockbuster
+                                      ? Colors.white
+                                      : colors.primary))
                           : Colors.transparent,
                       width: 3,
                     ),
-                    boxShadow: _focused && !widget.blockbuster
+                    boxShadow: _focused && festival
+                        ? [
+                            BoxShadow(
+                              color: colors.primary,
+                              offset: const Offset(4, 4),
+                            ),
+                          ]
+                        : _focused && !widget.blockbuster
                         ? [
                             BoxShadow(
                               color:
@@ -2518,13 +2599,19 @@ class _LayoutSettingTile extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onSelected,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(
+        SoupTheme.isFestival(context) ? 4 : 18,
+      ),
       child: Container(
         width: 320,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: colors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(18),
+          color: SoupTheme.isFestival(context) && selected
+              ? colors.secondaryContainer
+              : colors.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(
+            SoupTheme.isFestival(context) ? 4 : 18,
+          ),
           border: Border.all(
             color: selected ? colors.primary : colors.outlineVariant,
             width: selected ? 2 : 1,

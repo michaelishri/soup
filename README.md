@@ -36,8 +36,13 @@ later from Settings without reconnecting or changing accounts.
   destinations in compact bottom navigation.
 - **Blockbuster** is a denser, browse-led interface inspired by Netflix. It uses
   a billboard home and an expanding navigation rail on Android TV.
-- Both layouts support Soup, Ocean, Grove, and Mono palettes, each with an
-  explicit light and dark version.
+- **Festival** is the default theme: paper, cobalt and acid yellow, condensed
+  poster headings and crisp controls. Its light version continues the onboarding
+  identity; a coordinated dark version is available for evening viewing.
+- Both layouts support Festival, Soup, Ocean, Grove, and Mono palettes, each with
+  an explicit light and dark version. Existing saved choices are retained.
+- Settings → Use default selects Festival/light with the Fruity layout. Changes
+  take effect when you select Apply appearance.
 
 Onboarding and sign-in always use Soup's fixed setup design. Appearance choices
 apply only after authentication. The current customisation boundary is layout,

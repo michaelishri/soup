@@ -400,7 +400,28 @@ class _Metadata extends StatelessWidget {
         children: [
           if (item.seriesName case final series?)
             Text(series, style: Theme.of(context).textTheme.titleMedium),
-          Text(item.name, style: Theme.of(context).textTheme.displaySmall),
+          if (SoupTheme.isFestival(context))
+            Container(
+              key: const ValueKey('festival-details-title'),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: const BoxDecoration(
+                color: SoupTheme.onboardingAccent,
+                boxShadow: [
+                  BoxShadow(
+                    color: SoupTheme.onboardingInk,
+                    offset: Offset(5, 5),
+                  ),
+                ],
+              ),
+              child: Text(
+                item.name,
+                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                  color: SoupTheme.onboardingSurface,
+                ),
+              ),
+            )
+          else
+            Text(item.name, style: Theme.of(context).textTheme.displaySmall),
           if (metadata.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(metadata.join('  •  ')),
@@ -673,10 +694,14 @@ class _Poster extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(
+            SoupTheme.isFestival(context) ? 4 : 12,
+          ),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(
+            SoupTheme.isFestival(context) ? 4 : 12,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) => FutureBuilder<CachedArtwork?>(
               future: image,

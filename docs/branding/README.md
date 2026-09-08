@@ -30,7 +30,9 @@ The font is an unmodified ExtraBold TTF from the
 [Google Fonts Barlow Condensed distribution](https://github.com/google/fonts/tree/main/ofl/barlowcondensed).
 Its [SIL Open Font License](../../apps/android/assets/fonts/OFL.txt) ships with the
 app and is registered in Flutter's license registry. No runtime font download is
-needed. The app's user-selected library palettes remain available.
+needed. The app's user-selected library palettes remain available. SOUP-93 extends this
+identity into the default Festival library theme, with light and dark versions;
+see the [Festival gallery](../screenshots/festival/README.md).
 
 ## Artwork provenance
 

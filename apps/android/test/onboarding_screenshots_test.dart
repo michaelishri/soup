@@ -1,10 +1,8 @@
 import 'dart:io';
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
@@ -17,7 +15,7 @@ import 'package:soup/src/features/shared/tv_text_input.dart';
 
 import 'support/connectivity_fakes.dart';
 import 'support/quick_connect_fixture.dart';
-import 'support/onboarding_fonts.dart';
+import 'support/review_fonts.dart';
 import 'widget_test.dart' show FakeTvTextInput;
 
 // Explicitly opt in to generating review artifacts. Ordinary QA never rewrites
@@ -28,53 +26,7 @@ const captureScreenshots = bool.fromEnvironment(
 
 void main() {
   if (!captureScreenshots) return;
-  setUpAll(() async {
-    final config = File('.dart_tool/package_config.json');
-    final packages =
-        (jsonDecode(await config.readAsString())
-                as Map<String, dynamic>)['packages']
-            as List<dynamic>;
-    final flutter = packages.cast<Map<String, dynamic>>().singleWhere(
-      (entry) => entry['name'] == 'flutter',
-    );
-    final root = config.absolute.uri.resolve('${flutter['rootUri']}/');
-    final directory = root.resolve('../../bin/cache/artifacts/material_fonts/');
-    final loader = FontLoader('Roboto');
-    for (final name in [
-      'Roboto-Regular.ttf',
-      'Roboto-Medium.ttf',
-      'Roboto-Bold.ttf',
-    ]) {
-      loader.addFont(
-        File.fromUri(
-          directory.resolve(name),
-        ).readAsBytes().then((bytes) => ByteData.sublistView(bytes)),
-      );
-    }
-    await loader.load();
-    await loadOnboardingFonts();
-    final icons = FontLoader('packages/phosphoricons_flutter/PhosphorRegular');
-    icons.addFont(
-      rootBundle.load('packages/phosphoricons_flutter/lib/fonts/Phosphor.ttf'),
-    );
-    await icons.load();
-    final filledIcons = FontLoader(
-      'packages/phosphoricons_flutter/PhosphorFill',
-    );
-    filledIcons.addFont(
-      rootBundle.load(
-        'packages/phosphoricons_flutter/lib/fonts/Phosphor-Fill.ttf',
-      ),
-    );
-    await filledIcons.load();
-    final materialIcons = FontLoader('MaterialIcons');
-    materialIcons.addFont(
-      File.fromUri(
-        directory.resolve('MaterialIcons-Regular.otf'),
-      ).readAsBytes().then(ByteData.sublistView),
-    );
-    await materialIcons.load();
-  });
+  setUpAll(loadReviewFonts);
 
   for (final (label, size) in [
     ('tv', const Size(960, 540)),

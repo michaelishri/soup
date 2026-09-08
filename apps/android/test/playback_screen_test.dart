@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:soup/src/data/appearance/appearance_settings.dart';
+import 'package:soup/src/features/appearance/soup_theme.dart';
+import 'support/onboarding_fonts.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -7,6 +10,7 @@ import 'package:soup/src/features/playback/playback_screen.dart';
 import 'package:soup/src/features/playback/video_controller.dart';
 
 void main() {
+  setUpAll(loadOnboardingFonts);
   final session = JellyfinSession(
     serverUrl: Uri.parse('http://jellyfin/'),
     serverId: 'server',
@@ -33,7 +37,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: ThemeData.dark(useMaterial3: true),
+        theme: SoupTheme.authenticated(AppearanceSettings.defaults),
         home: PlaybackScreen(
           api: JellyfinApi(client, deviceId: 'device'),
           session: session,
@@ -45,6 +49,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final controlTheme = Theme.of(
+      tester.element(find.byKey(const ValueKey('playback-back-button'))),
+    );
+    expect(controlTheme.brightness, Brightness.dark);
+    expect(
+      controlTheme.colorScheme.onSurface.computeLuminance(),
+      greaterThan(0.7),
+    );
     expect(factory.controllers, hasLength(1));
     expect(factory.controllers.single.uri.path, '/Videos/movie/stream.mp4');
     expect(find.text('Direct Play'), findsOneWidget);

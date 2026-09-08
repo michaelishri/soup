@@ -41,6 +41,52 @@ void main() {
     );
   });
 
+  test('Festival controls and surfaces remain readable in both modes', () {
+    for (final brightness in AppearanceBrightness.values) {
+      final theme = SoupTheme.authenticated(
+        AppearanceSettings(brightness: brightness),
+      );
+      final colors = theme.colorScheme;
+      for (final surface in [
+        colors.surface,
+        colors.surfaceContainerLow,
+        colors.surfaceContainerHigh,
+        colors.surfaceContainerHighest,
+      ]) {
+        expect(_contrast(colors.onSurface, surface), greaterThanOrEqualTo(4.5));
+        expect(
+          _contrast(colors.onSurfaceVariant, surface),
+          greaterThanOrEqualTo(4.5),
+        );
+        expect(_contrast(colors.primary, surface), greaterThanOrEqualTo(3));
+      }
+      expect(
+        _contrast(colors.onSecondaryContainer, colors.secondaryContainer),
+        greaterThanOrEqualTo(4.5),
+      );
+      for (final states in [
+        <WidgetState>{},
+        {WidgetState.focused},
+      ]) {
+        final style = theme.filledButtonTheme.style!;
+        expect(
+          _contrast(
+            style.foregroundColor!.resolve(states)!,
+            style.backgroundColor!.resolve(states)!,
+          ),
+          greaterThanOrEqualTo(4.5),
+        );
+      }
+      expect(theme.textTheme.displaySmall!.fontFamily, 'BarlowCondensed');
+      final playback = SoupTheme.playback(theme);
+      expect(playback.brightness, Brightness.dark);
+      expect(
+        _contrast(playback.colorScheme.onSurface, const Color(0xFF15181E)),
+        greaterThanOrEqualTo(4.5),
+      );
+    }
+  });
+
   test(
     'all preset and palette combinations provide accessible core colours',
     () {

@@ -267,69 +267,79 @@ class _PlaybackScreenState extends State<PlaybackScreen> {
   @override
   Widget build(BuildContext context) {
     final value = _controller?.value ?? const SoupVideoValue();
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Shortcuts(
-          shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(LogicalKeyboardKey.arrowRight): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowDown): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft):
-                PreviousFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowUp): PreviousFocusIntent(),
-          },
-          child: FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (value.initialized)
-                  Center(
-                    child: AspectRatio(
-                      aspectRatio: value.aspectRatio,
-                      child: _controller!.buildView(),
-                    ),
-                  ),
-                if (value.caption.isNotEmpty)
-                  Positioned(
-                    left: 80,
-                    right: 80,
-                    bottom: 150,
-                    child: Text(
-                      value.caption,
-                      key: const ValueKey('playback-caption'),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+    return Theme(
+      data: SoupTheme.playback(Theme.of(context)),
+      child: Builder(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          body: SafeArea(
+            child: Shortcuts(
+              shortcuts: const <ShortcutActivator, Intent>{
+                SingleActivator(LogicalKeyboardKey.arrowRight):
+                    NextFocusIntent(),
+                SingleActivator(LogicalKeyboardKey.arrowDown):
+                    NextFocusIntent(),
+                SingleActivator(LogicalKeyboardKey.arrowLeft):
+                    PreviousFocusIntent(),
+                SingleActivator(LogicalKeyboardKey.arrowUp):
+                    PreviousFocusIntent(),
+              },
+              child: FocusTraversalGroup(
+                policy: OrderedTraversalPolicy(),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (value.initialized)
+                      Center(
+                        child: AspectRatio(
+                          aspectRatio: value.aspectRatio,
+                          child: _controller!.buildView(),
+                        ),
                       ),
+                    if (value.caption.isNotEmpty)
+                      Positioned(
+                        left: 80,
+                        right: 80,
+                        bottom: 150,
+                        child: Text(
+                          value.caption,
+                          key: const ValueKey('playback-caption'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            shadows: [
+                              Shadow(color: Colors.black, blurRadius: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    _Controls(
+                      title: widget.item.name,
+                      value: value,
+                      method: _method,
+                      subtitle: _subtitle,
+                      subtitleCount: _plan?.subtitles.length ?? 0,
+                      backFocusNode: _backFocusNode,
+                      onBack: () => Navigator.of(context).pop(),
+                      onToggle: _togglePlayback,
+                      onRewind: () => _seekBy(const Duration(seconds: -10)),
+                      onForward: () => _seekBy(const Duration(seconds: 30)),
+                      onSeek: (position) async {
+                        await _controller?.seekTo(position);
+                        await _reportNow();
+                      },
+                      onSubtitle: _cycleSubtitle,
                     ),
-                  ),
-                _Controls(
-                  title: widget.item.name,
-                  value: value,
-                  method: _method,
-                  subtitle: _subtitle,
-                  subtitleCount: _plan?.subtitles.length ?? 0,
-                  backFocusNode: _backFocusNode,
-                  onBack: () => Navigator.of(context).pop(),
-                  onToggle: _togglePlayback,
-                  onRewind: () => _seekBy(const Duration(seconds: -10)),
-                  onForward: () => _seekBy(const Duration(seconds: 30)),
-                  onSeek: (position) async {
-                    await _controller?.seekTo(position);
-                    await _reportNow();
-                  },
-                  onSubtitle: _cycleSubtitle,
+                    if (_loading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (_error case final error?)
+                      _PlaybackError(error: error, onRetry: _initialize),
+                    if (value.buffering && !_loading)
+                      const Center(child: CircularProgressIndicator()),
+                  ],
                 ),
-                if (_loading)
-                  const Center(child: CircularProgressIndicator())
-                else if (_error case final error?)
-                  _PlaybackError(error: error, onRetry: _initialize),
-                if (value.buffering && !_loading)
-                  const Center(child: CircularProgressIndicator()),
-              ],
+              ),
             ),
           ),
         ),
@@ -559,7 +569,7 @@ class _PlaybackError extends StatelessWidget {
     return ColoredBox(
       color: chrome,
       child: DefaultTextStyle.merge(
-        style: TextStyle(color: theme.colorScheme.onInverseSurface),
+        style: TextStyle(color: theme.colorScheme.onSurface),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 620),
@@ -569,7 +579,7 @@ class _PlaybackError extends StatelessWidget {
                 Icon(
                   PhosphorIconsRegular.warningCircle,
                   size: 56,
-                  color: theme.colorScheme.onInverseSurface,
+                  color: theme.colorScheme.onSurface,
                 ),
                 const SizedBox(height: 16),
                 Text(error, textAlign: TextAlign.center),
