@@ -79,7 +79,7 @@ class TvTextInput(private val activity: Activity) : MethodChannel.MethodCallHand
             addView(editor, LinearLayout.LayoutParams(-1, -2))
         }
         var submitted = false
-        val current = AlertDialog.Builder(editorContext)
+        val current = AlertDialog.Builder(editorContext, R.style.TvTextInputTheme)
             .setTitle(label)
             .setView(container)
             .setPositiveButton(if (next) "Next" else "Done") { _, _ -> submitted = true }

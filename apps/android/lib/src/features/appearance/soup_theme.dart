@@ -4,30 +4,61 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 class SoupTheme {
   const SoupTheme._();
 
-  static const onboardingBackground = Color(0xFF202936);
-  static const onboardingGlow = Color(0xFF343F50);
-  static const onboardingShade = Color(0xFF1B2330);
-  static const onboardingAccent = Color(0xFFAFD9EA);
+  static const onboardingBackground = Color(0xFFF5F3EB);
+  static const onboardingSurface = Color(0xFFFFFEF8);
+  static const onboardingSignal = Color(0xFFE8F35B);
+  static const onboardingAccent = Color(0xFF2541C8);
+  static const onboardingInk = Color(0xFF1C2027);
+  static const onboardingMuted = Color(0xFF515867);
 
   static ThemeData get onboarding {
     final colors =
         ColorScheme.fromSeed(
           seedColor: onboardingAccent,
-          brightness: Brightness.dark,
+          brightness: Brightness.light,
         ).copyWith(
           primary: onboardingAccent,
-          onPrimary: const Color(0xFF1B2C40),
+          onPrimary: onboardingSurface,
+          secondary: onboardingInk,
+          onSecondary: onboardingSurface,
+          secondaryContainer: onboardingSignal,
+          onSecondaryContainer: onboardingInk,
           surface: onboardingBackground,
-          surfaceContainerHighest: const Color(0xFF394658),
-          onSurface: const Color(0xFFF2F5FA),
-          onSurfaceVariant: const Color(0xFFCBD3DF),
-          outlineVariant: const Color(0xFF7C899C),
+          surfaceContainerHighest: const Color(0xFFE5E7E9),
+          onSurface: onboardingInk,
+          onSurfaceVariant: onboardingMuted,
+          outline: const Color(0xFF7C8391),
+          outlineVariant: const Color(0xFFAEB2B9),
         );
-    return ThemeData(
-      brightness: Brightness.dark,
+    final base = ThemeData(
+      brightness: Brightness.light,
       colorScheme: colors,
       scaffoldBackgroundColor: onboardingBackground,
       useMaterial3: true,
+    );
+    return base.copyWith(
+      textTheme: base.textTheme.copyWith(
+        headlineLarge: base.textTheme.headlineLarge?.copyWith(
+          fontFamily: 'BarlowCondensed',
+          fontWeight: FontWeight.w800,
+        ),
+        headlineMedium: base.textTheme.headlineMedium?.copyWith(
+          fontFamily: 'BarlowCondensed',
+          fontWeight: FontWeight.w800,
+        ),
+        titleLarge: base.textTheme.titleLarge?.copyWith(
+          fontSize: 30,
+          height: 1.1,
+          fontFamily: 'BarlowCondensed',
+          fontWeight: FontWeight.w800,
+        ),
+        titleMedium: base.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+        labelLarge: base.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+        ),
+      ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
@@ -42,31 +73,41 @@ class SoupTheme {
         trackOutlineColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? Colors.transparent
-              : colors.outlineVariant,
+              : colors.outline,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2B3748),
+        fillColor: onboardingSurface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 18,
         ),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: colors.outlineVariant),
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: colors.outline),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: colors.primary, width: 2),
+          borderRadius: BorderRadius.circular(4),
+          borderSide: BorderSide(color: colors.primary, width: 2.5),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: ButtonStyle(
-          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+          minimumSize: const WidgetStatePropertyAll(Size(48, 54)),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.disabled)) return null;
+            return states.contains(WidgetState.focused)
+                ? colors.primary
+                : colors.onSurface;
+          }),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) =>
+                states.contains(WidgetState.disabled) ? null : onboardingSignal,
+          ),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.focused)
@@ -79,7 +120,7 @@ class SoupTheme {
         style: ButtonStyle(
           minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
           shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.focused)

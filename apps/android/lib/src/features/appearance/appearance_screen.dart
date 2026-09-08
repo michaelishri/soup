@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
+import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
 
 class AppearanceScreen extends StatefulWidget {
   const AppearanceScreen({
@@ -34,141 +35,151 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 840;
     return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.all(wide ? 48 : 20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 960),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const SoupMark(size: 44),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Make Soup yours',
-                        style: Theme.of(context).textTheme.headlineMedium,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Choose how Soup will look after you sign in. You can change this later in Settings.',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 32),
-                  Text('Layout', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      _LayoutCard(
-                        key: const ValueKey('fruity-layout-choice'),
-                        title: 'Fruity',
-                        description:
-                            'Spacious, cinematic and focused on your artwork.',
-                        icon: PhosphorIconsRegular.sparkle,
-                        selected: _draft.preset == UiPreset.fruity,
-                        onSelected: () => setState(
-                          () =>
-                              _draft = _draft.copyWith(preset: UiPreset.fruity),
-                        ),
-                      ),
-                      _LayoutCard(
-                        key: const ValueKey('blockbuster-layout-choice'),
-                        title: 'Blockbuster',
-                        description:
-                            'Bold billboards, dense shelves and quick browsing.',
-                        icon: PhosphorIconsRegular.filmStrip,
-                        selected: _draft.preset == UiPreset.blockbuster,
-                        onSelected: () => setState(
-                          () => _draft = _draft.copyWith(
-                            preset: UiPreset.blockbuster,
+      body: OnboardingBackdrop(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(wide ? 48 : 20),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const SoupMark(size: 44),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Make Soup yours',
+                            style: Theme.of(context).textTheme.headlineMedium,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Colour palette',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final palette in PaletteFamily.values)
-                        _PaletteChoice(
-                          palette: palette,
-                          selected: _draft.palette == palette,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Choose how Soup will look after you sign in. You can change this later in Settings.',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 32),
+                    Text(
+                      'Layout',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        _LayoutCard(
+                          key: const ValueKey('fruity-layout-choice'),
+                          title: 'Fruity',
+                          description:
+                              'Spacious, cinematic and focused on your artwork.',
+                          icon: PhosphorIconsRegular.sparkle,
+                          selected: _draft.preset == UiPreset.fruity,
                           onSelected: () => setState(
-                            () => _draft = _draft.copyWith(palette: palette),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Brightness',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  SegmentedButton<AppearanceBrightness>(
-                    key: const ValueKey('appearance-brightness'),
-                    segments: const [
-                      ButtonSegment(
-                        value: AppearanceBrightness.light,
-                        icon: Icon(PhosphorIconsRegular.sun),
-                        label: Text('Light'),
-                      ),
-                      ButtonSegment(
-                        value: AppearanceBrightness.dark,
-                        icon: Icon(PhosphorIconsRegular.moon),
-                        label: Text('Dark'),
-                      ),
-                    ],
-                    selected: {_draft.brightness},
-                    onSelectionChanged: widget.saving
-                        ? null
-                        : (selection) => setState(
                             () => _draft = _draft.copyWith(
-                              brightness: selection.single,
+                              preset: UiPreset.fruity,
                             ),
                           ),
-                  ),
-                  if (widget.error case final error?) ...[
-                    const SizedBox(height: 20),
+                        ),
+                        _LayoutCard(
+                          key: const ValueKey('blockbuster-layout-choice'),
+                          title: 'Blockbuster',
+                          description:
+                              'Bold billboards, dense shelves and quick browsing.',
+                          icon: PhosphorIconsRegular.filmStrip,
+                          selected: _draft.preset == UiPreset.blockbuster,
+                          onSelected: () => setState(
+                            () => _draft = _draft.copyWith(
+                              preset: UiPreset.blockbuster,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
                     Text(
-                      error,
-                      key: const ValueKey('appearance-error'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                      'Colour palette',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final palette in PaletteFamily.values)
+                          _PaletteChoice(
+                            palette: palette,
+                            selected: _draft.palette == palette,
+                            onSelected: () => setState(
+                              () => _draft = _draft.copyWith(palette: palette),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Brightness',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<AppearanceBrightness>(
+                      key: const ValueKey('appearance-brightness'),
+                      segments: const [
+                        ButtonSegment(
+                          value: AppearanceBrightness.light,
+                          icon: Icon(PhosphorIconsRegular.sun),
+                          label: Text('Light'),
+                        ),
+                        ButtonSegment(
+                          value: AppearanceBrightness.dark,
+                          icon: Icon(PhosphorIconsRegular.moon),
+                          label: Text('Dark'),
+                        ),
+                      ],
+                      selected: {_draft.brightness},
+                      onSelectionChanged: widget.saving
+                          ? null
+                          : (selection) => setState(
+                              () => _draft = _draft.copyWith(
+                                brightness: selection.single,
+                              ),
+                            ),
+                    ),
+                    if (widget.error case final error?) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        error,
+                        key: const ValueKey('appearance-error'),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 32),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.icon(
+                        key: const ValueKey('appearance-continue'),
+                        onPressed: widget.saving
+                            ? null
+                            : () async => widget.onContinue(_draft),
+                        icon: widget.saving
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(PhosphorIconsRegular.arrowRight),
+                        label: const Text('Continue'),
                       ),
                     ),
                   ],
-                  const SizedBox(height: 32),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      key: const ValueKey('appearance-continue'),
-                      onPressed: widget.saving
-                          ? null
-                          : () async => widget.onContinue(_draft),
-                      icon: widget.saving
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(PhosphorIconsRegular.arrowRight),
-                      label: const Text('Continue'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -202,14 +213,14 @@ class _LayoutCard extends StatelessWidget {
       label: '$title layout',
       child: InkWell(
         autofocus: selected,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(4),
         onTap: onSelected,
         child: Container(
           width: 360,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: colors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(18),
+            color: selected ? colors.secondaryContainer : colors.surface,
+            borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: selected ? colors.primary : colors.outlineVariant,
               width: selected ? 3 : 1,

@@ -5,7 +5,10 @@ import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/appearance/appearance_screen.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 
+import 'support/onboarding_fonts.dart';
+
 void main() {
+  setUpAll(loadOnboardingFonts);
   for (final preset in UiPreset.values) {
     testWidgets('short TV starts at visible $preset and scrolls to Continue', (
       tester,

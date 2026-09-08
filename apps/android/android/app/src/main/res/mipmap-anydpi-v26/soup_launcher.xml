@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The inset keeps the can comfortably inside circular and squircle masks.
-     The generated foreground has an opaque slate canvas. -->
+     The can artwork has a transparent canvas. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/soup_icon_background" />
     <foreground>
         <inset
             android:drawable="@drawable/soup_launcher_art"
-            android:inset="10dp" />
+            android:inset="22dp" />
     </foreground>
 </adaptive-icon>

@@ -1,24 +1,22 @@
 # Onboarding review screenshots
 
-Current direction: a full-screen cool slate canvas, soft white typography and
-mist-blue controls, with the generated red-and-cream soup-can/play app badge
-selected in SOUP-89. TV uses a
-side-by-side heading and form; phone uses a stacked
-layout. There is no floating modal/card shell. These replace the earlier
-charcoal-and-orange, apricot-accent and teal/S-badge captures (SOUP-84/85/86).
+SOUP-92: film-festival poster typography, cobalt, acid yellow and ink on a paper
+canvas. The transparent original Soup can remains unboxed. Bold Barlow Condensed
+headings sit in crisp introduction panels with an offset print shadow; controls
+use small corners and a strong colour change for remote focus. Quick Connect and
+password sign-in share equal columns on TV and stack on phones.
 
-SOUP-87 adds a clear connection-success state, shorter QR copy and centred phone
-instructions. Step content enters with a 250ms fade and a 12px directional slide;
-header and navigation stay outside that animation. Only the current form is
-mounted, preserving focus and controller ownership. The custom toggle focus ring
-and button feedback use 200ms transitions. These custom animations are immediate
-when reduced motion is enabled. The SOUP-89 soup-can identity replaces the
-cinema-ticket logo; layout and interaction behaviour are unchanged.
+Fine diagonal frames and the bottom filmstrip edge are painted in a separate,
+noninteractive layer. A 36-second cycle updates at 20 fps without rebuilding
+forms or moving focus. Reduced motion, accessible navigation, inactive routes
+and app backgrounding stop the motion. Existing step/focus transitions also
+respect reduced motion.
 
-These images render the production Flutter onboarding widgets using SDK Roboto
-fonts and fake connection/server responses. They are headless UI renders, not
-Android emulator captures. The QR codes contain demonstration URLs and do not
-authorize a real device. No account credentials are included.
+These are production Flutter widget renders with bundled headings, SDK Roboto and
+icon fonts, and fixture network responses. They are not native device captures.
+The QR URLs and Quick Connect code are demonstrations, with no real authorization
+or credentials. TV captures use the production remote field widget; Android's
+native editor is tested separately on Guest Room TV.
 
 | Step | Android TV (960×540 logical) | Phone (412×915 logical) |
 | --- | --- | --- |
@@ -26,7 +24,8 @@ authorize a real device. No account credentials are included.
 | Tailscale QR | [TV](tailscale-qr-tv.png) | [Phone](tailscale-qr-phone.png) |
 | Tailscale connected | [TV](tailscale-connected-tv.png) | [Phone](tailscale-connected-phone.png) |
 | Jellyfin server | [TV](jellyfin-server-tv.png) | [Phone](jellyfin-server-phone.png) |
-| Jellyfin sign-in | [TV](jellyfin-sign-in-tv.png) | [Phone](jellyfin-sign-in-phone.png) |
+| Quick Connect / password | [TV](jellyfin-sign-in-tv.png) | [Phone](jellyfin-sign-in-phone.png) |
+| Appearance (initial scroll position) | [TV](appearance-tv.png) | [Phone](appearance-phone.png) |
 
 Regenerate from `apps/android`:
 
@@ -34,6 +33,5 @@ Regenerate from `apps/android`:
 flutter test --dart-define=UPDATE_ONBOARDING_SCREENSHOTS=true test/onboarding_screenshots_test.dart
 ```
 
-Regular tests do not update these files. Native Tailscale registration, actual
-QR scanning, media playback, and Android keyboard behavior still require an
-Android device or emulator for end-to-end validation.
+Regular tests do not update these files. Native device evidence is recorded in
+[Guest Room TV validation](../../development/android-tv-design-2026-09-08.md).

@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -287,19 +288,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
         },
         child: Scaffold(
           resizeToAvoidBottomInset: !_tv,
-          body: DecoratedBox(
+          body: OnboardingBackdrop(
             key: const ValueKey('setup-canvas'),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  SoupTheme.onboardingGlow,
-                  SoupTheme.onboardingBackground,
-                  SoupTheme.onboardingShade,
-                ],
-              ),
-            ),
             child: Material(
               type: MaterialType.transparency,
               child: SafeArea(
@@ -433,13 +423,13 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     };
     return Row(
       children: [
-        const SoupMark(),
+        const SoupMark(size: 46),
         const SizedBox(width: 10),
         Text(
-          'Soup',
+          'SOUP',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
           ),
         ),
         const SizedBox(width: 24),
@@ -465,14 +455,14 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
                       children: [
                         for (var index = 1; index <= 3; index++)
                           Container(
-                            width: 24,
-                            height: 3,
+                            width: 28,
+                            height: 5,
                             margin: EdgeInsets.only(left: index == 1 ? 0 : 6),
                             decoration: BoxDecoration(
                               color: index <= step
                                   ? colors.primary
                                   : colors.outlineVariant,
-                              borderRadius: BorderRadius.circular(2),
+                              borderRadius: BorderRadius.zero,
                             ),
                           ),
                       ],
@@ -489,62 +479,79 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
 
   Widget _intro(BuildContext context, {required bool wide}) {
     final theme = Theme.of(context);
-    return Column(
+    final title = switch (model.phase) {
+      SetupPhase.connection => 'Welcome to Soup',
+      SetupPhase.server => 'Find your Jellyfin server',
+      SetupPhase.credentials =>
+        'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
+      SetupPhase.ready => 'You’re all set',
+    };
+    return Container(
       key: const ValueKey('setup-intro'),
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          switch (model.phase) {
-            SetupPhase.connection => 'A LITTLE SETUP. A LOT TO WATCH.',
-            SetupPhase.server => 'YOUR LIBRARY STARTS HERE.',
-            SetupPhase.credentials ||
-            SetupPhase.ready => 'MAKE YOURSELF AT HOME.',
-          },
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.primary,
-            letterSpacing: 1.6,
-            height: 1.5,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Semantics(
-          header: true,
-          child: Text(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(
+        color: SoupTheme.onboardingAccent,
+        boxShadow: [
+          BoxShadow(color: SoupTheme.onboardingInk, offset: Offset(6, 6)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
             switch (model.phase) {
-              SetupPhase.connection => 'Welcome to Soup',
-              SetupPhase.server => 'Find your Jellyfin server',
-              SetupPhase.credentials =>
-                'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
-              SetupPhase.ready => 'You’re all set',
+              SetupPhase.connection => 'A LITTLE SETUP. A LOT TO WATCH.',
+              SetupPhase.server => 'YOUR LIBRARY STARTS HERE.',
+              SetupPhase.credentials ||
+              SetupPhase.ready => 'MAKE YOURSELF AT HOME.',
             },
-            style: theme.textTheme.headlineLarge?.copyWith(
-              fontSize: wide ? 44 : 36,
-              fontWeight: FontWeight.w500,
-              letterSpacing: -1.3,
-              height: 1.12,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: SoupTheme.onboardingSignal,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.w700,
+              height: 1.4,
             ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          switch (model.phase) {
-            SetupPhase.connection =>
-              'Your films, shows and favourites.\nLet’s bring them a little closer.',
-            SetupPhase.server =>
-              model.tailscaleEnabled
-                  ? 'Connect to your Jellyfin server through your Tailscale network.'
-                  : 'Connect to a Jellyfin server reachable from this device.',
-            SetupPhase.credentials =>
-              'Use your Jellyfin account. Your next favourite is waiting.',
-            SetupPhase.ready => 'Your library is ready.',
-          },
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            height: 1.6,
+          const SizedBox(height: 16),
+          Semantics(
+            header: true,
+            label: title,
+            child: ExcludeSemantics(
+              child: Text(
+                title.toUpperCase(),
+                style: theme.textTheme.headlineLarge?.copyWith(
+                  color: SoupTheme.onboardingSurface,
+                  fontSize: wide ? 60 : 48,
+                  letterSpacing: -0.5,
+                  height: 0.98,
+                ),
+              ),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+          Container(width: 44, height: 4, color: SoupTheme.onboardingSignal),
+          const SizedBox(height: 16),
+          Text(
+            switch (model.phase) {
+              SetupPhase.connection =>
+                'Your films, shows and favourites.\nLet’s bring them a little closer.',
+              SetupPhase.server =>
+                model.tailscaleEnabled
+                    ? 'Connect to your Jellyfin server through your Tailscale network.'
+                    : 'Connect to a Jellyfin server reachable from this device.',
+              SetupPhase.credentials =>
+                'Use your Jellyfin account. Your next favourite is waiting.',
+              SetupPhase.ready => 'Your library is ready.',
+            },
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: SoupTheme.onboardingSurface,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -620,7 +627,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
             duration: _focusDuration,
             curve: Curves.easeOutCubic,
             foregroundDecoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: _switchFocus.hasFocus
                     ? colors.primary
@@ -633,7 +640,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
             child: Material(
               key: const ValueKey('tailscale-tile-material'),
               type: MaterialType.transparency,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(4),
               clipBehavior: Clip.antiAlias,
               child: SwitchListTile.adaptive(
                 key: const ValueKey('tailscale-toggle'),
@@ -642,11 +649,9 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
                   horizontal: 18,
                   vertical: 10,
                 ),
-                tileColor: colors.surfaceContainerHighest.withValues(
-                  alpha: 0.45,
-                ),
+                tileColor: SoupTheme.onboardingSurface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 title: const Text(
                   'Use Tailscale',
@@ -825,11 +830,11 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
       key: ValueKey(key),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        border: Border.all(
-          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.6),
-        ),
-        borderRadius: BorderRadius.circular(16),
+        color: key == 'quick-connect-panel'
+            ? SoupTheme.onboardingSignal
+            : SoupTheme.onboardingSurface,
+        border: Border.all(color: theme.colorScheme.onSurface, width: 1.5),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -838,7 +843,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     );
     final quick = panel('quick-connect-panel', _quickConnectContent(context));
     final password = panel('password-panel', [
-      Text('Username and password', style: theme.textTheme.titleMedium),
+      Text('Username and password', style: theme.textTheme.titleLarge),
       const SizedBox(height: 16),
       ..._fields(context, short, duration),
       if (model.error case final error?) ...[
@@ -917,11 +922,11 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
       QuickConnectPhase.completing => 'Approved. Signing in…',
     };
     return [
-      Text('Quick Connect', style: theme.textTheme.titleMedium),
+      Text('Quick Connect', style: theme.textTheme.titleLarge),
       const SizedBox(height: 12),
       if (!unavailable) ...[
         Text(
-          'On a device already signed in to Jellyfin, open Settings → Quick Connect and enter this code.',
+          'On a device already signed in to Jellyfin, open Quick Connect in Settings and enter this code.',
           style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
         ),
         if (code != null) ...[
@@ -1000,7 +1005,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(4),
         ),
         child: QrImageView(
           data: url.toString(),
@@ -1082,7 +1087,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: colors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(4),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

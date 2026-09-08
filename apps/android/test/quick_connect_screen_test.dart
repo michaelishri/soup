@@ -7,7 +7,10 @@ import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'support/quick_connect_fixture.dart';
 import 'widget_test.dart' show setup, FakeTvTextInput, nextToServer;
 
+import 'support/onboarding_fonts.dart';
+
 void main() {
+  setUpAll(loadOnboardingFonts);
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('dev.michaelishri.soup/tv_text_input');
   setUp(

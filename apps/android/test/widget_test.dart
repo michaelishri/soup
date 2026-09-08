@@ -19,7 +19,11 @@ import 'package:soup_tailscale/soup_tailscale.dart';
 import 'support/connectivity_fakes.dart';
 import 'support/quick_connect_fixture.dart';
 
+import 'support/onboarding_fonts.dart';
+
 void main() {
+  setUpAll(loadOnboardingFonts);
+
   TestWidgetsFlutterBinding.ensureInitialized();
   const inputChannel = MethodChannel('dev.michaelishri.soup/tv_text_input');
   setUp(() {
@@ -53,7 +57,7 @@ void main() {
       } else {
         expect(intro.bottom, lessThan(toggle.top));
       }
-      expect(find.text('Welcome to Soup'), findsOneWidget);
+      expect(find.text('WELCOME TO SOUP'), findsOneWidget);
       expect(button(tester, 'connection-next-button').onPressed, isNotNull);
       final originalNext = tester.getRect(
         find.byKey(const ValueKey('connection-next-button')),

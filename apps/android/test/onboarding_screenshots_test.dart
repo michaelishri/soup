@@ -8,11 +8,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
+import 'package:soup/src/features/appearance/appearance_screen.dart';
+import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
+import 'package:soup/src/features/shared/tv_text_input.dart';
 
 import 'support/connectivity_fakes.dart';
+import 'support/quick_connect_fixture.dart';
+import 'support/onboarding_fonts.dart';
+import 'widget_test.dart' show FakeTvTextInput;
 
 // Explicitly opt in to generating review artifacts. Ordinary QA never rewrites
 // screenshots. Uses real widgets, bundled SDK fonts, and fake network data.
@@ -46,11 +52,28 @@ void main() {
       );
     }
     await loader.load();
+    await loadOnboardingFonts();
     final icons = FontLoader('packages/phosphoricons_flutter/PhosphorRegular');
     icons.addFont(
       rootBundle.load('packages/phosphoricons_flutter/lib/fonts/Phosphor.ttf'),
     );
     await icons.load();
+    final filledIcons = FontLoader(
+      'packages/phosphoricons_flutter/PhosphorFill',
+    );
+    filledIcons.addFont(
+      rootBundle.load(
+        'packages/phosphoricons_flutter/lib/fonts/Phosphor-Fill.ttf',
+      ),
+    );
+    await filledIcons.load();
+    final materialIcons = FontLoader('MaterialIcons');
+    materialIcons.addFont(
+      File.fromUri(
+        directory.resolve('MaterialIcons-Regular.otf'),
+      ).readAsBytes().then(ByteData.sublistView),
+    );
+    await materialIcons.load();
   });
 
   for (final (label, size) in [
@@ -62,9 +85,10 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final client = FakeTailscaleClient();
+      final fixture = QuickConnectFixture();
       final model = ConnectivityViewModel(
         client,
-        jellyfinClientFactory: FakeJellyfinClientFactory(),
+        jellyfinClientFactory: fixture.factory,
         sessionStore: MemorySessionStore(),
         connectionStore: MemoryConnectionPreferencesStore(),
       );
@@ -77,7 +101,12 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: SoupTheme.onboarding,
-            home: ConnectivityScreen(viewModel: model),
+            home: ConnectivityScreen(
+              viewModel: model,
+              tvTextInput: label == 'tv'
+                  ? FakeTvTextInput()
+                  : const TvTextInput(),
+            ),
           ),
         ),
       );
@@ -116,13 +145,27 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('connection-next-button')));
       await tester.pumpAndSettle();
       await capture('jellyfin-server');
-      await tester.enterText(
-        find.byKey(const ValueKey('server-url-field')),
-        'http://jellyfin:8096',
-      );
-      await tester.tap(find.byKey(const ValueKey('check-server-button')));
+      await model.checkServer('http://jellyfin:8096');
       await tester.pumpAndSettle();
       await capture('jellyfin-sign-in');
+      model.pauseQuickConnect();
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('screenshot'),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: SoupTheme.onboarding,
+            home: AppearanceScreen(
+              initialSettings: const AppearanceSettings(),
+              saving: false,
+              onContinue: (_) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await capture('appearance');
+      await tester.pumpWidget(const SizedBox.shrink());
     });
   }
 }

@@ -1,43 +1,48 @@
-# Soup identity — classic soup can / play
+# Soup identity — soup can / play
 
-Selected for production in SOUP-89 on 2026-09-08.
-
-The mark is an upright soup can with a large play cutout across a classic red and
-cream split label. Pale mist-blue rims connect it to the existing UI accent and
-the opaque cool-slate canvas coordinates with the onboarding background. It
-replaces the cinema-ticket mark selected during SOUP-86. Existing user-selectable
-library palettes and the onboarding flow are unchanged.
+The red-and-cream can selected in SOUP-89 remains the production mark. SOUP-92
+removes its slate backdrop and surrounding tile. The can now sits directly on
+its host surface in connectivity, appearance and library headers.
 
 ## Assets and integration
 
-- [Production Flutter asset](../../apps/android/assets/branding/soup-icon.png)
-- [Generated master / selected concept](concepts/soup-can-play-v2-campbells.png)
-- Android copy: `apps/android/android/app/src/main/res/drawable-nodpi/soup_launcher_art.png`
-- Shared widget: `SoupMark`, used in connectivity, appearance and library headers.
-- Android adaptive launcher: `@mipmap/soup_launcher` (Soup supports API 31+).
+- [Transparent production master](concepts/soup-can-play-transparent.png): 1024 × 1024 RGBA.
+- [Flutter asset](../../apps/android/assets/branding/soup-icon.png).
+- Android copy: `apps/android/android/app/src/main/res/drawable-nodpi/soup_launcher_art.png`.
+- Shared widget: `SoupMark`, with no tint, enclosing tile or corner clipping.
+- Android adaptive launcher: `@mipmap/soup_launcher`, with a 22dp inset and paper background. Android still supplies the platform's required launcher mask.
+- Native launch backgrounds match the paper onboarding canvas in light and dark system mode.
 
-The final PNG is a 1254 × 1254 opaque RGB app badge, not a transparent silhouette
-or a vector master. Keep its own background and do not tint the entire image.
-Flutter rounds its corners at display time; Android applies its launcher mask.
-The Android foreground retains a 10dp inset so the upright can remains comfortably
-inside circular and squircle masks. The selected master, Flutter asset and Android
-copy are byte-identical, checked by a regression test. The launcher background
-resource is checked against the onboarding slate token.
+The transparent master and both production copies are byte-identical. Regression
+checks cover their alpha border, visible can, preserved dark play symbol, and
+launcher background. The tightly framed can remains readable at small sizes.
 
-The previous fin PNG remains in the repository as an unused legacy source; it is
-no longer declared in Flutter's assets or referenced by the UI. The rejected S
-badge is preserved in commit `1d8c354`; the superseded cinema-ticket production
-asset is preserved in commit `a1cc40e`.
+## Onboarding visual language
 
-## Generation provenance
+The onboarding takes its cues from film-festival posters: cobalt introduction
+panels, acid-yellow highlights, ink-black controls and an off-white paper canvas.
+Condensed Barlow headings, crisp corners and offset print shadows give it a
+distinct graphic character. Fine diagonal frames and a narrow filmstrip edge
+provide subtle motion. Body copy and native editors retain platform typography
+for reading and editing.
 
-Generated with the built-in image generation tool via the imagegen skill during
-SOUP-89, using the first soup-can study as its edit reference. The selected master
-was copied unchanged to both production assets. It deliberately evokes familiar
-red-and-cream soup packaging without lettering or a third-party wordmark. This is
-generated artwork, not a trademark-clearance claim.
+The font is an unmodified ExtraBold TTF from the
+[Google Fonts Barlow Condensed distribution](https://github.com/google/fonts/tree/main/ofl/barlowcondensed).
+Its [SIL Open Font License](../../apps/android/assets/fonts/OFL.txt) ships with the
+app and is registered in Flutter's license registry. No runtime font download is
+needed. The app's user-selected library palettes remain available.
 
-## Final generation prompt
+## Artwork provenance
 
-The exact edit prompt is preserved in the
-[SOUP-89 generation record](concepts/soup-can-play-v2-campbells.md).
+The [original generated master](concepts/soup-can-play-v2-campbells.png) and its
+[SOUP-89 generation record](concepts/soup-can-play-v2-campbells.md) are retained.
+The SOUP-92 transparent derivative uses that original, without redrawing the can.
+
+Background removal used Pillow: flood-fill only the connected dark exterior
+(maximum RGB channel below 90), preserve the enclosed play symbol, recover colour
+and coverage at the antialiased perimeter, then centre an 820px square crop and
+resample to 1024px. The connected foreground bounds in the original were
+`(356, 265, 898, 994)`. The result was inspected against both cream and slate.
+
+The previous fin source is unused. Superseded S-badge and cinema-ticket production
+assets remain in git history.
