@@ -305,83 +305,91 @@ class _LibraryScreenState extends State<LibraryScreen> {
       listenable: _viewModel,
       builder: (context, _) => _content(),
     );
-    return Scaffold(
-      body: SafeArea(
-        child: FocusTraversalGroup(
-          policy: blockbuster && wide
-              ? ReadingOrderTraversalPolicy(
-                  requestFocusCallback: _requestBlockbusterTraversalFocus,
-                )
-              : ReadingOrderTraversalPolicy(),
-          child: blockbuster && wide
-              ? Stack(
-                  children: [
-                    FocusScope(
-                      node: _blockbusterContentScopeNode,
-                      child: Focus(
-                        canRequestFocus: false,
-                        skipTraversal: true,
-                        onKeyEvent: _handleBlockbusterContentKeyEvent,
-                        child: content,
+    return PopScope(
+      canPop: _destination == _FruityDestination.home,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && mounted) {
+          setState(() => _destination = _FruityDestination.home);
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: FocusTraversalGroup(
+            policy: blockbuster && wide
+                ? ReadingOrderTraversalPolicy(
+                    requestFocusCallback: _requestBlockbusterTraversalFocus,
+                  )
+                : ReadingOrderTraversalPolicy(),
+            child: blockbuster && wide
+                ? Stack(
+                    children: [
+                      FocusScope(
+                        node: _blockbusterContentScopeNode,
+                        child: Focus(
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          onKeyEvent: _handleBlockbusterContentKeyEvent,
+                          child: content,
+                        ),
                       ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: _BlockbusterRail(
-                        key: _blockbusterRailKey,
-                        destination: _destination,
-                        onExit: _focusBlockbusterContent,
-                        onSelected: (value) =>
-                            setState(() => _destination = value),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: _BlockbusterRail(
+                          key: _blockbusterRailKey,
+                          destination: _destination,
+                          onExit: _focusBlockbusterContent,
+                          onSelected: (value) =>
+                              setState(() => _destination = value),
+                        ),
                       ),
-                    ),
-                  ],
-                )
-              : Column(
-                  children: [
-                    if (wide)
-                      _FruityTopNavigation(
-                        destination: _destination,
-                        userName: widget.session.userName,
-                        onSelected: (value) =>
-                            setState(() => _destination = value),
-                      ),
-                    Expanded(child: content),
-                  ],
-                ),
+                    ],
+                  )
+                : Column(
+                    children: [
+                      if (wide)
+                        _FruityTopNavigation(
+                          destination: _destination,
+                          userName: widget.session.userName,
+                          onSelected: (value) =>
+                              setState(() => _destination = value),
+                        ),
+                      Expanded(child: content),
+                    ],
+                  ),
+          ),
         ),
-      ),
-      bottomNavigationBar: wide
-          ? null
-          : NavigationBar(
-              selectedIndex: _destination.index,
-              onDestinationSelected: (index) => setState(
-                () => _destination = _FruityDestination.values[index],
+        bottomNavigationBar: wide
+            ? null
+            : NavigationBar(
+                selectedIndex: _destination.index,
+                onDestinationSelected: (index) => setState(
+                  () => _destination = _FruityDestination.values[index],
+                ),
+                destinations: const [
+                  NavigationDestination(
+                    key: ValueKey('mobile-nav-home'),
+                    icon: Icon(PhosphorIconsRegular.house),
+                    selectedIcon: Icon(PhosphorIconsFill.house),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsRegular.television),
+                    selectedIcon: Icon(PhosphorIconsFill.television),
+                    label: 'TV',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsRegular.filmSlate),
+                    selectedIcon: Icon(PhosphorIconsFill.filmSlate),
+                    label: 'Movies',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(PhosphorIconsRegular.gear),
+                    selectedIcon: Icon(PhosphorIconsFill.gear),
+                    label: 'Settings',
+                  ),
+                ],
               ),
-              destinations: const [
-                NavigationDestination(
-                  key: ValueKey('mobile-nav-home'),
-                  icon: Icon(PhosphorIconsRegular.house),
-                  selectedIcon: Icon(PhosphorIconsFill.house),
-                  label: 'Home',
-                ),
-                NavigationDestination(
-                  icon: Icon(PhosphorIconsRegular.television),
-                  selectedIcon: Icon(PhosphorIconsFill.television),
-                  label: 'TV',
-                ),
-                NavigationDestination(
-                  icon: Icon(PhosphorIconsRegular.filmSlate),
-                  selectedIcon: Icon(PhosphorIconsFill.filmSlate),
-                  label: 'Movies',
-                ),
-                NavigationDestination(
-                  icon: Icon(PhosphorIconsRegular.gear),
-                  selectedIcon: Icon(PhosphorIconsFill.gear),
-                  label: 'Settings',
-                ),
-              ],
-            ),
+      ),
     );
   }
 

@@ -15,7 +15,11 @@ abstract interface class SessionStore {
 }
 
 class SecureSessionStore implements SessionStore {
-  const SecureSessionStore([this._storage = const FlutterSecureStorage()]);
+  const SecureSessionStore([
+    this._storage = const FlutterSecureStorage(
+      aOptions: AndroidOptions(resetOnError: false),
+    ),
+  ]);
 
   static const _deviceIdKey = 'jellyfin.device-id';
   static const _sessionKey = 'jellyfin.session';
@@ -41,19 +45,31 @@ class SecureSessionStore implements SessionStore {
     if (encoded == null) return null;
     try {
       final json = jsonDecode(encoded);
-      if (json is! Map<String, Object?>) return null;
+      if (json is! Map<String, Object?>) throw const FormatException();
       final serverUrl = Uri.tryParse(json['serverUrl'] as String? ?? '');
       final token = json['accessToken'] as String?;
-      if (serverUrl == null || token == null || token.isEmpty) return null;
+      final serverId = json['serverId'] as String?;
+      final userId = json['userId'] as String?;
+      if (serverUrl == null ||
+          !{'http', 'https'}.contains(serverUrl.scheme) ||
+          serverUrl.host.isEmpty ||
+          token == null ||
+          token.isEmpty ||
+          serverId == null ||
+          serverId.isEmpty ||
+          userId == null ||
+          userId.isEmpty) {
+        throw const FormatException();
+      }
       return JellyfinSession(
         serverUrl: serverUrl,
-        serverId: json['serverId'] as String? ?? '',
-        userId: json['userId'] as String? ?? '',
+        serverId: serverId,
+        userId: userId,
         userName: json['userName'] as String? ?? '',
         accessToken: token,
       );
     } on Object {
-      return null;
+      throw const FormatException('Your saved sign-in could not be read.');
     }
   }
 

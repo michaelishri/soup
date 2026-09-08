@@ -22,6 +22,7 @@ class DetailsViewModel extends ChangeNotifier {
     }
   }
 
+  bool _disposed = false;
   final JellyfinMetadataRepository repository;
   final JellyfinItem initialItem;
   final Map<String, _ScopeStatus> _statuses = {};
@@ -68,9 +69,9 @@ class DetailsViewModel extends ChangeNotifier {
   String? get blockingError => _mainScopeHasSnapshot ? null : error;
 
   Future<void> load() async {
-    if (_refreshing) return;
+    if (_disposed || _refreshing) return;
     _refreshing = true;
-    notifyListeners();
+    _notify();
     final refreshes = <Future<void>>[repository.refreshItem(_item.id)];
     if (_item.type == 'CollectionFolder') {
       refreshes.add(repository.refreshLibraryItems(_item.id));
@@ -88,11 +89,12 @@ class DetailsViewModel extends ChangeNotifier {
       );
     } finally {
       _refreshing = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> retry() async {
+    if (_disposed) return;
     final season = _selectedSeason;
     await Future.wait([
       load(),
@@ -145,12 +147,13 @@ class DetailsViewModel extends ChangeNotifier {
       stale: snapshot.stale,
       errorMessage: snapshot.errorMessage,
     );
-    notifyListeners();
+    _notify();
   }
 
   Future<void> selectSeason(JellyfinItem season) => _selectSeason(season);
 
   Future<void> _selectSeason(JellyfinItem season) async {
+    if (_disposed) return;
     if (_selectedSeason?.id == season.id && _episodesSubscription != null) {
       return;
     }
@@ -167,13 +170,14 @@ class DetailsViewModel extends ChangeNotifier {
     _episodesSubscription = repository
         .watchEpisodes(_item.id, seasonId: seasonId)
         .listen((snapshot) => _acceptEpisodes(seasonId, snapshot));
-    notifyListeners();
+    _notify();
     await _refreshEpisodes(seasonId);
   }
 
   Future<void> _refreshEpisodes(String seasonId) async {
+    if (_disposed) return;
     _loadingEpisodes = true;
-    notifyListeners();
+    _notify();
     try {
       await repository.refreshEpisodes(_item.id, seasonId: seasonId);
     } on Object catch (error) {
@@ -186,7 +190,7 @@ class DetailsViewModel extends ChangeNotifier {
     } finally {
       if (_selectedSeason?.id == seasonId) {
         _loadingEpisodes = false;
-        notifyListeners();
+        _notify();
       }
     }
   }
@@ -195,8 +199,13 @@ class DetailsViewModel extends ChangeNotifier {
     return Duration(microseconds: item.playbackPositionTicks ~/ 10);
   }
 
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_itemSubscription?.cancel());
     unawaited(_librarySubscription?.cancel());
     unawaited(_seasonsSubscription?.cancel());

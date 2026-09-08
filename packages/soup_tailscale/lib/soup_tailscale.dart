@@ -234,8 +234,16 @@ class NativeTailscaleClient implements TailscaleClient {
   }) async {
     var consecutiveFailures = 0;
     var authKeyNeedsLoginSince = DateTime.now();
+    final restoring = Stopwatch()..start();
     while (true) {
       _ensureCurrent(generation);
+      if (mode == _RegistrationMode.restore &&
+          restoring.elapsed >= const Duration(seconds: 30)) {
+        throw const TailscaleException(
+          'restore',
+          'Tailscale took too long to reconnect. Please try again.',
+        );
+      }
       try {
         final status = await localApi.status();
         consecutiveFailures = 0;

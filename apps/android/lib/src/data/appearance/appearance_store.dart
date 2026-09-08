@@ -18,7 +18,11 @@ class SharedPreferencesAppearanceStore implements AppearanceStore {
   @override
   Future<AppearanceSettings?> read() async {
     final encoded = await _preferences.getString(settingsKey);
-    return encoded == null ? null : AppearanceSettings.tryDecode(encoded);
+    if (encoded == null) return null;
+    return AppearanceSettings.tryDecode(encoded) ??
+        (throw const FormatException(
+          'Your saved appearance could not be read.',
+        ));
   }
 
   @override

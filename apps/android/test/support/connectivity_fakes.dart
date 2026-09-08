@@ -11,12 +11,29 @@ import 'package:soup_tailscale/soup_tailscale.dart';
 class MemorySessionStore implements SessionStore {
   MemorySessionStore([this.session]);
   JellyfinSession? session;
+  Object? readError;
+  Object? deviceIdError;
+  Completer<void>? readGate;
+  int clears = 0;
   @override
-  Future<void> clear() async => session = null;
+  Future<void> clear() async {
+    clears++;
+    session = null;
+  }
+
   @override
-  Future<String> deviceId() async => 'device-1';
+  Future<String> deviceId() async {
+    if (deviceIdError case final error?) throw error;
+    return 'device-1';
+  }
+
   @override
-  Future<JellyfinSession?> read() async => session;
+  Future<JellyfinSession?> read() async {
+    await readGate?.future;
+    if (readError case final error?) throw error;
+    return session;
+  }
+
   @override
   Future<void> write(JellyfinSession value) async => session = value;
 }
@@ -92,6 +109,7 @@ class FakeTailscaleClient implements TailscaleClient {
   int interactiveConnects = 0;
   int disconnects = 0;
   bool restoreConnected = false;
+  Completer<void>? restoreGate;
   bool immediateConnect = false;
   bool delayCancellation = false;
   bool preparing = false;
@@ -104,6 +122,7 @@ class FakeTailscaleClient implements TailscaleClient {
   @override
   Future<void> restore() async {
     restores++;
+    await restoreGate?.future;
     if (restoreConnected) emit(connectedStatus);
   }
 

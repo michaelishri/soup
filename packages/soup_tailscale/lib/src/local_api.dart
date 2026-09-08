@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -33,11 +34,15 @@ class TailscaleLocalApiException implements Exception {
 }
 
 class TailscaleLocalApiClient {
-  TailscaleLocalApiClient({required String address, required this.credential})
-    : _baseUri = Uri.parse('http://$address/localapi/v0/');
+  TailscaleLocalApiClient({
+    required String address,
+    required this.credential,
+    this.requestTimeout = const Duration(seconds: 5),
+  }) : _baseUri = Uri.parse('http://$address/localapi/v0/');
 
   final Uri _baseUri;
   final String credential;
+  final Duration requestTimeout;
 
   Future<void> startInteractiveLogin() async {
     await _request('POST', 'login-interactive');
@@ -55,25 +60,30 @@ class TailscaleLocalApiClient {
   Future<String> _request(String method, String path) async {
     final client = HttpClient()..findProxy = (_) => 'DIRECT';
     try {
-      final request = await client.openUrl(method, _baseUri.resolve(path));
-      request.headers
-        ..set(
-          HttpHeaders.authorizationHeader,
-          'Basic ${base64Encode(utf8.encode(':$credential'))}',
-        )
-        ..set('Sec-Tailscale', 'localapi');
-      request.contentLength = 0;
-      final response = await request.close();
-      final body = await utf8.decoder.bind(response).join();
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw TailscaleLocalApiException(
-          'LocalAPI $method $path',
-          'HTTP ${response.statusCode}${body.isEmpty ? '' : ': $body'}',
-        );
-      }
-      return body;
+      return await _send(client, method, path).timeout(requestTimeout);
     } finally {
+      // Also abort the socket/body stream when the deadline expires.
       client.close(force: true);
     }
+  }
+
+  Future<String> _send(HttpClient client, String method, String path) async {
+    final request = await client.openUrl(method, _baseUri.resolve(path));
+    request.headers
+      ..set(
+        HttpHeaders.authorizationHeader,
+        'Basic ${base64Encode(utf8.encode(':$credential'))}',
+      )
+      ..set('Sec-Tailscale', 'localapi');
+    request.contentLength = 0;
+    final response = await request.close();
+    final body = await utf8.decoder.bind(response).join();
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw TailscaleLocalApiException(
+        'LocalAPI $method $path',
+        'HTTP ${response.statusCode}${body.isEmpty ? '' : ': $body'}',
+      );
+    }
+    return body;
   }
 }

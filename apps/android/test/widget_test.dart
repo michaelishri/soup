@@ -706,6 +706,7 @@ void main() {
           final client = FakeTailscaleClient()..immediateConnect = true;
           final store = MemorySessionStore();
           final preferences = MemoryConnectionPreferencesStore();
+          final appearance = MemoryAppearanceStore();
           final quickFixture = QuickConnectFixture();
           final factory = quickConnect
               ? quickFixture.factory
@@ -724,7 +725,7 @@ void main() {
               jellyfinClientFactory: factory,
               sessionStore: store,
               connectionStore: preferences,
-              appearanceStore: MemoryAppearanceStore(),
+              appearanceStore: appearance,
               database: database,
             ),
           );
@@ -768,6 +769,25 @@ void main() {
           );
           expect(factory.modes, [mode]);
           if (mode == ConnectionMode.direct) expect(client.restores, 0);
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pumpAndSettle();
+          final reopenedClient = FakeTailscaleClient()..restoreConnected = true;
+          addTearDown(reopenedClient.dispose);
+          await tester.pumpWidget(
+            SoupApp(
+              tailscaleClient: reopenedClient,
+              jellyfinClientFactory: factory,
+              sessionStore: store,
+              connectionStore: preferences,
+              appearanceStore: appearance,
+              database: database,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('No playlists yet'), findsOneWidget);
+          expect(find.text('Make Soup yours'), findsNothing);
+          expect(find.byKey(const ValueKey('server-url-field')), findsNothing);
+          expect(reopenedClient.interactiveConnects, 0);
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.pumpAndSettle();
         },

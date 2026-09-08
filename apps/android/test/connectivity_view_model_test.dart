@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
@@ -71,7 +73,7 @@ void main() {
   });
 
   test(
-    'failed restoration stays selected; retry and Next reuse saved account',
+    'failed restoration reconnects with the saved node and account automatically',
     () async {
       preferences.mode = ConnectionMode.tailscale;
       sessions.session = testSession;
@@ -80,12 +82,10 @@ void main() {
       expect(model.tailscaleEnabled, isTrue);
       expect(model.canContinueConnection, isFalse);
       expect(model.error, isNotNull);
-      final retry = model.retryTailscale();
-      await tick();
-      client.complete();
-      await retry;
-      expect(model.phase, SetupPhase.connection);
-      await model.continueConnection();
+      client.restoreConnected = true;
+      await model.reconnectSession();
+      expect(client.restores, 2);
+      expect(client.interactiveConnects, 0);
       expect(model.phase, SetupPhase.ready);
       expect(model.session, testSession);
     },
@@ -214,6 +214,55 @@ void main() {
       expect(factory.closed, 1);
       await expectLater(model.authenticatedApi(), throwsA(isA<Exception>()));
       expect(factory.modes, [ConnectionMode.tailscale]);
+      client.emit(FakeTailscaleClient.connectedStatus);
+      expect(model.phase, SetupPhase.ready);
+      expect(model.session, testSession);
+      await model.authenticatedApi();
+      expect(factory.modes, [
+        ConnectionMode.tailscale,
+        ConnectionMode.tailscale,
+      ]);
+      expect(sessions.clears, 0);
+    },
+  );
+
+  test(
+    'slow restore cannot change transport or erase a saved session',
+    () async {
+      sessions.session = testSession;
+      client.restoreGate = Completer<void>();
+      client.restoreConnected = true;
+      final loading = model.initialize();
+      await tick();
+      expect(model.isBusy, isTrue);
+      expect(model.canContinueConnection, isFalse);
+      await model.setTailscaleEnabled(false);
+      await model.continueConnection();
+      expect(sessions.session, testSession);
+      expect(sessions.clears, 0);
+      client.restoreGate!.complete();
+      await loading;
+      expect(model.phase, SetupPhase.ready);
+      expect(model.mode, ConnectionMode.tailscale);
+    },
+  );
+
+  test(
+    'storage error blocks setup and retries without clearing the account',
+    () async {
+      sessions.session = testSession;
+      sessions.readError = StateError('temporarily unavailable');
+      preferences.mode = ConnectionMode.direct;
+      await model.initialize();
+      expect(model.initialized, isFalse);
+      expect(model.initializationError, isNotNull);
+      await model.continueConnection();
+      expect(sessions.clears, 0);
+      sessions.readError = null;
+      await model.initialize();
+      expect(model.phase, SetupPhase.ready);
+      expect(model.session, testSession);
+      expect(model.initializationError, isNull);
     },
   );
 }

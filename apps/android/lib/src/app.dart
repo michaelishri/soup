@@ -17,6 +17,7 @@ import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup/src/features/playback/playback_screen.dart';
+import 'package:soup/src/features/shared/app_status_screen.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -46,6 +47,8 @@ class _SoupAppState extends State<SoupApp> {
   late final AppearanceController _appearanceController;
   SoupDatabase? _database;
   late final bool _ownsDatabase;
+  Object? _navigationIdentity;
+  GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -82,17 +85,61 @@ class _SoupAppState extends State<SoupApp> {
         final authenticated =
             _viewModel.phase == SetupPhase.ready && session != null;
         final appearance = _appearanceController.settings;
+        // Routes and their API clients belong to one account and transport.
+        // Remove detail/player routes when that transport is replaced.
+        final identity = authenticated
+            ? (session.serverId, session.userId, _viewModel.transportRevision)
+            : null;
+        if (identity != _navigationIdentity) {
+          _navigationIdentity = identity;
+          _navigatorKey = GlobalKey<NavigatorState>();
+        }
         return MaterialApp(
+          navigatorKey: _navigatorKey,
           title: 'Soup',
           debugShowCheckedModeBanner: false,
-          theme: authenticated && appearance != null
+          theme: session != null && appearance != null
               ? SoupTheme.authenticated(appearance)
               : SoupTheme.onboarding,
           home: Builder(
             builder: (context) {
-              if (!_appearanceController.initialized) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
+              if (!_viewModel.initialized ||
+                  !_appearanceController.initialized) {
+                final error =
+                    _viewModel.initializationError ??
+                    _appearanceController.loadError;
+                return AppStatusScreen(
+                  title: error == null
+                      ? 'Opening Soup'
+                      : 'Let’s try that again',
+                  message: error ?? 'Loading your saved setup…',
+                  busy: error == null,
+                  onRetry: error == null
+                      ? null
+                      : () {
+                          _viewModel.initialize();
+                          _appearanceController.initialize();
+                        },
+                );
+              }
+              if (session != null && !authenticated) {
+                final status = _viewModel.status;
+                final waitingForLogin = status.authorizationUrl != null;
+                return AppStatusScreen(
+                  title: 'Reconnecting to Tailscale',
+                  message: waitingForLogin
+                      ? 'Scan to reconnect. Your Jellyfin sign-in is saved.'
+                      : status.phase ==
+                            TailscaleConnectionPhase.awaitingApproval
+                      ? 'Approve this device in Tailscale. Your Jellyfin sign-in is saved.'
+                      : _viewModel.connecting
+                      ? 'Your server and sign-in are saved. We’ll open your library as soon as you’re connected.'
+                      : 'Your server and sign-in are saved. Check your connection, then try again.',
+                  busy: _viewModel.connecting,
+                  authorizationUrl: status.authorizationUrl,
+                  onRetry: _viewModel.connecting
+                      ? null
+                      : _viewModel.reconnectSession,
                 );
               }
               if (authenticated) {
@@ -140,8 +187,7 @@ class _AuthenticatedHome extends StatefulWidget {
 }
 
 class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
-  late final Future<_AuthenticatedDependencies> _dependencies =
-      _loadDependencies();
+  late Future<_AuthenticatedDependencies> _dependencies = _loadDependencies();
   _AuthenticatedDependencies? _resolvedDependencies;
 
   Future<_AuthenticatedDependencies> _loadDependencies() async {
@@ -222,10 +268,12 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
           );
         }
         if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text('Could not open your library. ${snapshot.error}'),
-            ),
+          return AppStatusScreen(
+            title: 'Could not open your library',
+            message: 'Your sign-in is saved. Please try again.',
+            onRetry: () => setState(() {
+              _dependencies = _loadDependencies();
+            }),
           );
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));

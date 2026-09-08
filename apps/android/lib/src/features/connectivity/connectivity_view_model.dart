@@ -55,6 +55,13 @@ class ConnectivityViewModel extends ChangeNotifier {
   bool _disposed = false;
   bool _initialized = false;
   bool get initialized => _initialized;
+  bool _initializing = false;
+  String? _initializationError;
+  String? get initializationError => _initializationError;
+  bool _connecting = false;
+  bool get connecting => _connecting;
+  int _transportRevision = 0;
+  int get transportRevision => _transportRevision;
   ConnectionMode _mode = ConnectionMode.direct;
   ConnectionMode get mode => _mode;
   bool get tailscaleEnabled => mode == ConnectionMode.tailscale;
@@ -79,7 +86,12 @@ class ConnectivityViewModel extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> initialize() async {
-    _statusSubscription = _tailscaleClient.statuses.listen(_setTailscaleStatus);
+    if (_disposed || _initializing || _initialized) return;
+    _initializing = true;
+    _initializationError = null;
+    _statusSubscription ??= _tailscaleClient.statuses.listen(
+      _setTailscaleStatus,
+    );
     _isBusy = true;
     _notify();
     try {
@@ -93,7 +105,6 @@ class ConnectivityViewModel extends ChangeNotifier {
       _session = stored;
       _serverUrl = stored?.serverUrl;
       _initialized = true;
-      _isBusy = false;
       if (tailscaleEnabled) {
         final generation = _connectionGeneration + 1;
         await _startTailscale(restoreOnly: true);
@@ -102,14 +113,15 @@ class ConnectivityViewModel extends ChangeNotifier {
         return;
       }
       _phase = stored == null ? SetupPhase.server : SetupPhase.ready;
-    } on Object catch (error) {
-      if (!_disposed) _error = _friendlyError(error);
+    } on Object {
+      if (!_disposed) {
+        _initializationError =
+            'Could not load your saved sign-in. Please try again.';
+      }
     } finally {
       if (!_disposed) {
-        if (!_initialized) {
-          _initialized = true;
-          _isBusy = false;
-        }
+        _initializing = false;
+        _isBusy = false;
         _notify();
       }
     }
@@ -147,6 +159,17 @@ class ConnectivityViewModel extends ChangeNotifier {
     return _startTailscale(newCode: true);
   }
 
+  Future<void> reconnectSession() {
+    if (_session == null || !tailscaleEnabled || isBusy || connecting) {
+      return Future.value();
+    }
+    // Reuse the node after a network failure. A missing/expired node can sign
+    // in again, without discarding the Jellyfin account.
+    return _startTailscale(
+      restoreOnly: status.phase != TailscaleConnectionPhase.disconnected,
+    );
+  }
+
   Future<void> _disconnect() {
     _disconnectTask = _disconnectTask
         .then((_) => _tailscaleClient.disconnect())
@@ -164,6 +187,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     bool newCode = false,
   }) {
     final generation = ++_connectionGeneration;
+    _connecting = true;
     _acceptStatuses = false;
     _status = const TailscaleStatus.starting();
     _error = null;
@@ -196,7 +220,10 @@ class ConnectivityViewModel extends ChangeNotifier {
           _error = _friendlyError(error);
         }
       } finally {
-        if (_current(generation)) _notify();
+        if (_current(generation)) {
+          _connecting = false;
+          _notify();
+        }
       }
     }();
     _notify();
@@ -551,6 +578,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     _status = value;
     if (value.phase == TailscaleConnectionPhase.failed) _error = value.detail;
     if (value.phase == TailscaleConnectionPhase.connected) _error = null;
+    if (tailscaleConnected && _session != null) _phase = SetupPhase.ready;
     if (!tailscaleConnected && _phase != SetupPhase.connection) {
       _formGeneration++;
       _phase = SetupPhase.connection;
@@ -561,6 +589,7 @@ class ConnectivityViewModel extends ChangeNotifier {
   }
 
   void _closeTransport() {
+    _transportRevision++;
     _httpClient?.close();
     _httpClient = null;
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,35 @@ import 'package:soup_tailscale/soup_tailscale.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test(
+    'stalled LocalAPI body times out and a later request can recover',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var requests = 0;
+      final subscription = server.listen((request) async {
+        requests++;
+        if (requests == 1) {
+          request.response.write('{');
+          await request.response.flush();
+        } else {
+          request.response.write('{"BackendState":"Running"}');
+          await request.response.close();
+        }
+      });
+      addTearDown(() async {
+        await subscription.cancel();
+        await server.close(force: true);
+      });
+      final client = TailscaleLocalApiClient(
+        address: '${server.address.address}:${server.port}',
+        credential: 'test-only',
+        requestTimeout: const Duration(milliseconds: 100),
+      );
+      await expectLater(client.status(), throwsA(isA<TimeoutException>()));
+      expect((await client.status()).backendState, 'Running');
+    },
+  );
+
   test('unavailable adapter reports disconnected', () {
     final client = UnavailableTailscaleClient();
 

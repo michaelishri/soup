@@ -14,6 +14,7 @@ class LibraryViewModel extends ChangeNotifier {
     _homeSubscription = repository.watchHome().listen(_acceptSnapshot);
   }
 
+  bool _disposed = false;
   final JellyfinMetadataRepository repository;
   final ArtworkRepository? artworkRepository;
   final JellyfinSession session;
@@ -38,9 +39,9 @@ class LibraryViewModel extends ChangeNotifier {
   String? get error => _error;
 
   Future<void> load() async {
-    if (_refreshing) return;
+    if (_disposed || _refreshing) return;
     _refreshing = true;
-    notifyListeners();
+    _notify();
     try {
       await repository.refreshHome();
     } on Object catch (error) {
@@ -50,7 +51,7 @@ class LibraryViewModel extends ChangeNotifier {
           : 'Could not load your Jellyfin library.';
     } finally {
       _refreshing = false;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -61,7 +62,7 @@ class LibraryViewModel extends ChangeNotifier {
     _hasSnapshot = snapshot.hasSnapshot;
     _stale = snapshot.stale;
     _error = snapshot.errorMessage;
-    notifyListeners();
+    _notify();
   }
 
   Future<CachedArtwork?> image(
@@ -99,8 +100,13 @@ class LibraryViewModel extends ChangeNotifier {
     repository.prefetch(item, type: type, maxWidth: maxWidth);
   }
 
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     unawaited(_homeSubscription?.cancel());
     super.dispose();
   }

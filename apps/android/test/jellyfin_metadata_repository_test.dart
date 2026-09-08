@@ -103,6 +103,32 @@ void main() {
       expect(await database.findMediaItem('server', 'one'), isNotNull);
     },
   );
+
+  test(
+    'transport failures keep cached content with a readable retry message',
+    () async {
+      final source = FakeMetadataSource(home: _home(latest: [_item('one')]));
+      final repository = _repository(database, source, _session('alice'));
+      await repository.refreshHome();
+      source.error = StateError('private transport diagnostic');
+      await repository.refreshHome();
+      final stale = await repository.watchHome().firstWhere(
+        (value) => value.stale,
+      );
+      expect(stale.data?.latest.single.id, 'one');
+      expect(
+        stale.errorMessage,
+        'Could not refresh from your server. Check your connection and try again.',
+      );
+      source.error = null;
+      await repository.refreshHome();
+      final recovered = await repository.watchHome().firstWhere(
+        (value) => !value.stale,
+      );
+      expect(recovered.hasSnapshot, isTrue);
+      expect(recovered.errorMessage, null);
+    },
+  );
 }
 
 DriftJellyfinMetadataRepository _repository(

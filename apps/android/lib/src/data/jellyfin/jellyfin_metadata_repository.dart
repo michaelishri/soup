@@ -110,7 +110,7 @@ class DriftJellyfinMetadataRepository implements JellyfinMetadataRepository {
       ];
       await _writeGroups(groups);
     } on Object catch (error) {
-      await database.markScopesStale(keys, error);
+      await database.markScopesStale(keys, _refreshError(error));
     }
   }
 
@@ -182,9 +182,13 @@ class DriftJellyfinMetadataRepository implements JellyfinMetadataRepository {
       final items = await request();
       await _writeGroups([(key, items)]);
     } on Object catch (error) {
-      await database.markScopeStale(key, error);
+      await database.markScopeStale(key, _refreshError(error));
     }
   }
+
+  static String _refreshError(Object error) => error is JellyfinApiException
+      ? error.message
+      : 'Could not refresh from your server. Check your connection and try again.';
 
   Future<void> _writeGroups(List<(ScopeKey, List<JellyfinItem>)> groups) async {
     final updatedAt = DateTime.now().toUtc();

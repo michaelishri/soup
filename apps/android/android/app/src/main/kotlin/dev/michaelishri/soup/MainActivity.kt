@@ -1,7 +1,11 @@
 package dev.michaelishri.soup
 
+import android.content.Context
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.FlutterEngineCache
+import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import java.net.NetworkInterface
 import java.util.Collections
@@ -10,17 +14,38 @@ import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
     private val tvTextInput = TvTextInput(this)
+    private var textInputChannel: MethodChannel? = null
+    private var networkChannel: MethodChannel? = null
+
+    override fun provideFlutterEngine(context: Context): FlutterEngine {
+        // libtailscale lives for the Android process. Reuse its owning Dart
+        // isolate when Back destroys/recreates the activity in that process.
+        val cache = FlutterEngineCache.getInstance()
+        cache.get(ENGINE_ID)?.let {
+            Log.i("SoupLifecycle", "Reusing Flutter engine")
+            return it
+        }
+        Log.i("SoupLifecycle", "Creating Flutter engine")
+        return FlutterEngine(context.applicationContext).also {
+            cache.put(ENGINE_ID, it)
+            it.dartExecutor.executeDartEntrypoint(DartExecutor.DartEntrypoint.createDefault())
+        }
+    }
+
+    override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(
+        textInputChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.michaelishri.soup/tv_text_input",
-        ).setMethodCallHandler(tvTextInput)
-        MethodChannel(
+        )
+        textInputChannel?.setMethodCallHandler(tvTextInput)
+        networkChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.michaelishri.soup/network_interfaces",
-        ).setMethodCallHandler { call, result ->
+        )
+        networkChannel?.setMethodCallHandler { call, result ->
             if (call.method != "getNetworkInterfaces") {
                 result.notImplemented()
                 return@setMethodCallHandler
@@ -33,9 +58,14 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    override fun onDestroy() {
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        Log.i("SoupLifecycle", "Detaching activity; retaining Flutter engine")
         tvTextInput.dismiss()
-        super.onDestroy()
+        textInputChannel?.setMethodCallHandler(null)
+        networkChannel?.setMethodCallHandler(null)
+        textInputChannel = null
+        networkChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 
     private fun networkInterfacesJson(): String {
@@ -68,5 +98,9 @@ class MainActivity : FlutterActivity() {
             }
         }
         return output.toString()
+    }
+
+    companion object {
+        private const val ENGINE_ID = "soup-process-engine"
     }
 }
