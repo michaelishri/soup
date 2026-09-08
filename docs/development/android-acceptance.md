@@ -20,9 +20,11 @@ tickets does not establish that native acceptance passed.
   production-widget renders with fake network data and demonstration QR URLs.
   Native QR scanning, playback and Android input remain unverified by those
   images.
-- Current-host check: no ADB devices, no `/dev/kvm`, and no exposed `vmx`/`svm`
-  CPU flags. The SDK and build tools are installed; see
-  [headless Android setup](android-linux.md).
+- Initial host check found no ADB devices, `/dev/kvm`, or exposed `vmx`/`svm`
+  CPU flags. The user subsequently provided Guest Room TV; wireless pairing,
+  installation and initial native onboarding checks succeeded. See the
+  [Chromecast session report](android-tv-2026-09-08.md). Phone access and the
+  remaining account-dependent checks are still outstanding.
 
 The local debug artifact checked during housekeeping is
 `apps/android/build/app/outputs/flutter-apk/app-debug.apk` (275,923,962 bytes),
@@ -72,14 +74,14 @@ SOUP-18.
 
 | Case | Exercise and expected result | Phone | TV |
 | --- | --- | --- | --- |
-| A1: Install and branding | Launch the native app; inspect the selected can/play mark in the app and launcher, including available circular/squircle masks. No clipped artwork, wrong legacy logo or startup failure. | Blocked: device | Blocked: device |
-| A2: Direct connection | Start with Tailscale off; enter the test server; exercise invalid and valid credentials, Back, draft preservation and keyboard insets. Browse real artwork/details and play real media with pause/seek/resume and progress reporting. Restart and verify session restoration. | Blocked: device/account | Blocked: device/account |
-| A3: Fresh Tailscale registration | Enable Tailscale, scan the real QR on another device, choose the intended tailnet where available, and complete sign-in/administrator approval. Waiting and success states are correct; connection requires explicit Next. | Blocked: device/account | Blocked: device/account |
-| A4: Registration recovery | Cancel during preparation/waiting; obtain a new code; retry a failed attempt; toggle Tailscale off/on. An old attempt cannot complete the new one or advance the UI. Background/reopen and restart; verify both restored-node and legacy-session behavior with suitable fixtures. | Blocked: device/account | Blocked: device/account |
-| A5: Tailscale media path | Through the embedded node, sign into Jellyfin, load artwork/details and play real media. Verify controls, progress, error recovery and restored access after app restart. | Blocked: device/account | Blocked: device/account |
-| A6: Onboarding interaction | Verify phone touch/keyboard and TV remote/keyboard traversal, readable QR quiet zone, visible actions at short heights, stable header/footer, success transition, rapid Back/Next and reduced-motion behavior. | Blocked: device | Blocked: device |
-| A7: Appearance and persistence | Exercise Fruity/Blockbuster × Soup/Ocean/Grove/Mono × light/dark (16 combinations). Check first-use selection, explicit Apply, switching without losing the destination, settings persistence after restart/sign-out, and fixed-style setup/login. | Blocked: device/account | Blocked: device/account |
-| A8: Browsing and accessibility | Exercise current Home, TV/Movies, details/episodes, playback and Settings with empty/loading/error/retry and missing-artwork states. Verify directional focus, return from details, active-vs-focused navigation, transparent rail focus, expansion/collapse, full hero visibility on return, enlarged text, contrast, reduced motion and usable touch targets. | Blocked: device/account | Blocked: device/account |
+| A1: Install and branding | Launch the native app; inspect the selected can/play mark in the app and launcher, including available circular/squircle masks. No clipped artwork, wrong legacy logo or startup failure. | Blocked: device | Partial: install, launch, in-app branding and TV launch intent verified; launcher masks pending |
+| A2: Direct connection | Start with Tailscale off; enter the test server; exercise invalid and valid credentials, Back, draft preservation and keyboard insets. Browse real artwork/details and play real media with pause/seek/resume and progress reporting. Restart and verify session restoration. | Blocked: device/account | Partial: direct server form and native keyboard reached; server/account needed |
+| A3: Fresh Tailscale registration | Enable Tailscale, scan the real QR on another device, choose the intended tailnet where available, and complete sign-in/administrator approval. Waiting and success states are correct; connection requires explicit Next. | Blocked: device/account | Partial: native QR and disabled Next observed; user authorization pending |
+| A4: Registration recovery | Cancel during preparation/waiting; obtain a new code; retry a failed attempt; toggle Tailscale off/on. An old attempt cannot complete the new one or advance the UI. Background/reopen and restart; verify both restored-node and legacy-session behavior with suitable fixtures. | Blocked: device/account | Pending: preserve the QR while the user authorizes |
+| A5: Tailscale media path | Through the embedded node, sign into Jellyfin, load artwork/details and play real media. Verify controls, progress, error recovery and restored access after app restart. | Blocked: device/account | Blocked: authorization/server/account |
+| A6: Onboarding interaction | Verify phone touch/keyboard and TV remote/keyboard traversal, readable QR quiet zone, visible actions at short heights, stable header/footer, success transition, rapid Back/Next and reduced-motion behavior. | Blocked: device | Partial: native layout and initial D-pad focus/navigation observed; remaining cases pending |
+| A7: Appearance and persistence | Exercise Fruity/Blockbuster × Soup/Ocean/Grove/Mono × light/dark (16 combinations). Check first-use selection, explicit Apply, switching without losing the destination, settings persistence after restart/sign-out, and fixed-style setup/login. | Blocked: device/account | Blocked: server/account |
+| A8: Browsing and accessibility | Exercise current Home, TV/Movies, details/episodes, playback and Settings with empty/loading/error/retry and missing-artwork states. Verify directional focus, return from details, active-vs-focused navigation, transparent rail focus, expansion/collapse, full hero visibility on return, enlarged text, contrast, reduced motion and usable touch targets. | Blocked: device/account | Blocked: server/account |
 | A9: Visual acceptance | Review the current palette/layout/branding and animations on both form factors. Compare with the current gallery and record the user's acceptance or concrete changes requested. | Pending | Pending |
 
 Cover the original 412×915 phone and 1280×720/1920×1080 TV layout targets;
