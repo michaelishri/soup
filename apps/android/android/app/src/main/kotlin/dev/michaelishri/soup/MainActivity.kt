@@ -9,8 +9,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
+    private val tvTextInput = TvTextInput(this)
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.michaelishri.soup/tv_text_input",
+        ).setMethodCallHandler(tvTextInput)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.michaelishri.soup/network_interfaces",
@@ -25,6 +31,11 @@ class MainActivity : FlutterActivity() {
                 result.error("network_interfaces", error.message, null)
             }
         }
+    }
+
+    override fun onDestroy() {
+        tvTextInput.dismiss()
+        super.onDestroy()
     }
 
     private fun networkInterfacesJson(): String {

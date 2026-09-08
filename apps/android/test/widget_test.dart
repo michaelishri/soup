@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -11,11 +13,23 @@ import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
+import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 import 'support/connectivity_fakes.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const inputChannel = MethodChannel('dev.michaelishri.soup/tv_text_input');
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(inputChannel, (call) async => false);
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(inputChannel, null);
+  });
+
   for (final size in [
     const Size(412, 915),
     const Size(960, 540),
@@ -218,11 +232,16 @@ void main() {
       expect(material.key, const ValueKey('tailscale-tile-material'));
       expect(material.clipBehavior, Clip.antiAlias);
       expect(tester.getRect(find.byKey(material.key!)), tester.getRect(toggle));
-      // Success must not steal focus from the switch. Down still reaches Next.
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      // The first Select after successful authorization must continue, without
+      // toggling Tailscale off or requiring an extra Down press.
+      expect(
+        button(tester, 'connection-next-button').focusNode!.hasFocus,
+        isTrue,
+      );
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
       expect(model.phase, SetupPhase.server);
+      expect(model.tailscaleEnabled, isTrue);
       expect(tester.takeException(), isNull);
     } finally {
       semantics.dispose();
@@ -260,6 +279,201 @@ void main() {
     expect(border().top.width, 2);
     expect(tester.getRect(toggle), originalToggle);
   });
+
+  testWidgets('Back to an established connection focuses Next again', (
+    tester,
+  ) async {
+    final (model, client) = await setup(tester);
+    await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
+    await tester.pumpAndSettle();
+    client.complete();
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('onboarding-back-button')));
+    await tester.pumpAndSettle();
+    expect(
+      button(tester, 'connection-next-button').focusNode!.hasFocus,
+      isTrue,
+    );
+    final disconnects = client.disconnects;
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle();
+    expect(model.phase, SetupPhase.server);
+    expect(client.disconnects, disconnects);
+  });
+
+  testWidgets('connected status updates preserve intentional remote focus', (
+    tester,
+  ) async {
+    final (_, client) = await setup(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    await tester.pumpAndSettle();
+    client.complete();
+    await tester.pumpAndSettle();
+    expect(
+      button(tester, 'connection-next-button').focusNode!.hasFocus,
+      isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    client.emit(FakeTailscaleClient.connectedStatus);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const ValueKey('tailscale-toggle')),
+          )
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+  });
+
+  testWidgets(
+    'TV traversal does not open an editor and Select opens only one',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        final input = FakeTvTextInput();
+        final (model, _) = await setup(tester, tvTextInput: input);
+        await nextToServer(tester);
+        expect(find.byType(TextField), findsNothing);
+        expect(find.bySemanticsLabel('Server address'), findsOneWidget);
+        expect(input.calls, isEmpty);
+        final field = find.byKey(const ValueKey('server-url-field'));
+        expect(tester.widget<TvTextField>(field).focusNode.hasFocus, isTrue);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+        expect(tester.widget<TvTextField>(field).focusNode.hasFocus, isFalse);
+        expect(input.calls, isEmpty);
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.sendKeyEvent(LogicalKeyboardKey.select);
+        await tester.sendKeyEvent(LogicalKeyboardKey.select);
+        await tester.pumpAndSettle();
+        expect(input.calls, hasLength(1));
+        input.complete('http://draft:8096', submitted: false);
+        await tester.pumpAndSettle();
+        expect(model.phase, SetupPhase.server);
+        expect(
+          tester.widget<TvTextField>(field).controller.text,
+          'http://draft:8096',
+        );
+        expect(tester.widget<TvTextField>(field).focusNode.hasFocus, isTrue);
+        await tester.sendKeyEvent(LogicalKeyboardKey.select);
+        expect(input.calls.last['text'], 'http://draft:8096');
+        input.complete('', submitted: false);
+        await tester.pumpAndSettle();
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'TV invalid server submission restores field focus without reopening IME',
+    (tester) async {
+      final input = FakeTvTextInput();
+      final factory = FakeJellyfinClientFactory();
+      final (model, _) = await setup(
+        tester,
+        tvTextInput: input,
+        factory: factory,
+      );
+      await nextToServer(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      input.complete('');
+      await tester.pumpAndSettle();
+      expect(model.error, isNotNull);
+      expect(factory.requests, isEmpty);
+      expect(input.calls, hasLength(1));
+      expect(
+        tester
+            .widget<TvTextField>(find.byKey(const ValueKey('server-url-field')))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'TV username Next opens password and failed sign-in clears its secret',
+    (tester) async {
+      final input = FakeTvTextInput();
+      final factory = FakeJellyfinClientFactory(
+        respond: (request) =>
+            request.url.path.endsWith('/Users/AuthenticateByName')
+            ? http.Response('Unauthorized', 401)
+            : FakeJellyfinClientFactory.defaultResponse(request),
+      );
+      final (model, _) = await setup(
+        tester,
+        tvTextInput: input,
+        factory: factory,
+      );
+      await nextToServer(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      input.complete('http://jellyfin:8096');
+      await tester.pumpAndSettle();
+      expect(model.phase, SetupPhase.credentials);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      expect(input.calls.last['label'], 'Username');
+      input.complete('Test user');
+      await tester.pumpAndSettle();
+      expect(input.calls.last['label'], 'Password');
+      expect(input.calls.last['obscureText'], isTrue);
+      input.complete('wrong-password');
+      await tester.pumpAndSettle();
+      expect(model.phase, SetupPhase.credentials);
+      expect(model.error, isNotNull);
+      expect(
+        tester
+            .widget<TvTextField>(find.byKey(const ValueKey('password-field')))
+            .controller
+            .text,
+        isEmpty,
+      );
+      expect(
+        tester
+            .widget<TvTextField>(find.byKey(const ValueKey('username-field')))
+            .controller
+            .text,
+        'Test user',
+      );
+      expect(
+        tester
+            .widget<TvTextField>(find.byKey(const ValueKey('password-field')))
+            .focusNode
+            .hasFocus,
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'TV pending edit is dismissed and cannot write into a later step',
+    (tester) async {
+      final input = FakeTvTextInput();
+      final (model, _) = await setup(tester, tvTextInput: input);
+      await nextToServer(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      model.back();
+      await tester.pumpAndSettle();
+      expect(input.dismissals, 1);
+      await nextToServer(tester);
+      input.complete('http://stale:8096');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TvTextField>(find.byKey(const ValueKey('server-url-field')))
+            .controller
+            .text,
+        isEmpty,
+      );
+      expect(model.phase, SetupPhase.server);
+    },
+  );
 
   testWidgets(
     'short wide layout handles long server names and exposes progress',
@@ -663,6 +877,7 @@ Future<(ConnectivityViewModel, FakeTailscaleClient)> setup(
   Size size = const Size(1280, 720),
   FakeJellyfinClientFactory? factory,
   bool accessibility = false,
+  TvTextInput tvTextInput = const TvTextInput(),
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -687,9 +902,46 @@ Future<(ConnectivityViewModel, FakeTailscaleClient)> setup(
         ),
         child: child!,
       ),
-      home: ConnectivityScreen(viewModel: model),
+      home: ConnectivityScreen(viewModel: model, tvTextInput: tvTextInput),
     ),
   );
   await tester.pumpAndSettle();
   return (model, client);
+}
+
+class FakeTvTextInput extends TvTextInput {
+  final calls = <Map<String, Object>>[];
+  Completer<TvTextEdit?>? pending;
+  int dismissals = 0;
+
+  @override
+  Future<bool> isTelevision() async => true;
+
+  @override
+  Future<TvTextEdit?> edit({
+    required String label,
+    required String text,
+    required bool obscureText,
+    required bool isUrl,
+    required bool next,
+  }) {
+    calls.add({
+      'label': label,
+      'text': text,
+      'obscureText': obscureText,
+      'isUrl': isUrl,
+      'next': next,
+    });
+    pending = Completer<TvTextEdit?>();
+    return pending!.future;
+  }
+
+  void complete(String text, {bool submitted = true}) {
+    final result = pending!;
+    pending = null;
+    result.complete(TvTextEdit(text: text, submitted: submitted));
+  }
+
+  @override
+  Future<void> dismiss() async => dismissals++;
 }

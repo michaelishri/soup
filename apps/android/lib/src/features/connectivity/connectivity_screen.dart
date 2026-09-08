@@ -7,11 +7,17 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
+import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class ConnectivityScreen extends StatefulWidget {
-  const ConnectivityScreen({required this.viewModel, super.key});
+  const ConnectivityScreen({
+    required this.viewModel,
+    this.tvTextInput = const TvTextInput(),
+    super.key,
+  });
   final ConnectivityViewModel viewModel;
+  final TvTextInput tvTextInput;
 
   @override
   State<ConnectivityScreen> createState() => _ConnectivityScreenState();
@@ -24,16 +30,37 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   final _switchFocus = FocusNode(debugLabel: 'use Tailscale');
   final _serverFocus = FocusNode(debugLabel: 'Jellyfin server');
   final _usernameFocus = FocusNode(debugLabel: 'Jellyfin username');
+  final _passwordFocus = FocusNode(debugLabel: 'Jellyfin password');
+  final _nextFocus = FocusNode(debugLabel: 'setup Next');
   final _scroll = ScrollController();
   late SetupPhase _lastPhase;
+  late bool _wasConnected;
+  late bool _wasInitialized;
+  bool _tv = false;
+  bool _inputReady = false;
+  bool _editingTv = false;
+  int _focusGeneration = 0;
+  int _editGeneration = 0;
   ConnectivityViewModel get model => widget.viewModel;
 
   @override
   void initState() {
     super.initState();
     _lastPhase = model.phase;
+    _wasConnected = model.tailscaleConnected;
+    _wasInitialized = model.initialized;
     _server.text = model.serverUrl?.toString() ?? '';
     model.addListener(_changed);
+    unawaited(_initializeInput());
+  }
+
+  Future<void> _initializeInput() async {
+    final tv = await widget.tvTextInput.isTelevision();
+    if (!mounted) return;
+    setState(() {
+      _tv = tv;
+      _inputReady = true;
+    });
     _focusStep();
   }
 
@@ -48,21 +75,38 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   void _changed() {
-    if (model.phase == _lastPhase) return;
-    _password.clear();
+    final phaseChanged = model.phase != _lastPhase;
+    final connectionChanged = model.tailscaleConnected != _wasConnected;
+    final initialized = model.initialized && !_wasInitialized;
     _lastPhase = model.phase;
-    if (_server.text.isEmpty && model.serverUrl != null) {
-      _server.text = model.serverUrl.toString();
+    _wasConnected = model.tailscaleConnected;
+    _wasInitialized = model.initialized;
+    if (phaseChanged) {
+      _editGeneration++;
+      _password.clear();
+      if (_editingTv) unawaited(widget.tvTextInput.dismiss());
+      if (_server.text.isEmpty && model.serverUrl != null) {
+        _server.text = model.serverUrl.toString();
+      }
     }
-    _focusStep();
+    if (phaseChanged ||
+        initialized ||
+        (connectionChanged && model.phase == SetupPhase.connection)) {
+      _focusStep();
+    }
   }
 
-  void _focusStep() {
+  void _focusStep({bool retry = false}) {
+    final generation = ++_focusGeneration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || !_inputReady || generation != _focusGeneration) return;
       if (_scroll.hasClients) _scroll.jumpTo(0);
       switch (model.phase) {
         case SetupPhase.connection:
+          if (model.tailscaleConnected && model.canContinueConnection) {
+            _nextFocus.requestFocus();
+            return;
+          }
           _switchFocus.requestFocus();
           final switchContext = _switchFocus.context;
           if (switchContext != null) {
@@ -76,7 +120,10 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         case SetupPhase.server:
           _serverFocus.requestFocus();
         case SetupPhase.credentials:
-          _usernameFocus.requestFocus();
+          (retry && _username.text.trim().isNotEmpty
+                  ? _passwordFocus
+                  : _usernameFocus)
+              .requestFocus();
         case SetupPhase.ready:
           break;
       }
@@ -116,6 +163,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
   }
 
   Future<void> _next() async {
+    if (model.isBusy) return;
+    final phase = model.phase;
     FocusManager.instance.primaryFocus?.unfocus();
     switch (model.phase) {
       case SetupPhase.connection:
@@ -129,10 +178,65 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       case SetupPhase.ready:
         break;
     }
+    // Validation or network failures leave the step in place. Restore a useful
+    // remote focus stop instead of dropping focus into the root scope.
+    if (mounted && model.phase == phase) _focusStep(retry: true);
+  }
+
+  Future<void> _editTvField({
+    required TextEditingController controller,
+    required FocusNode focus,
+    required String label,
+    bool password = false,
+    bool url = false,
+    bool next = false,
+  }) async {
+    if (_editingTv || model.isBusy) return;
+    final phase = model.phase;
+    _editingTv = true;
+    final generation = _editGeneration;
+    TvTextEdit? result;
+    try {
+      result = await widget.tvTextInput.edit(
+        label: label,
+        text: controller.text,
+        obscureText: password,
+        isUrl: url,
+        next: next,
+      );
+    } on PlatformException {
+      if (mounted) {
+        _message('Unable to open the keyboard. Select the field to retry.');
+      }
+    } finally {
+      _editingTv = false;
+    }
+    if (!mounted || model.phase != phase || generation != _editGeneration) {
+      return;
+    }
+    focus.requestFocus();
+    if (result == null) return;
+    controller.value = TextEditingValue(
+      text: result.text,
+      selection: TextSelection.collapsed(offset: result.text.length),
+    );
+    if (!result.submitted) return;
+    if (next) {
+      _passwordFocus.requestFocus();
+      await _editTvField(
+        controller: _password,
+        focus: _passwordFocus,
+        label: 'Password',
+        password: true,
+      );
+    } else {
+      await _next();
+    }
   }
 
   @override
   void dispose() {
+    if (_editingTv) unawaited(widget.tvTextInput.dismiss());
     model.removeListener(_changed);
     _server.dispose();
     _username.dispose();
@@ -140,6 +244,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
     _switchFocus.dispose();
     _serverFocus.dispose();
     _usernameFocus.dispose();
+    _passwordFocus.dispose();
+    _nextFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -157,6 +263,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
           if (!didPop) _back();
         },
         child: Scaffold(
+          resizeToAvoidBottomInset: !_tv,
           body: DecoratedBox(
             key: const ValueKey('setup-canvas'),
             decoration: const BoxDecoration(
@@ -564,22 +671,40 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ),
       ],
       SetupPhase.server => [
-        TextField(
-          key: const ValueKey('server-url-field'),
-          controller: _server,
-          focusNode: _serverFocus,
-          enabled: !model.isBusy,
-          keyboardType: TextInputType.url,
-          autocorrect: false,
-          textInputAction: TextInputAction.done,
-          onSubmitted: model.isBusy ? null : (_) => _next(),
-          decoration: InputDecoration(
-            labelText: 'Server address',
-            hintText: model.tailscaleEnabled
+        if (_tv)
+          TvTextField(
+            key: const ValueKey('server-url-field'),
+            controller: _server,
+            focusNode: _serverFocus,
+            enabled: !model.isBusy,
+            label: 'Server address',
+            hint: model.tailscaleEnabled
                 ? 'http://jellyfin:8096'
                 : 'http://192.168.1.10:8096',
+            onEdit: () => _editTvField(
+              controller: _server,
+              focus: _serverFocus,
+              label: 'Server address',
+              url: true,
+            ),
+          )
+        else
+          TextField(
+            key: const ValueKey('server-url-field'),
+            controller: _server,
+            focusNode: _serverFocus,
+            enabled: !model.isBusy,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            textInputAction: TextInputAction.done,
+            onSubmitted: model.isBusy ? null : (_) => _next(),
+            decoration: InputDecoration(
+              labelText: 'Server address',
+              hintText: model.tailscaleEnabled
+                  ? 'http://jellyfin:8096'
+                  : 'http://192.168.1.10:8096',
+            ),
           ),
-        ),
         const SizedBox(height: 8),
         Align(
           alignment: Alignment.centerLeft,
@@ -595,28 +720,60 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
       SetupPhase.credentials => [
         Text(model.serverUrl?.toString() ?? '', style: caption),
         const SizedBox(height: 24),
-        TextField(
-          key: const ValueKey('username-field'),
-          controller: _username,
-          focusNode: _usernameFocus,
-          enabled: !model.isBusy,
-          autocorrect: false,
-          textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.username],
-          decoration: const InputDecoration(labelText: 'Username'),
-        ),
+        if (_tv)
+          TvTextField(
+            key: const ValueKey('username-field'),
+            controller: _username,
+            focusNode: _usernameFocus,
+            enabled: !model.isBusy,
+            label: 'Username',
+            onEdit: () => _editTvField(
+              controller: _username,
+              focus: _usernameFocus,
+              label: 'Username',
+              next: true,
+            ),
+          )
+        else
+          TextField(
+            key: const ValueKey('username-field'),
+            controller: _username,
+            focusNode: _usernameFocus,
+            enabled: !model.isBusy,
+            autocorrect: false,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.username],
+            decoration: const InputDecoration(labelText: 'Username'),
+          ),
         const SizedBox(height: 16),
-        TextField(
-          key: const ValueKey('password-field'),
-          controller: _password,
-          enabled: !model.isBusy,
-          obscureText: true,
-          enableSuggestions: false,
-          autocorrect: false,
-          textInputAction: TextInputAction.done,
-          onSubmitted: model.isBusy ? null : (_) => _next(),
-          decoration: const InputDecoration(labelText: 'Password'),
-        ),
+        if (_tv)
+          TvTextField(
+            key: const ValueKey('password-field'),
+            controller: _password,
+            focusNode: _passwordFocus,
+            enabled: !model.isBusy,
+            label: 'Password',
+            obscureText: true,
+            onEdit: () => _editTvField(
+              controller: _password,
+              focus: _passwordFocus,
+              label: 'Password',
+              password: true,
+            ),
+          )
+        else
+          TextField(
+            key: const ValueKey('password-field'),
+            controller: _password,
+            focusNode: _passwordFocus,
+            enabled: !model.isBusy,
+            obscureText: true,
+            enableSuggestions: false,
+            autocorrect: false,
+            textInputAction: TextInputAction.done,
+            onSubmitted: model.isBusy ? null : (_) => _next(),
+            decoration: const InputDecoration(labelText: 'Password'),
+          ),
       ],
       SetupPhase.ready => [Text('Your library is ready.', style: caption)],
     };
@@ -840,6 +997,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen> {
         ],
         Expanded(
           child: FilledButton(
+            focusNode: _nextFocus,
             style: _buttonMotion,
             key: ValueKey(switch (model.phase) {
               SetupPhase.connection => 'connection-next-button',

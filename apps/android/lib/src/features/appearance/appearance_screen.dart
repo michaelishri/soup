@@ -156,7 +156,6 @@ class _AppearanceScreenState extends State<AppearanceScreen> {
                     alignment: Alignment.centerRight,
                     child: FilledButton.icon(
                       key: const ValueKey('appearance-continue'),
-                      autofocus: true,
                       onPressed: widget.saving
                           ? null
                           : () async => widget.onContinue(_draft),
@@ -202,6 +201,7 @@ class _LayoutCard extends StatelessWidget {
       selected: selected,
       label: '$title layout',
       child: InkWell(
+        autofocus: selected,
         borderRadius: BorderRadius.circular(18),
         onTap: onSelected,
         child: Container(

@@ -1,10 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/features/appearance/appearance_screen.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 
 void main() {
+  for (final preset in UiPreset.values) {
+    testWidgets('short TV starts at visible $preset and scrolls to Continue', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(960, 540);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      AppearanceSettings? selected;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SoupTheme.onboarding,
+          home: AppearanceScreen(
+            initialSettings: AppearanceSettings(preset: preset),
+            saving: false,
+            onContinue: (value) async => selected = value,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final layout = find.text(
+        preset == UiPreset.fruity ? 'Fruity' : 'Blockbuster',
+      );
+      expect(Focus.of(tester.element(layout)).hasFocus, isTrue);
+      expect(layout.hitTestable(), findsOneWidget);
+      final proceed = find.text('Continue');
+      for (
+        var presses = 0;
+        presses < 6 && !Focus.of(tester.element(proceed)).hasFocus;
+        presses++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        await tester.pumpAndSettle();
+      }
+      expect(Focus.of(tester.element(proceed)).hasFocus, isTrue);
+      expect(proceed.hitTestable(), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect(selected?.preset, preset);
+    });
+  }
+
   testWidgets('selects a palette and brightness before continuing', (
     tester,
   ) async {
