@@ -43,6 +43,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   late final DetailsViewModel _viewModel;
   late final JellyfinMetadataRepository _metadataRepository;
   late final bool _ownsMetadataRepository;
+  final _backFocus = FocusNode(debugLabel: 'details-back');
   final Map<String, Future<CachedArtwork?>> _images = {};
   final Set<String> _prefetchedImages = {};
 
@@ -66,6 +67,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
   @override
   void dispose() {
     _viewModel.dispose();
+    _backFocus.dispose();
     if (_ownsMetadataRepository) {
       unawaited(_metadataRepository.close());
     }
@@ -134,83 +136,76 @@ class _DetailsScreenState extends State<DetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Shortcuts(
-          shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(LogicalKeyboardKey.arrowRight): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowDown): NextFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowLeft):
-                PreviousFocusIntent(),
-            SingleActivator(LogicalKeyboardKey.arrowUp): PreviousFocusIntent(),
-          },
-          child: FocusTraversalGroup(
-            policy: OrderedTraversalPolicy(),
-            child: ListenableBuilder(
-              listenable: _viewModel,
-              builder: (context, _) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  _Backdrop(
-                    artworkKey: _viewModel.item.id,
-                    blurHash: _viewModel.item.backdropBlurHash,
-                    image: _image(
-                      _viewModel.item,
-                      type: 'Backdrop',
-                      maxWidth: artworkBackdropWidth,
+        child: FocusTraversalGroup(
+          policy: OrderedTraversalPolicy(),
+          child: ListenableBuilder(
+            listenable: _viewModel,
+            builder: (context, _) => Stack(
+              fit: StackFit.expand,
+              children: [
+                _Backdrop(
+                  artworkKey: _viewModel.item.id,
+                  blurHash: _viewModel.item.backdropBlurHash,
+                  image: _image(
+                    _viewModel.item,
+                    type: 'Backdrop',
+                    maxWidth: artworkBackdropWidth,
+                  ),
+                ),
+                if (_viewModel.loading)
+                  const Center(child: CircularProgressIndicator())
+                else if (_viewModel.blockingError case final error?)
+                  _DetailsError(error: error, onRetry: _viewModel.load)
+                else if (_viewModel.item.type == 'CollectionFolder')
+                  _LibraryContents(
+                    library: _viewModel.item,
+                    onFocusBack: _backFocus.requestFocus,
+                    items: _viewModel.libraryItems,
+                    image: _image,
+                    prefetch: _prefetch,
+                    onOpen: _openItem,
+                  )
+                else
+                  _ItemDetails(
+                    item: _viewModel.item,
+                    seasons: _viewModel.seasons,
+                    selectedSeason: _viewModel.selectedSeason,
+                    episodes: _viewModel.episodes,
+                    loadingEpisodes: _viewModel.loadingEpisodes,
+                    image: _image,
+                    onSelectSeason: _viewModel.selectSeason,
+                    onPlay: _play,
+                  ),
+                Positioned(
+                  left: 24,
+                  top: 18,
+                  child: FocusTraversalOrder(
+                    order: const NumericFocusOrder(900),
+                    child: IconButton.filledTonal(
+                      key: const ValueKey('details-back-button'),
+                      focusNode: _backFocus,
+                      tooltip: 'Back',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(PhosphorIconsRegular.arrowLeft),
                     ),
                   ),
-                  if (_viewModel.loading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_viewModel.blockingError case final error?)
-                    _DetailsError(error: error, onRetry: _viewModel.load)
-                  else if (_viewModel.item.type == 'CollectionFolder')
-                    _LibraryContents(
-                      library: _viewModel.item,
-                      items: _viewModel.libraryItems,
-                      image: _image,
-                      prefetch: _prefetch,
-                      onOpen: _openItem,
-                    )
-                  else
-                    _ItemDetails(
-                      item: _viewModel.item,
-                      seasons: _viewModel.seasons,
-                      selectedSeason: _viewModel.selectedSeason,
-                      episodes: _viewModel.episodes,
-                      loadingEpisodes: _viewModel.loadingEpisodes,
-                      image: _image,
-                      onSelectSeason: _viewModel.selectSeason,
-                      onPlay: _play,
-                    ),
+                ),
+                if (_viewModel.stale && _viewModel.blockingError == null)
                   Positioned(
-                    left: 24,
-                    top: 18,
-                    child: FocusTraversalOrder(
-                      order: const NumericFocusOrder(900),
-                      child: IconButton.filledTonal(
-                        key: const ValueKey('details-back-button'),
-                        tooltip: 'Back',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(PhosphorIconsRegular.arrowLeft),
-                      ),
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: StaleDataBanner(
+                      message:
+                          _viewModel.error ??
+                          'Showing saved data. Refresh failed.',
+                      retrying:
+                          _viewModel.refreshing ||
+                          _viewModel.refreshingEpisodes,
+                      onRetry: _viewModel.retry,
                     ),
                   ),
-                  if (_viewModel.stale && _viewModel.blockingError == null)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: StaleDataBanner(
-                        message:
-                            _viewModel.error ??
-                            'Showing saved data. Refresh failed.',
-                        retrying:
-                            _viewModel.refreshing ||
-                            _viewModel.refreshingEpisodes,
-                        onRetry: _viewModel.retry,
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -349,11 +344,34 @@ class _ItemDetails extends StatelessWidget {
                     for (var index = 0; index < seasons.length; index++)
                       FocusTraversalOrder(
                         order: NumericFocusOrder(100 + index.toDouble()),
-                        child: ChoiceChip(
-                          key: ValueKey('season-${seasons[index].id}'),
-                          label: Text(seasons[index].name),
-                          selected: selectedSeason?.id == seasons[index].id,
-                          onSelected: (_) => onSelectSeason(seasons[index]),
+                        child: Builder(
+                          builder: (chipContext) => Focus(
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onFocusChange: (focused) {
+                              if (!focused) return;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (!chipContext.mounted) return;
+                                // Autofocus does not run a traversal callback.
+                                // Reveal the initial season on short displays too.
+                                unawaited(
+                                  Scrollable.ensureVisible(
+                                    chipContext,
+                                    alignmentPolicy:
+                                        ScrollPositionAlignmentPolicy
+                                            .keepVisibleAtEnd,
+                                  ),
+                                );
+                              });
+                            },
+                            child: ChoiceChip(
+                              key: ValueKey('season-${seasons[index].id}'),
+                              autofocus: index == 0,
+                              label: Text(seasons[index].name),
+                              selected: selectedSeason?.id == seasons[index].id,
+                              onSelected: (_) => onSelectSeason(seasons[index]),
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -548,6 +566,7 @@ class _EpisodeList extends StatelessWidget {
 class _LibraryContents extends StatelessWidget {
   const _LibraryContents({
     required this.library,
+    required this.onFocusBack,
     required this.items,
     required this.image,
     required this.prefetch,
@@ -555,6 +574,7 @@ class _LibraryContents extends StatelessWidget {
   });
 
   final JellyfinItem library;
+  final VoidCallback onFocusBack;
   final List<JellyfinItem> items;
   final Future<CachedArtwork?> Function(
     JellyfinItem item, {
@@ -567,57 +587,90 @@ class _LibraryContents extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final gridWidth = MediaQuery.sizeOf(context).width - 120;
-    final calculatedColumns = ((gridWidth + 18) / (210 + 18)).ceil();
-    final columnCount = calculatedColumns < 1 ? 1 : calculatedColumns;
-    return CustomScrollView(
-      key: const ValueKey('library-contents'),
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(96, 96, 48, 20),
-          sliver: SliverToBoxAdapter(
-            child: Text(
-              library.name,
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-          ),
-        ),
-        if (items.isEmpty)
-          const SliverFillRemaining(
-            hasScrollBody: false,
-            child: Center(
-              child: Text('No movies or series are in this library.'),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(72, 10, 48, 48),
-            sliver: SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 210,
-                childAspectRatio: 0.66,
-                crossAxisSpacing: 18,
-                mainAxisSpacing: 22,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final gridWidth = constraints.maxWidth - 120;
+        // Match SliverGridDelegateWithMaxCrossAxisExtent at column breakpoints.
+        final calculatedColumns = (gridWidth / (210 + 18)).ceil();
+        final columnCount = calculatedColumns < 1 ? 1 : calculatedColumns;
+        return CustomScrollView(
+          key: const ValueKey('library-contents'),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(96, 96, 48, 20),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  library.name,
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
               ),
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final prefetchIndex = index + columnCount;
-                if (prefetchIndex < items.length) {
-                  prefetch(items[prefetchIndex], maxWidth: 720);
-                }
-                return FocusTraversalOrder(
-                  order: NumericFocusOrder(index + 1.0),
-                  child: _DetailCard(
-                    item: items[index],
-                    image: image(items[index], maxWidth: 720),
-                    autofocus: index == 0,
-                    onPressed: () => onOpen(items[index]),
-                  ),
-                );
-              },
             ),
-          ),
-      ],
+            if (items.isEmpty)
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(
+                  child: Text('No movies or series are in this library.'),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(72, 10, 48, 48),
+                sliver: SliverGrid.builder(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 210,
+                    childAspectRatio: 0.66,
+                    crossAxisSpacing: 18,
+                    mainAxisSpacing: 22,
+                  ),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final prefetchIndex = index + columnCount;
+                    if (prefetchIndex < items.length) {
+                      prefetch(items[prefetchIndex], maxWidth: 720);
+                    }
+                    return FocusTraversalOrder(
+                      order: NumericFocusOrder(index + 1.0),
+                      child: Focus(
+                        canRequestFocus: false,
+                        skipTraversal: true,
+                        onKeyEvent: (_, event) {
+                          if (event is! KeyDownEvent &&
+                              event is! KeyRepeatEvent) {
+                            return KeyEventResult.ignored;
+                          }
+                          if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+                              index < columnCount) {
+                            onFocusBack();
+                            return KeyEventResult.handled;
+                          }
+                          if ((event.logicalKey ==
+                                      LogicalKeyboardKey.arrowLeft &&
+                                  index % columnCount == 0) ||
+                              (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowRight &&
+                                  (index % columnCount == columnCount - 1 ||
+                                      index == items.length - 1)) ||
+                              (event.logicalKey ==
+                                      LogicalKeyboardKey.arrowDown &&
+                                  index + columnCount >= items.length)) {
+                            return KeyEventResult.handled;
+                          }
+                          return KeyEventResult.ignored;
+                        },
+                        child: _DetailCard(
+                          item: items[index],
+                          image: image(items[index], maxWidth: 720),
+                          autofocus: index == 0,
+                          onPressed: () => onOpen(items[index]),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

@@ -31,6 +31,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
   final _password = TextEditingController();
   final _switchFocus = FocusNode(debugLabel: 'use Tailscale');
   final _serverFocus = FocusNode(debugLabel: 'Jellyfin server');
+  final _protocolFocus = FocusNode(debugLabel: 'server protocol');
+  String _serverProtocol = 'https';
   final _usernameFocus = FocusNode(debugLabel: 'Jellyfin username');
   final _passwordFocus = FocusNode(debugLabel: 'Jellyfin password');
   final _nextFocus = FocusNode(debugLabel: 'setup Next');
@@ -51,7 +53,19 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     _lastPhase = model.phase;
     _wasConnected = model.tailscaleConnected;
     _wasInitialized = model.initialized;
+    _server.addListener(_serverChanged);
     _server.text = model.serverUrl?.toString() ?? '';
+    _serverFocus.onKeyEvent = (_, event) => _serverKey(event);
+    _protocolFocus.onKeyEvent = (_, event) => _serverKey(event);
+    _nextFocus.onKeyEvent = (_, event) {
+      if (model.phase == SetupPhase.server &&
+          (event is KeyDownEvent || event is KeyRepeatEvent) &&
+          event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _serverFocus.requestFocus();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    };
     model.addListener(_changed);
     WidgetsBinding.instance.addObserver(this);
     _usernameFocus.addListener(_credentialFocusChanged);
@@ -159,23 +173,56 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     model.back();
   }
 
-  Future<void> _pasteServer() async {
-    try {
-      final text =
-          (await Clipboard.getData(Clipboard.kTextPlain))?.text?.trim() ?? '';
-      if (!mounted) return;
-      if (text.isEmpty) {
-        _message('Clipboard does not contain a server address.');
-        return;
-      }
-      _server.value = TextEditingValue(
-        text: text,
-        selection: TextSelection.collapsed(offset: text.length),
-      );
-      _message('Server address pasted.');
-    } on PlatformException {
-      if (mounted) _message('Unable to read the clipboard.');
+  void _serverChanged() {
+    final value = _server.value;
+    final prefix = RegExp(
+      r'^\s*(https?)://',
+      caseSensitive: false,
+    ).firstMatch(value.text);
+    if (prefix == null) return;
+    final protocol = prefix.group(1)!.toLowerCase();
+    final removed = prefix.end;
+    final address = value.text.substring(removed);
+    _server.value = TextEditingValue(
+      text: address,
+      selection: value.selection.isValid
+          ? TextSelection(
+              baseOffset: (value.selection.baseOffset - removed).clamp(
+                0,
+                address.length,
+              ),
+              extentOffset: (value.selection.extentOffset - removed).clamp(
+                0,
+                address.length,
+              ),
+            )
+          : TextSelection.collapsed(offset: address.length),
+    );
+    if (_serverProtocol != protocol) {
+      setState(() => _serverProtocol = protocol);
     }
+  }
+
+  KeyEventResult _serverKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      _nextFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (_protocolFocus.hasFocus &&
+        event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      _serverFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (_tv &&
+        _serverFocus.hasFocus &&
+        event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      _protocolFocus.requestFocus();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _message(String value) {
@@ -192,7 +239,12 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
       case SetupPhase.connection:
         await model.continueConnection();
       case SetupPhase.server:
-        await model.checkServer(_server.text);
+        final address = _server.text.trim();
+        await model.checkServer(
+          address.isEmpty || address.contains('://')
+              ? address
+              : '$_serverProtocol://$address',
+        );
       case SetupPhase.credentials:
         final password = _password.text;
         _password.clear();
@@ -267,6 +319,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     _password.dispose();
     _switchFocus.dispose();
     _serverFocus.dispose();
+    _protocolFocus.dispose();
     _usernameFocus.dispose();
     _passwordFocus.dispose();
     _nextFocus.dispose();
@@ -709,50 +762,67 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
         ),
       ],
       SetupPhase.server => [
-        if (_tv)
-          TvTextField(
-            key: const ValueKey('server-url-field'),
-            controller: _server,
-            focusNode: _serverFocus,
-            enabled: !model.isBusy,
-            label: 'Server address',
-            hint: model.tailscaleEnabled
-                ? 'http://jellyfin:8096'
-                : 'http://192.168.1.10:8096',
-            onEdit: () => _editTvField(
-              controller: _server,
-              focus: _serverFocus,
-              label: 'Server address',
-              url: true,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Semantics(
+              label: 'Server protocol',
+              child: OutlinedButton(
+                key: const ValueKey('server-protocol-button'),
+                focusNode: _protocolFocus,
+                style: _buttonMotion.copyWith(
+                  minimumSize: const WidgetStatePropertyAll(Size(0, 56)),
+                  padding: const WidgetStatePropertyAll(
+                    EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+                onPressed: model.isBusy
+                    ? null
+                    : () => setState(() {
+                        _serverProtocol = _serverProtocol == 'https'
+                            ? 'http'
+                            : 'https';
+                      }),
+                child: Text('$_serverProtocol://'),
+              ),
             ),
-          )
-        else
-          TextField(
-            key: const ValueKey('server-url-field'),
-            controller: _server,
-            focusNode: _serverFocus,
-            enabled: !model.isBusy,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            textInputAction: TextInputAction.done,
-            onSubmitted: model.isBusy ? null : (_) => _next(),
-            decoration: InputDecoration(
-              labelText: 'Server address',
-              hintText: model.tailscaleEnabled
-                  ? 'http://jellyfin:8096'
-                  : 'http://192.168.1.10:8096',
+            const SizedBox(width: 12),
+            Expanded(
+              child: _tv
+                  ? TvTextField(
+                      key: const ValueKey('server-url-field'),
+                      controller: _server,
+                      focusNode: _serverFocus,
+                      enabled: !model.isBusy,
+                      label: 'Server address',
+                      hint: model.tailscaleEnabled
+                          ? 'jellyfin:8096'
+                          : 'jellyfin.example.com',
+                      onEdit: () => _editTvField(
+                        controller: _server,
+                        focus: _serverFocus,
+                        label: 'Server address',
+                        url: true,
+                      ),
+                    )
+                  : TextField(
+                      key: const ValueKey('server-url-field'),
+                      controller: _server,
+                      focusNode: _serverFocus,
+                      enabled: !model.isBusy,
+                      keyboardType: TextInputType.url,
+                      autocorrect: false,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: model.isBusy ? null : (_) => _next(),
+                      decoration: InputDecoration(
+                        labelText: 'Server address',
+                        hintText: model.tailscaleEnabled
+                            ? 'jellyfin:8096'
+                            : 'jellyfin.example.com',
+                      ),
+                    ),
             ),
-          ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            key: const ValueKey('paste-server-url-button'),
-            style: _buttonMotion,
-            onPressed: model.isBusy ? null : _pasteServer,
-            icon: const Icon(PhosphorIconsRegular.clipboardText, size: 18),
-            label: const Text('Paste server address'),
-          ),
+          ],
         ),
       ],
       SetupPhase.credentials => [

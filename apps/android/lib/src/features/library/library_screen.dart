@@ -16,6 +16,20 @@ import 'package:soup/src/features/shared/fading_artwork.dart';
 import 'package:soup/src/features/shared/stale_data_banner.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
 
+void _scrollTo(BuildContext context, ScrollPosition position, double offset) {
+  if (MediaQuery.disableAnimationsOf(context)) {
+    position.jumpTo(offset);
+  } else {
+    unawaited(
+      position.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+}
+
 enum _FruityDestination { home, tv, movies, settings }
 
 const _blockbusterContentInset = 104.0;
@@ -72,6 +86,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
   int _blockbusterHeroIndex = 0;
   int _blockbusterFocusRevision = 0;
   Timer? _blockbusterBackdropTimer;
+  final _topNavNodes = List.generate(
+    5,
+    (index) => FocusNode(debugLabel: 'top-nav-$index'),
+  );
+  final _topContentScope = FocusScopeNode(debugLabel: 'top-nav-content');
+  final _festivalHeroFocus = FocusNode(debugLabel: 'festival-hero');
+  final _homeRowKeys = <String, GlobalKey<_HorizontalCardRowState>>{};
+  List<String> _homeRowTitles = [];
   final _applyAppearanceFocus = FocusNode(debugLabel: 'apply-appearance');
   bool _savingAppearance = false;
   bool _clearingArtwork = false;
@@ -86,6 +108,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       debugLabel: 'blockbuster-hero-carousel',
     );
     _homeScrollController = ScrollController(debugLabel: 'library-home-scroll');
+    _festivalHeroFocus.addListener(() {
+      if (_festivalHeroFocus.hasFocus) _scrollHomeToTop();
+    });
     _appearanceDraft = widget.appearance;
     _ownsMetadataRepository = widget.metadataRepository == null;
     _metadataRepository =
@@ -115,6 +140,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     _homeScrollController.dispose();
     _blockbusterHeroFocusNode.dispose();
     _applyAppearanceFocus.dispose();
+    for (final node in _topNavNodes) {
+      node.dispose();
+    }
+    _topContentScope.dispose();
+    _festivalHeroFocus.dispose();
     _blockbusterContentScopeNode.dispose();
     _viewModel.dispose();
     if (_ownsMetadataRepository) {
@@ -215,13 +245,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             )
             .toDouble();
     if ((targetOffset - playlistScroll.position.pixels).abs() < 1) return;
-    playlistScroll.position.animateTo(
-      targetOffset,
-      duration: MediaQuery.disableAnimationsOf(context)
-          ? Duration.zero
-          : _blockbusterRailTransitionDuration,
-      curve: Curves.easeOutCubic,
-    );
+    _scrollTo(context, playlistScroll.position, targetOffset);
   }
 
   Future<void> _saveAppearance() async {
@@ -348,12 +372,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     children: [
                       if (wide)
                         _FruityTopNavigation(
+                          nodes: _topNavNodes,
+                          onEnterContent: _enterTopNavContent,
                           destination: _destination,
                           userName: widget.session.userName,
                           onSelected: (value) =>
                               setState(() => _destination = value),
                         ),
-                      Expanded(child: content),
+                      Expanded(
+                        child: FocusScope(
+                          node: _topContentScope,
+                          child: Focus(
+                            canRequestFocus: false,
+                            skipTraversal: true,
+                            onKeyEvent: wide ? _handleTopNavContentKey : null,
+                            child: content,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
           ),
@@ -391,6 +427,73 @@ class _LibraryScreenState extends State<LibraryScreen> {
               ),
       ),
     );
+  }
+
+  void _scrollHomeToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !_festivalHeroFocus.hasFocus ||
+          !_homeScrollController.hasClients) {
+        return;
+      }
+      _scrollTo(context, _homeScrollController.position, 0);
+    });
+  }
+
+  void _enterTopNavContent() {
+    if (_destination == _FruityDestination.home &&
+        _festivalHeroFocus.context != null) {
+      _festivalHeroFocus.requestFocus();
+      return;
+    }
+    final nodes = _topContentScope.traversalDescendants.toList()
+      ..sort((a, b) {
+        final vertical = a.rect.top.compareTo(b.rect.top);
+        return vertical != 0 ? vertical : a.rect.left.compareTo(b.rect.left);
+      });
+    if (nodes.isNotEmpty) {
+      FocusTraversalPolicy.defaultTraversalRequestFocusCallback(nodes.first);
+    }
+  }
+
+  void _focusHomeRow(int index) {
+    if (index < 0) {
+      if (_festivalHeroFocus.context != null) {
+        _festivalHeroFocus.requestFocus();
+      } else {
+        _topNavNodes[_destination.index].requestFocus();
+      }
+    } else if (index < _homeRowTitles.length) {
+      _homeRowKeys[_homeRowTitles[index]]?.currentState?.focusRemembered();
+    }
+  }
+
+  KeyEventResult _handleTopNavContentKey(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (_festivalHeroFocus.hasFocus) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+        _topNavNodes[_destination.index].requestFocus();
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+        _focusHomeRow(0);
+      } else if (event.logicalKey != LogicalKeyboardKey.arrowLeft &&
+          event.logicalKey != LogicalKeyboardKey.arrowRight) {
+        return KeyEventResult.ignored;
+      }
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      final current = FocusManager.instance.primaryFocus;
+      if (current != null &&
+          !_topContentScope.traversalDescendants.any(
+            (node) => node != current && node.rect.center.dy < current.rect.top,
+          )) {
+        _topNavNodes[_destination.index].requestFocus();
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   KeyEventResult _handleBlockbusterContentKeyEvent(
@@ -521,11 +624,35 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final hero = blockbuster
         ? selectedBlockbusterHero
         : resumeItems.firstOrNull ?? heroCandidates.firstOrNull;
+    final topNavigation =
+        !blockbuster && MediaQuery.sizeOf(context).width >= 840;
+    _homeRowTitles = [
+      if (resumeItems.isNotEmpty) 'Continue Watching',
+      if (recentlyAddedMovies.isNotEmpty) 'Recently Added Movies',
+      if (recentlyAddedTv.isNotEmpty) 'Recently Added TV',
+    ];
+    for (final title in _homeRowTitles) {
+      _homeRowKeys.putIfAbsent(
+        title,
+        () => GlobalKey<_HorizontalCardRowState>(),
+      );
+    }
     final continueWatching = resumeItems.isEmpty
         ? null
         : _LibrarySection(
             blockbuster: blockbuster,
             title: 'Continue Watching',
+            rowKey: _homeRowKeys['Continue Watching'],
+            onUp: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Continue Watching') - 1,
+                  )
+                : null,
+            onDown: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Continue Watching') + 1,
+                  )
+                : null,
             items: resumeItems,
             landscape: true,
             image: _viewModel.image,
@@ -543,6 +670,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
         : _LibrarySection(
             blockbuster: blockbuster,
             title: 'Recently Added Movies',
+            rowKey: _homeRowKeys['Recently Added Movies'],
+            onUp: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Recently Added Movies') - 1,
+                  )
+                : null,
+            onDown: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Recently Added Movies') + 1,
+                  )
+                : null,
             items: recentlyAddedMovies,
             image: _viewModel.image,
             prefetch: _viewModel.prefetchArtwork,
@@ -559,6 +697,17 @@ class _LibraryScreenState extends State<LibraryScreen> {
         : _LibrarySection(
             blockbuster: blockbuster,
             title: 'Recently Added TV',
+            rowKey: _homeRowKeys['Recently Added TV'],
+            onUp: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Recently Added TV') - 1,
+                  )
+                : null,
+            onDown: topNavigation
+                ? () => _focusHomeRow(
+                    _homeRowTitles.indexOf('Recently Added TV') + 1,
+                  )
+                : null,
             items: recentlyAddedTv,
             image: _viewModel.image,
             prefetch: _viewModel.prefetchArtwork,
@@ -600,7 +749,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             onHeroFocused: blockbuster
                 ? () => _restoreFullHero(selectedBlockbusterHero!)
                 : null,
-            focusNode: blockbusterWide ? _blockbusterHeroFocusNode : null,
+            focusNode: blockbusterWide
+                ? _blockbusterHeroFocusNode
+                : _festivalHeroFocus,
             heroIndex: blockbusterWide ? effectiveHeroIndex : null,
             heroCount: blockbusterWide ? blockbusterHeroItems.length : null,
             onPreviousHero: blockbusterHeroItems.length > 1
@@ -708,13 +859,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_homeScrollController.hasClients) return;
-      _homeScrollController.animateTo(
-        0,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-      );
+      _scrollTo(context, _homeScrollController.position, 0);
     });
   }
 
@@ -1420,11 +1565,15 @@ class _BlockbusterRailItemState extends State<_BlockbusterRailItem> {
 
 class _FruityTopNavigation extends StatelessWidget {
   const _FruityTopNavigation({
+    required this.nodes,
+    required this.onEnterContent,
     required this.destination,
     required this.userName,
     required this.onSelected,
   });
 
+  final List<FocusNode> nodes;
+  final VoidCallback onEnterContent;
   final _FruityDestination destination;
   final String userName;
   final ValueChanged<_FruityDestination> onSelected;
@@ -1432,74 +1581,107 @@ class _FruityTopNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Material(
-      color: colors.surface.withValues(alpha: 0.78),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: SoupTheme.isFestival(context)
-                  ? colors.outlineVariant
-                  : Colors.transparent,
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) {
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+          return KeyEventResult.ignored;
+        }
+        final index = nodes.indexWhere((node) => node.hasFocus);
+        if (index < 0) return KeyEventResult.ignored;
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          onEnterContent();
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+          nodes[(index + 1).clamp(0, nodes.length - 1)].requestFocus();
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+          nodes[(index - 1).clamp(0, nodes.length - 1)].requestFocus();
+        } else if (event.logicalKey != LogicalKeyboardKey.arrowUp) {
+          return KeyEventResult.ignored;
+        }
+        return KeyEventResult.handled;
+      },
+      child: Material(
+        color: colors.surface.withValues(alpha: 0.78),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: SoupTheme.isFestival(context)
+                    ? colors.outlineVariant
+                    : Colors.transparent,
+              ),
             ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
-          child: Row(
-            children: [
-              const SoupMark(),
-              const SizedBox(width: 10),
-              Text(
-                SoupTheme.isFestival(context) ? 'SOUP' : 'Soup',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const Spacer(),
-              _TopNavItem(
-                key: const ValueKey('fruity-nav-home'),
-                order: 1,
-                selected: destination == _FruityDestination.home,
-                tooltip: 'Home',
-                onPressed: () => onSelected(_FruityDestination.home),
-                child: const Icon(PhosphorIconsRegular.house),
-              ),
-              const SizedBox(width: 8),
-              _TopNavItem(
-                key: const ValueKey('fruity-nav-tv'),
-                order: 2,
-                selected: destination == _FruityDestination.tv,
-                tooltip: 'TV',
-                onPressed: () => onSelected(_FruityDestination.tv),
-                child: const Text('TV'),
-              ),
-              const SizedBox(width: 8),
-              _TopNavItem(
-                key: const ValueKey('fruity-nav-movies'),
-                order: 3,
-                selected: destination == _FruityDestination.movies,
-                tooltip: 'Movies',
-                onPressed: () => onSelected(_FruityDestination.movies),
-                child: const Text('Movies'),
-              ),
-              const SizedBox(width: 8),
-              _TopNavItem(
-                key: const ValueKey('fruity-nav-settings'),
-                order: 4,
-                selected: destination == _FruityDestination.settings,
-                tooltip: 'Settings',
-                onPressed: () => onSelected(_FruityDestination.settings),
-                child: const Text('Settings'),
-              ),
-              const Spacer(),
-              CircleAvatar(
-                backgroundColor: colors.primaryContainer,
-                child: Text(
-                  userName.isEmpty
-                      ? '?'
-                      : userName.characters.first.toUpperCase(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+            child: Row(
+              children: [
+                const SoupMark(),
+                const SizedBox(width: 10),
+                Text(
+                  SoupTheme.isFestival(context) ? 'SOUP' : 'Soup',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-              ),
-            ],
+                const Spacer(),
+                _TopNavItem(
+                  key: const ValueKey('fruity-nav-home'),
+                  focusNode: nodes[0],
+                  order: 1,
+                  selected: destination == _FruityDestination.home,
+                  tooltip: 'Home',
+                  onPressed: () => onSelected(_FruityDestination.home),
+                  child: const Icon(PhosphorIconsRegular.house),
+                ),
+                const SizedBox(width: 8),
+                _TopNavItem(
+                  key: const ValueKey('fruity-nav-tv'),
+                  focusNode: nodes[1],
+                  order: 2,
+                  selected: destination == _FruityDestination.tv,
+                  tooltip: 'TV',
+                  onPressed: () => onSelected(_FruityDestination.tv),
+                  child: const Text('TV'),
+                ),
+                const SizedBox(width: 8),
+                _TopNavItem(
+                  key: const ValueKey('fruity-nav-movies'),
+                  focusNode: nodes[2],
+                  order: 3,
+                  selected: destination == _FruityDestination.movies,
+                  tooltip: 'Movies',
+                  onPressed: () => onSelected(_FruityDestination.movies),
+                  child: const Text('Movies'),
+                ),
+                const SizedBox(width: 8),
+                _TopNavItem(
+                  key: const ValueKey('fruity-nav-settings'),
+                  focusNode: nodes[3],
+                  order: 4,
+                  selected: destination == _FruityDestination.settings,
+                  tooltip: 'Settings',
+                  onPressed: () => onSelected(_FruityDestination.settings),
+                  child: const Text('Settings'),
+                ),
+                const Spacer(),
+                _TopNavItem(
+                  key: const ValueKey('fruity-nav-account'),
+                  focusNode: nodes[4],
+                  order: 5,
+                  selected: false,
+                  tooltip: userName.isEmpty ? 'Account' : 'Account: $userName',
+                  onPressed: () => onSelected(_FruityDestination.settings),
+                  child: CircleAvatar(
+                    backgroundColor: colors.primaryContainer,
+                    child: Text(
+                      userName.isEmpty
+                          ? '?'
+                          : userName.characters.first.toUpperCase(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1509,6 +1691,7 @@ class _FruityTopNavigation extends StatelessWidget {
 
 class _TopNavItem extends StatefulWidget {
   const _TopNavItem({
+    required this.focusNode,
     required this.order,
     required this.selected,
     required this.tooltip,
@@ -1517,6 +1700,7 @@ class _TopNavItem extends StatefulWidget {
     super.key,
   });
 
+  final FocusNode focusNode;
   final double order;
   final bool selected;
   final String tooltip;
@@ -1540,6 +1724,7 @@ class _TopNavItemState extends State<_TopNavItem> {
       child: Tooltip(
         message: widget.tooltip,
         child: FocusableActionDetector(
+          focusNode: widget.focusNode,
           onShowFocusHighlight: (focused) => setState(() => _focused = focused),
           actions: {
             ActivateIntent: CallbackAction<ActivateIntent>(
@@ -1554,6 +1739,7 @@ class _TopNavItemState extends State<_TopNavItem> {
             selected: widget.selected,
             label: widget.tooltip,
             child: InkWell(
+              canRequestFocus: false,
               onTap: widget.onPressed,
               borderRadius: radius,
               child: AnimatedContainer(
@@ -1655,6 +1841,7 @@ class _FruityHero extends StatelessWidget {
         userName: userName,
         image: image,
         onOpen: onOpen,
+        focusNode: focusNode,
       );
     }
     final heroHeight = blockbuster && wide
@@ -1731,6 +1918,7 @@ class _FruityHero extends StatelessWidget {
           else
             FilledButton.icon(
               key: const ValueKey('fruity-hero-open'),
+              focusNode: focusNode,
               autofocus: true,
               onPressed: onOpen,
               icon: const Icon(PhosphorIconsRegular.info),
@@ -2189,11 +2377,17 @@ class _LibrarySection extends StatelessWidget {
     required this.prefetch,
     required this.onOpen,
     this.onItemFocused,
+    this.rowKey,
+    this.onUp,
+    this.onDown,
     required this.autofocusFirst,
     required this.sectionOrder,
     this.landscape = false,
   });
 
+  final GlobalKey<_HorizontalCardRowState>? rowKey;
+  final VoidCallback? onUp;
+  final VoidCallback? onDown;
   final bool blockbuster;
   final String title;
   final List<JellyfinItem> items;
@@ -2250,9 +2444,16 @@ class _LibrarySection extends StatelessWidget {
           const SizedBox(height: 12),
           SizedBox(
             height: artHeight + 64,
-            child: _BlockbusterHorizontalCardRow(
-              key: ValueKey('library-row-${title.toLowerCase()}'),
-              restoreLeadingInset: blockbuster && !phone,
+            child: _HorizontalCardRow(
+              key: rowKey,
+              rowLabel: title.toLowerCase(),
+              leadingInset: blockbuster && !phone
+                  ? _blockbusterContentInset
+                  : (phone ? 20 : 40),
+              itemWidth: width,
+              allowExitLeft: blockbuster,
+              onUp: onUp,
+              onDown: onDown,
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final item = items[index];
@@ -2321,34 +2522,85 @@ class _BlockbusterPlaylistRails extends StatelessWidget {
   }
 }
 
-class _BlockbusterHorizontalCardRow extends StatelessWidget {
-  const _BlockbusterHorizontalCardRow({
-    required this.restoreLeadingInset,
+class _HorizontalCardRow extends StatefulWidget {
+  const _HorizontalCardRow({
+    required this.leadingInset,
     required this.itemCount,
+    required this.itemWidth,
     required this.itemBuilder,
+    required this.rowLabel,
+    required this.allowExitLeft,
+    this.onUp,
+    this.onDown,
     super.key,
   });
 
-  final bool restoreLeadingInset;
+  final double leadingInset;
   final int itemCount;
+  final double itemWidth;
   final IndexedWidgetBuilder itemBuilder;
+  final String rowLabel;
+  final bool allowExitLeft;
+  final VoidCallback? onUp;
+  final VoidCallback? onDown;
 
-  void _restoreLeadingInset(BuildContext context) {
+  @override
+  State<_HorizontalCardRow> createState() => _HorizontalCardRowState();
+}
+
+class _HorizontalCardRowState extends State<_HorizontalCardRow> {
+  final _scroll = ScrollController();
+  final _items = <int, FocusNode>{};
+  int _focusedIndex = 0;
+  int _focusRevision = 0;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    for (final node in _items.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  void focusRemembered() =>
+      _focusItem(_focusedIndex.clamp(0, widget.itemCount - 1));
+
+  void _focusItem(int index) {
+    final revision = ++_focusRevision;
+    void focus() {
+      if (!mounted || revision != _focusRevision) return;
+      final scope = _items[index];
+      final target = scope?.traversalDescendants.firstOrNull;
+      if (target != null) {
+        FocusTraversalGroup.of(target.context!).requestFocusCallback(target);
+      }
+    }
+
+    if (_items[index]?.context != null) {
+      focus();
+    } else if (_scroll.hasClients) {
+      // A long row only builds nearby cards. Bring the next card into the
+      // viewport before requesting focus, including repeated remote presses.
+      _scroll.jumpTo(
+        (widget.leadingInset + index * (widget.itemWidth + 18)).clamp(
+          _scroll.position.minScrollExtent,
+          _scroll.position.maxScrollExtent,
+        ),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => focus());
+    }
+  }
+
+  void _restoreLeadingInset() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.mounted) return;
-      final position = Scrollable.maybeOf(context)?.position;
-      if (position == null ||
-          !position.hasPixels ||
-          position.pixels <= position.minScrollExtent) {
+      if (!mounted ||
+          !_scroll.hasClients ||
+          _focusedIndex != 0 ||
+          !(_items[0]?.hasFocus ?? false)) {
         return;
       }
-      position.animateTo(
-        position.minScrollExtent,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-      );
+      _scrollTo(context, _scroll.position, _scroll.position.minScrollExtent);
     });
   }
 
@@ -2356,37 +2608,45 @@ class _BlockbusterHorizontalCardRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width < 600;
     return ListView.separated(
-      padding: EdgeInsets.fromLTRB(
-        restoreLeadingInset ? _blockbusterContentInset : (phone ? 20 : 40),
-        6,
-        phone ? 20 : 40,
-        6,
-      ),
+      key: ValueKey('library-row-${widget.rowLabel}'),
+      controller: _scroll,
+      padding: EdgeInsets.fromLTRB(widget.leadingInset, 6, phone ? 20 : 40, 6),
       scrollDirection: Axis.horizontal,
-      itemCount: itemCount,
+      itemCount: widget.itemCount,
       separatorBuilder: (_, _) => const SizedBox(width: 18),
-      itemBuilder: (context, index) {
-        final child = itemBuilder(context, index);
-        return Focus(
-          canRequestFocus: false,
-          skipTraversal: true,
-          onKeyEvent: (_, event) {
-            if (restoreLeadingInset &&
-                index == itemCount - 1 &&
-                (event is KeyDownEvent || event is KeyRepeatEvent) &&
-                event.logicalKey == LogicalKeyboardKey.arrowRight) {
-              return KeyEventResult.handled;
-            }
+      itemBuilder: (context, index) => Focus(
+        focusNode: _items.putIfAbsent(index, () => FocusNode()),
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (_, event) {
+          if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
             return KeyEventResult.ignored;
-          },
-          onFocusChange: (focused) {
-            if (focused && index == 0 && restoreLeadingInset) {
-              _restoreLeadingInset(context);
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            if (index < widget.itemCount - 1) _focusItem(index + 1);
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            if (index == 0 && widget.allowExitLeft) {
+              return KeyEventResult.ignored;
             }
-          },
-          child: child,
-        );
-      },
+            if (index > 0) _focusItem(index - 1);
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp &&
+              widget.onUp != null) {
+            widget.onUp!();
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowDown &&
+              widget.onDown != null) {
+            widget.onDown!();
+          } else {
+            return KeyEventResult.ignored;
+          }
+          return KeyEventResult.handled;
+        },
+        onFocusChange: (focused) {
+          if (!focused) return;
+          _focusedIndex = index;
+          if (index == 0) _restoreLeadingInset();
+        },
+        child: widget.itemBuilder(context, index),
+      ),
     );
   }
 }
@@ -2671,6 +2931,7 @@ class _LibraryMessage extends StatelessWidget {
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 20),
               FilledButton.icon(
+                autofocus: true,
                 onPressed: onAction,
                 icon: const Icon(PhosphorIconsRegular.arrowsClockwise),
                 label: Text(actionLabel),

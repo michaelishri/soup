@@ -360,13 +360,10 @@ void main() {
         input.complete('http://draft:8096', submitted: false);
         await tester.pumpAndSettle();
         expect(model.phase, SetupPhase.server);
-        expect(
-          tester.widget<TvTextField>(field).controller.text,
-          'http://draft:8096',
-        );
+        expect(tester.widget<TvTextField>(field).controller.text, 'draft:8096');
         expect(tester.widget<TvTextField>(field).focusNode.hasFocus, isTrue);
         await tester.sendKeyEvent(LogicalKeyboardKey.select);
-        expect(input.calls.last['text'], 'http://draft:8096');
+        expect(input.calls.last['text'], 'draft:8096');
         input.complete('', submitted: false);
         await tester.pumpAndSettle();
       } finally {
@@ -597,7 +594,7 @@ void main() {
           .widget<TextField>(find.byKey(const ValueKey('server-url-field')))
           .controller!
           .text,
-      'http://localhost:8096',
+      'localhost:8096',
     );
     await tester.tap(find.byKey(const ValueKey('check-server-button')));
     await tester.pumpAndSettle();
@@ -614,41 +611,6 @@ void main() {
           .controller!
           .text,
       isEmpty,
-    );
-  });
-
-  testWidgets('server paste trims text and reports empty clipboard', (
-    tester,
-  ) async {
-    String clipboard = '  http://localhost:8096\n';
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async =>
-          call.method == 'Clipboard.getData' ? {'text': clipboard} : null,
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        null,
-      ),
-    );
-    await setup(tester);
-    await nextToServer(tester);
-    await tester.tap(find.byKey(const ValueKey('paste-server-url-button')));
-    await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const ValueKey('server-url-field')))
-          .controller!
-          .text,
-      'http://localhost:8096',
-    );
-    clipboard = '';
-    await tester.tap(find.byKey(const ValueKey('paste-server-url-button')));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Clipboard does not contain a server address.'),
-      findsOneWidget,
     );
   });
 

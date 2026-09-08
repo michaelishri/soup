@@ -14,6 +14,7 @@ class FestivalHero extends StatelessWidget {
     required this.userName,
     required this.image,
     required this.onOpen,
+    this.focusNode,
     super.key,
   });
 
@@ -21,6 +22,7 @@ class FestivalHero extends StatelessWidget {
   final String userName;
   final Future<CachedArtwork?> image;
   final VoidCallback onOpen;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +77,7 @@ class FestivalHero extends StatelessWidget {
           const SizedBox(height: 20),
           FilledButton.icon(
             key: const ValueKey('fruity-hero-open'),
+            focusNode: focusNode,
             autofocus: true,
             onPressed: onOpen,
             // This action sits on cobalt in both brightness modes. A yellow
