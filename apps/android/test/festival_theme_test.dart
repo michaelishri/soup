@@ -93,7 +93,7 @@ void main() {
           final source = FakeLibrarySource(
             const JellyfinHome(
               libraries: [],
-              resume: [_movie],
+              resume: [_movie, ..._latest],
               latest: _latest,
             ),
           );
