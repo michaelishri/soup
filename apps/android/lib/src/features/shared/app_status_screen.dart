@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:soup/src/features/connectivity/tailscale_authorization_controller.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup/src/features/shared/tailscale_authorization_button.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
@@ -12,15 +13,17 @@ class AppStatusScreen extends StatelessWidget {
     this.busy = false,
     this.onRetry,
     this.authorizationUrl,
+    this.authorizationController,
     this.tvTextInput = const TvTextInput(),
     super.key,
-  });
+  }) : assert(authorizationUrl == null || authorizationController != null);
 
   final String title;
   final String message;
   final bool busy;
   final VoidCallback? onRetry;
   final Uri? authorizationUrl;
+  final TailscaleAuthorizationController? authorizationController;
   final TvTextInput tvTextInput;
 
   @override
@@ -51,6 +54,7 @@ class AppStatusScreen extends StatelessWidget {
                   const SizedBox(height: 20),
                   _RecoveryAuthorization(
                     authorizationUrl: url,
+                    controller: authorizationController!,
                     tvTextInput: tvTextInput,
                   ),
                 ] else if (busy) ...[
@@ -78,9 +82,11 @@ class _RecoveryAuthorization extends StatefulWidget {
   const _RecoveryAuthorization({
     required this.authorizationUrl,
     required this.tvTextInput,
+    required this.controller,
   });
 
   final Uri authorizationUrl;
+  final TailscaleAuthorizationController controller;
   final TvTextInput tvTextInput;
 
   @override
@@ -97,7 +103,7 @@ class _RecoveryAuthorizationState extends State<_RecoveryAuthorization> {
       if (!snapshot.hasData) return const SizedBox.shrink();
       final url = widget.authorizationUrl;
       if (!snapshot.data!) {
-        return TailscaleAuthorizationButton(authorizationUrl: url);
+        return TailscaleAuthorizationButton(controller: widget.controller);
       }
       return Column(
         mainAxisSize: MainAxisSize.min,

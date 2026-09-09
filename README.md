@@ -44,8 +44,8 @@ for series. Playback negotiates direct play with Jellyfin and falls back to HLS
 transcoding when required, with resume seeking, transport controls, progress
 reporting, and selectable WebVTT subtitles. The authenticated loopback playback
 bridge uses the same selected connection as the rest of the app. Tailscale setup
-opens authorisation in the browser on mobile and displays a QR code on TV. Server
-discovery searches the local network and, when connected, visible Tailscale devices.
+opens authorisation in a browser tab within Soup on mobile and displays a QR code
+on TV. Server discovery searches the local network and, when connected, visible Tailscale devices.
 Soup tries Jellyfin's built-in discovery first, then standard Jellyfin ports and
 Tailscale HTTPS addresses on known devices. Verified servers appear as selectable
 cards; manual entry is always available. Discovery is bounded and may not find
@@ -83,7 +83,7 @@ Secrets are handled deliberately:
 
 - Interactive registration sends no Tailscale credential through Soup. The
   embedded node supplies an HTTPS authorization URL. Phones and tablets open it
-  in the external browser using **Authorise device on Tailscale**; Android TV
+  in a Custom Tab using **Authorise device on Tailscale**; Android TV
   renders it as a QR code. Auth-key entry is not offered in Soup onboarding.
 - The Jellyfin password is cleared immediately after submission or backward navigation and is never
   persisted.
@@ -140,7 +140,9 @@ minimum supported version.
 
 On first launch, **Use Tailscale** is off. Select **Next** to find a Jellyfin
 10.11+ server reachable from your device, or enable Tailscale. On mobile, tap
-**Authorise device on Tailscale**, sign in in your browser, then return to Soup.
+**Authorise device on Tailscale** to sign in. Soup closes the browser tab when
+the device connects or needs administrator approval. If an in-app browser tab is
+unavailable, sign-in opens in your external browser; return to Soup manually.
 On Android TV, scan the QR code with another device and finish authorization.
 Saved accounts that need to reconnect use the same mobile button or TV QR flow.
 If device approval is required, Soup waits for the administrator; after connection,

@@ -14,6 +14,7 @@ import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/appearance_controller.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/shared/app_status_screen.dart';
+import 'package:soup/src/features/connectivity/tailscale_authorization_controller.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
@@ -21,6 +22,7 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 import 'support/connectivity_fakes.dart';
 import 'support/onboarding_fonts.dart';
 import 'support/url_launcher_fake.dart';
+import 'support/custom_tabs_fake.dart';
 import 'widget_test.dart' show FakeTvTextInput;
 
 void main() {
@@ -33,11 +35,13 @@ void main() {
   late _AppearanceStore appearance;
   late SoupDatabase database;
   late FakeUrlLauncher launcher;
+  late FakeCustomTabs tabs;
   late UrlLauncherPlatform previousLauncher;
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(inputChannel, (_) async => false);
+    tabs = FakeCustomTabs()..install();
     previousLauncher = UrlLauncherPlatform.instance;
     UrlLauncherPlatform.instance = launcher = FakeUrlLauncher();
     client = FakeTailscaleClient()..restoreConnected = true;
@@ -54,6 +58,7 @@ void main() {
   tearDown(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(inputChannel, null);
+    tabs.uninstall();
     UrlLauncherPlatform.instance = previousLauncher;
     client.dispose();
     await database.close();
@@ -206,6 +211,7 @@ void main() {
   testWidgets('mobile reauthorisation returns to the saved library', (
     tester,
   ) async {
+    launcher.customTabsSupported = true;
     connection.mode = ConnectionMode.tailscale;
     await mount(tester);
     await tester.pumpAndSettle();
@@ -219,22 +225,20 @@ void main() {
     expect(launcher.launches, isEmpty);
     await tester.tap(find.text('Authorise device on Tailscale'));
     await tester.pumpAndSettle();
-    expect(launcher.launches, [
-      (
-        client.status.authorizationUrl.toString(),
-        PreferredLaunchMode.externalApplication,
-      ),
-    ]);
+    expect(launcher.launches, isEmpty);
+    expect(tabs.launches, [client.status.authorizationUrl.toString()]);
     expect(client.interactiveConnects, 1);
     expect(sessions.session, testSession);
     client.emit(const TailscaleStatus.awaitingApproval());
     await tester.pump();
     expect(find.text('Authorise device on Tailscale'), findsNothing);
     expect(find.text('Reconnecting to Tailscale'), findsOneWidget);
+    expect(tabs.closes, 1);
     client.complete();
     await tester.pumpAndSettle();
     expect(find.text('No playlists yet'), findsOneWidget);
     expect(sessions.session, testSession);
+    expect(tabs.closes, 1);
     expect(sessions.clears, 0);
     expect(tester.takeException(), isNull);
   });
@@ -243,6 +247,14 @@ void main() {
     tester,
   ) async {
     addTearDown(tester.view.reset);
+    final auth = TailscaleAuthorizationController()
+      ..update(
+        TailscaleStatus.awaitingLogin(
+          Uri.parse('https://login.tailscale.com/a/example'),
+        ),
+        attempt: 1,
+      );
+    addTearDown(auth.dispose);
     for (final (size, television) in [
       (const Size(320, 480), false),
       (const Size(960, 540), false),
@@ -259,6 +271,7 @@ void main() {
             title: 'Reconnecting to Tailscale',
             message:
                 'Sign in to Tailscale to reconnect. Your Jellyfin sign-in is saved.',
+            authorizationController: auth,
             authorizationUrl: Uri.parse(
               'https://login.tailscale.com/a/example',
             ),

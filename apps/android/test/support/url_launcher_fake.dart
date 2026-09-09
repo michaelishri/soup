@@ -4,6 +4,11 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 class FakeUrlLauncher extends UrlLauncherPlatform {
   final launches = <(String, PreferredLaunchMode)>[];
   Future<bool> Function()? handleLaunch;
+  bool customTabsSupported = false;
+
+  @override
+  Future<bool> supportsMode(PreferredLaunchMode mode) async =>
+      customTabsSupported;
 
   @override
   LinkDelegate? get linkDelegate => null;

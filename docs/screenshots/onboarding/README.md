@@ -13,8 +13,9 @@ captures for the root README.
 SOUP-98 adds server discovery cards, with manual entry available throughout the
 search. The example server and its Tailscale address are fictional.
 
-SOUP-99 replaces the phone Tailscale QR with **Authorise device on Tailscale**,
-which opens the authorisation URL in the external browser. TV retains its QR.
+SOUP-99 replaces the phone Tailscale QR with **Authorise device on Tailscale**.
+SOUP-100 opens that link in a Custom Tab and returns to Soup on connection or administrator
+approval. An external-browser fallback retains manual return. TV retains its QR.
 Browser launch and return require native phone validation; these fixture renders
 verify the interface only.
 

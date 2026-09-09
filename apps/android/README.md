@@ -10,13 +10,17 @@ server validation, and Jellyfin sign-in. On first launch **Use Tailscale** is
 off; **Next** immediately opens server setup without starting Tailscale.
 
 Enabling Tailscale on phones and tablets reveals **Authorise device on Tailscale**.
-Tap it to sign in using your browser, then return to Soup. Android TV displays a
-QR code for sign-in on another device. Saved accounts that need to sign in again
-use the same device-appropriate authorisation flow.
+Tap it to sign in in a full-screen Android Custom Tab, sharing your browser’s
+saved sign-in. Soup closes the tab when Tailscale connects or needs administrator
+approval. Back/close lets you return early and reopen the same link. If Custom Tabs
+are unavailable or fail to open, Soup uses your external browser and asks you to
+return manually. Android TV displays a QR code for sign-in on another device.
+Saved accounts that need to sign in again use the same device-appropriate flow.
 
 Soup shows preparation, sign-in, administrator approval, and connection success
-in place. **Next** becomes available when connected. **Get a new link** on mobile
-(**Get a new code** on TV) restarts sign-in; turning the switch off cancels it and
+in place. **Next** becomes available when connected and still requires a tap.
+Reauthorising an existing account automatically reopens its saved library.
+**Get a new link** on mobile (**Get a new code** on TV) restarts sign-in; turning the switch off cancels it and
 allows direct setup. If the browser cannot open, Soup shows an error and lets
 you retry the button. Auth-key entry is not offered.
 

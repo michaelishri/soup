@@ -7,6 +7,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup/src/features/connectivity/tailscale_authorization_controller.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 enum SetupPhase { connection, server, credentials, ready }
@@ -29,7 +30,13 @@ class ConnectivityViewModel extends ChangeNotifier {
     required this.sessionStore,
     required this.connectionStore,
     this.discoveryService,
-  });
+    TailscaleAuthorizationBrowser authorizationBrowser =
+        const PlatformTailscaleAuthorizationBrowser(),
+  }) : authorization = TailscaleAuthorizationController(
+         browser: authorizationBrowser,
+       );
+
+  final TailscaleAuthorizationController authorization;
 
   final TailscaleClient _tailscaleClient;
   final JellyfinClientFactory jellyfinClientFactory;
@@ -749,7 +756,10 @@ class ConnectivityViewModel extends ChangeNotifier {
   }
 
   void _notify() {
-    if (!_disposed) notifyListeners();
+    if (!_disposed) {
+      authorization.update(_status, attempt: _connectionGeneration);
+      notifyListeners();
+    }
   }
 
   static String _friendlyError(Object error) {
@@ -763,6 +773,7 @@ class ConnectivityViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    authorization.dispose();
     _stopDiscovery(clear: true);
     _formGeneration++;
     _stopQuickConnect(clear: true);

@@ -1188,7 +1188,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TailscaleAuthorizationButton(
-              authorizationUrl: url,
+              controller: model.authorization,
               style: _buttonMotion,
             ),
             const SizedBox(height: 8),

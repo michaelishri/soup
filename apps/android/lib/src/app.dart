@@ -141,6 +141,7 @@ class _SoupAppState extends State<SoupApp> {
                       : 'Your server and sign-in are saved. Check your connection, then try again.',
                   busy: _viewModel.connecting,
                   authorizationUrl: status.authorizationUrl,
+                  authorizationController: _viewModel.authorization,
                   onRetry: _viewModel.connecting
                       ? null
                       : _viewModel.reconnectSession,
