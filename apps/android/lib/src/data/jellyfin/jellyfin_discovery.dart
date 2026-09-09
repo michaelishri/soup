@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/jellyfin/discovery_client_factory.dart';
 import 'package:soup/src/data/jellyfin/lan_discovery.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -63,7 +64,7 @@ class DiscoveryLimits {
 class DefaultJellyfinDiscoveryService implements JellyfinDiscoveryService {
   DefaultJellyfinDiscoveryService({
     required this.tailscale,
-    this.clients = const DefaultJellyfinClientFactory(),
+    this.clients = const DiscoveryJellyfinClientFactory(),
     LanDiscoverySession Function()? openLan,
     this.limits = const DiscoveryLimits(),
   }) : openLan = openLan ?? SocketLanDiscoverySession.new;
@@ -335,6 +336,10 @@ class _DiscoveryRun implements JellyfinDiscoveryRun {
 
   void _add(Uri raw, DiscoverySource source, int networkRank, [String? id]) {
     if (_closed || !_safeHost(raw.host)) return;
+    if (_seen.length >= 512) {
+      _partial = true;
+      return;
+    }
     final url = JellyfinApi.parseServerUrl(raw.toString());
     // Keep source and expected identity in the key so a LAN result can also
     // acquire its tailnet provenance without accepting a mismatched UDP ID.

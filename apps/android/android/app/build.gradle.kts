@@ -16,7 +16,8 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "dev.michaelishri.soup"
+        applicationId = providers.gradleProperty("soupApplicationId")
+            .orElse("dev.michaelishri.soup").get()
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 31

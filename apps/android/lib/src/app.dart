@@ -6,6 +6,7 @@ import 'package:soup/src/data/artwork/artwork_cache.dart';
 import 'package:soup/src/data/cache/soup_database.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
@@ -28,6 +29,7 @@ class SoupApp extends StatefulWidget {
     this.connectionStore,
     this.appearanceStore,
     this.database,
+    this.discoveryService,
     super.key,
   });
 
@@ -37,6 +39,7 @@ class SoupApp extends StatefulWidget {
   final ConnectionPreferencesStore? connectionStore;
   final AppearanceStore? appearanceStore;
   final SoupDatabase? database;
+  final JellyfinDiscoveryService? discoveryService;
 
   @override
   State<SoupApp> createState() => _SoupAppState();
@@ -61,6 +64,7 @@ class _SoupAppState extends State<SoupApp> {
       sessionStore: widget.sessionStore,
       connectionStore:
           widget.connectionStore ?? SharedPreferencesConnectionStore(),
+      discoveryService: widget.discoveryService,
     )..initialize();
     _appearanceController = AppearanceController(
       widget.appearanceStore ?? SharedPreferencesAppearanceStore(),

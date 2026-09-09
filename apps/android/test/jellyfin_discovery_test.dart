@@ -98,6 +98,132 @@ const shortLimits = DiscoveryLimits(
 
 void main() {
   test(
+    'overall deadline closes all eight active probes and never starts queued work',
+    () async {
+      final tailnet = DiscoveryTailnet()
+        ..visible = List.generate(
+          8,
+          (i) => TailscalePeer(
+            id: '$i',
+            hostname: 'media',
+            addresses: [InternetAddress('100.64.0.${i + 1}')],
+          ),
+        );
+      final response = Completer<http.Response>();
+      final clients = FakeJellyfinClientFactory(
+        respond: (_) => response.future,
+      );
+      final run =
+          DefaultJellyfinDiscoveryService(
+            tailscale: tailnet,
+            clients: clients,
+            openLan: FakeLanDiscovery.new,
+            limits: const DiscoveryLimits(
+              total: Duration(milliseconds: 100),
+              udpWindow: Duration(milliseconds: 10),
+              repeat: Duration(milliseconds: 2),
+              probe: Duration(seconds: 1),
+            ),
+          ).start(
+            ConnectionMode.tailscale,
+            FakeTailscaleClient.connectedStatus.proxy,
+          );
+      final result = (await run.snapshots.toList()).last;
+      expect(result.phase, DiscoveryPhase.partial);
+      expect(clients.requests, hasLength(8));
+      expect(clients.closed, 8);
+      expect(tailnet.udp.closed, isTrue);
+      response.complete(http.Response('', 404));
+      await Future<void>.delayed(Duration.zero);
+      expect(clients.requests, hasLength(8));
+    },
+  );
+
+  test(
+    'directed tailnet discovery validates a custom advertised base path',
+    () async {
+      final tailnet = DiscoveryTailnet()
+        ..visible = [
+          TailscalePeer(
+            id: 'peer',
+            hostname: 'media',
+            addresses: [InternetAddress('100.64.0.8')],
+          ),
+        ];
+      final clients = FakeJellyfinClientFactory(
+        respond: (request) =>
+            request.url.toString() ==
+                'http://100.64.0.8:8888/jellyfin/System/Info/Public'
+            ? FakeJellyfinClientFactory.defaultResponse(request)
+            : http.Response('', 404),
+      );
+      final run =
+          DefaultJellyfinDiscoveryService(
+            tailscale: tailnet,
+            clients: clients,
+            openLan: FakeLanDiscovery.new,
+            limits: shortLimits,
+          ).start(
+            ConnectionMode.tailscale,
+            FakeTailscaleClient.connectedStatus.proxy,
+          );
+      final results = run.snapshots.toList();
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      tailnet.udp.events.add(
+        TailscaleDatagram(
+          Uint8List.fromList(
+            utf8.encode(
+              '{"Address":"http://127.0.0.1:8888/jellyfin","Id":"server-1","Name":"Cinema"}',
+            ),
+          ),
+          InternetAddress('100.64.0.8'),
+          7359,
+        ),
+      );
+      final result = (await results).last;
+      expect(
+        result.servers.single.url.toString(),
+        'http://100.64.0.8:8888/jellyfin/',
+      );
+      expect(clients.requests.any((r) => r.url.host == '127.0.0.1'), isFalse);
+    },
+  );
+
+  test('IPv6-only tailnet peer gets HTTP fallback without IPv4 UDP', () async {
+    final tailnet = DiscoveryTailnet()
+      ..visible = [
+        TailscalePeer(
+          id: 'ipv6',
+          hostname: 'media',
+          addresses: [InternetAddress('fd7a:115c:a1e0::8')],
+        ),
+      ];
+    final clients = FakeJellyfinClientFactory(
+      respond: (request) => request.url.scheme == 'http'
+          ? FakeJellyfinClientFactory.defaultResponse(request)
+          : http.Response('', 404),
+    );
+    final result =
+        (await DefaultJellyfinDiscoveryService(
+                  tailscale: tailnet,
+                  clients: clients,
+                  openLan: FakeLanDiscovery.new,
+                  limits: shortLimits,
+                )
+                .start(
+                  ConnectionMode.tailscale,
+                  FakeTailscaleClient.connectedStatus.proxy,
+                )
+                .snapshots
+                .toList())
+            .last;
+    expect(
+      result.servers.single.url.toString(),
+      'http://[fd7a:115c:a1e0::8]:8096/',
+    );
+    expect(tailnet.udp.sends, 0);
+  });
+  test(
     'LAN discovery preserves custom port/base path and repairs localhost',
     () async {
       final lan = FakeLanDiscovery();
