@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:soup/src/app.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/platform/android_network_interfaces.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -15,12 +16,14 @@ Future<void> main() async {
   });
   final supportDirectory = await getApplicationSupportDirectory();
   const networkInterfaces = AndroidNetworkInterfaces();
+  final tailscale = NativeTailscaleClient(
+    stateDirectory: '${supportDirectory.path}/tailscale',
+    networkInterfaces: networkInterfaces.getJson,
+  );
   runApp(
     SoupApp(
-      tailscaleClient: NativeTailscaleClient(
-        stateDirectory: '${supportDirectory.path}/tailscale',
-        networkInterfaces: networkInterfaces.getJson,
-      ),
+      tailscaleClient: tailscale,
+      discoveryService: DefaultJellyfinDiscoveryService(tailscale: tailscale),
     ),
   );
 }

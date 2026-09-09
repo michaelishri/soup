@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -27,12 +28,131 @@ class ConnectivityViewModel extends ChangeNotifier {
     required this.jellyfinClientFactory,
     required this.sessionStore,
     required this.connectionStore,
+    this.discoveryService,
   });
 
   final TailscaleClient _tailscaleClient;
   final JellyfinClientFactory jellyfinClientFactory;
   final SessionStore sessionStore;
   final ConnectionPreferencesStore connectionStore;
+  final JellyfinDiscoveryService? discoveryService;
+  JellyfinDiscoveryRun? _discoveryRun;
+  StreamSubscription<JellyfinDiscoverySnapshot>? _discoverySubscription;
+  int _discoveryGeneration = 0;
+  bool _discoveryStarted = false;
+  bool _manualServer = false;
+  bool _resumeDiscovery = false;
+  JellyfinDiscoverySnapshot _discovery = const JellyfinDiscoverySnapshot(
+    phase: DiscoveryPhase.complete,
+  );
+  JellyfinDiscoverySnapshot get discovery => _discovery;
+  String? selectedDiscoveryId;
+  bool get showingServerDiscovery =>
+      discoveryService != null && !_manualServer && _phase == SetupPhase.server;
+
+  bool get _canDiscover => !isBusy && _canAcceptDiscovery;
+
+  // Next may save preferences while a prefetched search finishes. Preserve
+  // current-generation results during that write; navigation cancels stale runs.
+  bool get _canAcceptDiscovery =>
+      !_disposed &&
+      _initialized &&
+      !_initializing &&
+      _foreground &&
+      _session == null &&
+      !_manualServer &&
+      discoveryService != null &&
+      (_phase == SetupPhase.server ||
+          (_phase == SetupPhase.connection && tailscaleConnected)) &&
+      (!tailscaleEnabled || tailscaleConnected);
+
+  void searchServers({bool again = false, bool preserveResults = false}) {
+    if (!_canDiscover || (_discoveryStarted && !again)) return;
+    final previous = preserveResults
+        ? _discovery.servers
+        : <DiscoveredJellyfinServer>[];
+    _stopDiscovery();
+    _discoveryStarted = true;
+    _discovery = JellyfinDiscoverySnapshot(servers: previous);
+    final generation = _discoveryGeneration;
+    try {
+      final run = discoveryService!.start(
+        mode,
+        tailscaleEnabled ? _status.proxy : null,
+      );
+      _discoveryRun = run;
+      _discoverySubscription = run.snapshots.listen(
+        (snapshot) {
+          if (!_canAcceptDiscovery || generation != _discoveryGeneration) {
+            return;
+          }
+          _discovery = JellyfinDiscoverySnapshot(
+            phase: snapshot.phase,
+            servers: List.unmodifiable(
+              {
+                for (final server in previous) server.info.id: server,
+                for (final server in snapshot.servers) server.info.id: server,
+              }.values,
+            ),
+          );
+          _notify();
+        },
+        onError: (Object _) {
+          if (!_canAcceptDiscovery || generation != _discoveryGeneration) {
+            return;
+          }
+          _discovery = JellyfinDiscoverySnapshot(
+            servers: _discovery.servers,
+            phase: DiscoveryPhase.unavailable,
+          );
+          _stopDiscovery();
+          _notify();
+        },
+      );
+    } on Object {
+      _discovery = JellyfinDiscoverySnapshot(
+        servers: previous,
+        phase: DiscoveryPhase.unavailable,
+      );
+    }
+    _notify();
+  }
+
+  void enterServerManually() {
+    if (_phase != SetupPhase.server || isBusy) return;
+    _manualServer = true;
+    _resumeDiscovery = false;
+    _stopDiscovery();
+    _error = null;
+    _notify();
+  }
+
+  Future<void> connectDiscoveredServer(DiscoveredJellyfinServer server) async {
+    if (!showingServerDiscovery || isBusy || !server.info.supportsSoup) return;
+    selectedDiscoveryId = server.info.id;
+    await checkServer(server.url.toString(), expectedId: server.info.id);
+  }
+
+  void _stopDiscovery({bool clear = false}) {
+    _discoveryGeneration++;
+    _discoveryRun?.cancel();
+    _discoveryRun = null;
+    unawaited(_discoverySubscription?.cancel());
+    _discoverySubscription = null;
+    if (clear) {
+      _discoveryStarted = false;
+      selectedDiscoveryId = null;
+      _discovery = const JellyfinDiscoverySnapshot(
+        phase: DiscoveryPhase.complete,
+      );
+    } else if (_discovery.searching) {
+      _discovery = JellyfinDiscoverySnapshot(
+        servers: _discovery.servers,
+        phase: DiscoveryPhase.partial,
+      );
+    }
+  }
+
   StreamSubscription<TailscaleStatus>? _statusSubscription;
   http.Client? _httpClient;
   Future<void> _connectionTask = Future.value();
@@ -122,6 +242,7 @@ class ConnectivityViewModel extends ChangeNotifier {
       if (!_disposed) {
         _initializing = false;
         _isBusy = false;
+        searchServers();
         _notify();
       }
     }
@@ -133,6 +254,7 @@ class ConnectivityViewModel extends ChangeNotifier {
     }
     _stopQuickConnect(clear: true);
     _mode = enabled ? ConnectionMode.tailscale : ConnectionMode.direct;
+    _manualServer = false;
     _session = null;
     _serverInfo = null;
     _serverUrl = null;
@@ -249,12 +371,21 @@ class ConnectivityViewModel extends ChangeNotifier {
       if (!_disposed) _error = _friendlyError(error);
     } finally {
       _isBusy = false;
+      searchServers();
       _notify();
     }
   }
 
   void back() {
     if (isBusy && _phase != SetupPhase.credentials) return;
+    if (_phase == SetupPhase.server &&
+        _manualServer &&
+        discoveryService != null) {
+      _manualServer = false;
+      _error = null;
+      _notify();
+      return;
+    }
     _stopQuickConnect(clear: true);
     _formGeneration++;
     _isBusy = false;
@@ -263,13 +394,16 @@ class ConnectivityViewModel extends ChangeNotifier {
       _serverInfo = null;
       _phase = SetupPhase.server;
     } else if (_phase == SetupPhase.server) {
+      _stopDiscovery(clear: true);
       _phase = SetupPhase.connection;
     }
     _notify();
   }
 
-  Future<void> checkServer(String value) async {
+  Future<void> checkServer(String value, {String? expectedId}) async {
     if (isBusy || _phase != SetupPhase.server) return;
+    _resumeDiscovery = false;
+    _stopDiscovery();
     final generation = ++_formGeneration;
     _error = null;
     _serverInfo = null;
@@ -280,6 +414,11 @@ class ConnectivityViewModel extends ChangeNotifier {
       final api = await authenticatedApi();
       final info = await api.getPublicSystemInfo(url);
       if (_disposed || generation != _formGeneration) return;
+      if (expectedId != null && info.id != expectedId) {
+        throw const JellyfinApiException(
+          'This address now belongs to a different server. Search again.',
+        );
+      }
       _serverInfo = info;
       _serverUrl = url;
       _phase = SetupPhase.credentials;
@@ -350,11 +489,14 @@ class ConnectivityViewModel extends ChangeNotifier {
     _formGeneration++;
     await _mutateSession(sessionStore.clear);
     _session = null;
+    _manualServer = false;
+    _stopDiscovery(clear: true);
     _serverInfo = null;
     _phase = tailscaleEnabled && !tailscaleConnected
         ? SetupPhase.connection
         : SetupPhase.server;
     _error = null;
+    searchServers();
     _notify();
   }
 
@@ -373,6 +515,9 @@ class ConnectivityViewModel extends ChangeNotifier {
     if (_foreground == foreground) return;
     _foreground = foreground;
     if (!foreground) {
+      _resumeDiscovery =
+          _discovery.searching && _session == null && !_manualServer;
+      if (_resumeDiscovery) _stopDiscovery();
       _resumeOnForeground =
           _phase == SetupPhase.credentials &&
           {
@@ -385,9 +530,15 @@ class ConnectivityViewModel extends ChangeNotifier {
         _quickConnectPhase = QuickConnectPhase.paused;
         _notify();
       }
-    } else if (_resumeOnForeground) {
-      _resumeOnForeground = false;
-      unawaited(startQuickConnect());
+    } else {
+      if (_resumeDiscovery) {
+        _resumeDiscovery = false;
+        searchServers(again: true, preserveResults: true);
+      }
+      if (_resumeOnForeground) {
+        _resumeOnForeground = false;
+        unawaited(startQuickConnect());
+      }
     }
   }
 
@@ -567,7 +718,8 @@ class ConnectivityViewModel extends ChangeNotifier {
         oldProxy?.port != proxy?.port ||
         oldProxy?.password != proxy?.password) {
       _closeTransport();
-      if (_phase == SetupPhase.credentials) {
+      if (_phase == SetupPhase.credentials ||
+          (_phase == SetupPhase.server && isBusy)) {
         _stopQuickConnect(clear: true);
         _formGeneration++;
         _isBusy = false;
@@ -585,10 +737,12 @@ class ConnectivityViewModel extends ChangeNotifier {
       _error =
           'Your Tailscale connection was interrupted. Reconnect to continue.';
     }
+    searchServers();
     _notify();
   }
 
   void _closeTransport() {
+    _stopDiscovery(clear: true);
     _transportRevision++;
     _httpClient?.close();
     _httpClient = null;
@@ -609,6 +763,7 @@ class ConnectivityViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _stopDiscovery(clear: true);
     _formGeneration++;
     _stopQuickConnect(clear: true);
     _acceptStatuses = false;

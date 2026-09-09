@@ -6,6 +6,11 @@ import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 import 'package:soup_tailscale/src/local_api.dart';
 import 'package:soup_tailscale/src/native_bindings.dart';
+import 'package:soup_tailscale/src/datagrams.dart';
+import 'package:soup_tailscale/src/peers.dart';
+
+export 'src/datagrams.dart' show TailscaleDatagram, TailscaleDatagramSession;
+export 'src/peers.dart' show TailscalePeer;
 
 enum TailscaleConnectionPhase {
   disconnected,
@@ -97,6 +102,10 @@ abstract interface class TailscaleClient {
   Future<void> connectWithAuthKey({required String authKey});
 
   Future<void> disconnect();
+
+  Future<List<TailscalePeer>> peers();
+
+  TailscaleDatagramSession openDatagrams();
 }
 
 class NativeTailscaleClient implements TailscaleClient {
@@ -113,6 +122,8 @@ class NativeTailscaleClient implements TailscaleClient {
 
   TailscaleStatus _status = const TailscaleStatus.disconnected();
   int? _server;
+  TailscaleLocalApiClient? _localApi;
+  final _datagrams = <TailscaleDatagramSession>{};
   Future<void>? _pendingConnection;
   int _connectionGeneration = 0;
 
@@ -193,6 +204,7 @@ class NativeTailscaleClient implements TailscaleClient {
         address: node.loopbackAddress,
         credential: node.localApiCredential,
       );
+      _localApi = localApi;
       if (mode == _RegistrationMode.interactive) {
         await localApi.startInteractiveLogin();
       }
@@ -210,6 +222,7 @@ class NativeTailscaleClient implements TailscaleClient {
         ),
       );
     } on _ConnectionCancelled {
+      _localApi = null;
       final server = _server;
       _server = null;
       if (server != null) {
@@ -217,6 +230,7 @@ class NativeTailscaleClient implements TailscaleClient {
       }
       // disconnect() owns the final status for an explicitly cancelled attempt.
     } on Object catch (error) {
+      _localApi = null;
       final server = _server;
       _server = null;
       if (server != null) {
@@ -296,6 +310,10 @@ class NativeTailscaleClient implements TailscaleClient {
   @override
   Future<void> disconnect() async {
     _connectionGeneration++;
+    _localApi = null;
+    for (final session in _datagrams.toList()) {
+      session.close();
+    }
     final server = _server;
     _server = null;
     if (server != null) {
@@ -304,6 +322,36 @@ class NativeTailscaleClient implements TailscaleClient {
     if (_status.phase != TailscaleConnectionPhase.disconnected) {
       _emit(const TailscaleStatus.disconnected());
     }
+  }
+
+  @override
+  Future<List<TailscalePeer>> peers() async {
+    final api = _localApi;
+    final generation = _connectionGeneration;
+    if (_status.phase != TailscaleConnectionPhase.connected || api == null) {
+      throw StateError('Tailscale is not connected.');
+    }
+    final peers = await api.peers();
+    _ensureCurrent(generation);
+    return peers;
+  }
+
+  @override
+  TailscaleDatagramSession openDatagrams() {
+    final proxy = _status.proxy;
+    if (_status.phase != TailscaleConnectionPhase.connected || proxy == null) {
+      throw StateError('Tailscale is not connected.');
+    }
+    late final TailscaleDatagramSession session;
+    session = Socks5DatagramSession(
+      host: proxy.host,
+      port: proxy.port,
+      username: TailscaleProxy.username,
+      password: proxy.password,
+      onClose: () => _datagrams.remove(session),
+    );
+    _datagrams.add(session);
+    return session;
   }
 
   void _emit(TailscaleStatus value) {
@@ -345,6 +393,13 @@ class UnavailableTailscaleClient implements TailscaleClient {
 
   @override
   Future<void> disconnect() async {}
+
+  @override
+  Future<List<TailscalePeer>> peers() async => const [];
+
+  @override
+  TailscaleDatagramSession openDatagrams() =>
+      throw UnsupportedError('Tailscale UDP is unavailable.');
 }
 
 enum _RegistrationMode { restore, interactive, authKey }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/appearance/appearance_screen.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
@@ -14,6 +15,7 @@ import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
 
 import 'support/connectivity_fakes.dart';
+import 'support/discovery_fakes.dart';
 import 'support/quick_connect_fixture.dart';
 import 'support/review_fonts.dart';
 import 'widget_test.dart' show FakeTvTextInput;
@@ -38,11 +40,19 @@ void main() {
       addTearDown(tester.view.reset);
       final client = FakeTailscaleClient();
       final fixture = QuickConnectFixture();
+      final discovery = FakeDiscoveryService(
+        initial: JellyfinDiscoverySnapshot(
+          servers: [discoveryServer()],
+          phase: DiscoveryPhase.complete,
+        ),
+      );
+      addTearDown(discovery.dispose);
       final model = ConnectivityViewModel(
         client,
         jellyfinClientFactory: fixture.factory,
         sessionStore: MemorySessionStore(),
         connectionStore: MemoryConnectionPreferencesStore(),
+        discoveryService: discovery,
       );
       addTearDown(client.dispose);
       addTearDown(model.dispose);
@@ -95,6 +105,9 @@ void main() {
       await tester.pumpAndSettle();
       await capture('tailscale-connected');
       await tester.tap(find.byKey(const ValueKey('connection-next-button')));
+      await tester.pumpAndSettle();
+      await capture('jellyfin-discovery');
+      await tester.tap(find.byKey(const ValueKey('enter-server-manually')));
       await tester.pumpAndSettle();
       await capture('jellyfin-server');
       await model.checkServer('http://jellyfin:8096');

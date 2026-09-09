@@ -78,6 +78,7 @@ class MainActivity : FlutterActivity() {
                     addresses.put(
                         JSONObject()
                             .put("ip", address.hostAddress)
+                            .put("broadcastAddress", interfaceAddress.broadcast?.hostAddress)
                             .put("prefixLen", interfaceAddress.networkPrefixLength.toInt()),
                     )
                 }

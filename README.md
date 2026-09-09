@@ -15,9 +15,9 @@ accounts and library artwork. The QR and Quick Connect codes are demonstrations.
 | --- | --- |
 | ![Welcome screen with the optional Tailscale switch](docs/screenshots/onboarding/welcome-tv.png) | ![Optional Tailscale setup with a demonstration authorization QR code](docs/screenshots/onboarding/tailscale-qr-tv.png) |
 
-| Add your server | Sign in |
+| Find your server | Sign in |
 | --- | --- |
-| ![Server address entry with an HTTPS and HTTP selector](docs/screenshots/onboarding/jellyfin-server-tv.png) | ![Jellyfin sign-in with Quick Connect and username and password options](docs/screenshots/onboarding/jellyfin-sign-in-tv.png) |
+| ![Automatically discovered Jellyfin server with a manual address option](docs/screenshots/onboarding/jellyfin-discovery-tv.png) | ![Jellyfin sign-in with Quick Connect and username and password options](docs/screenshots/onboarding/jellyfin-sign-in-tv.png) |
 
 ### Sample signed-in homepage
 
@@ -45,7 +45,13 @@ transcoding when required, with resume seeking, transport controls, progress
 reporting, and selectable WebVTT subtitles. The authenticated loopback playback
 bridge uses the same selected connection as the rest of the app. Tailscale setup
 uses an authorization QR code scanned with another device on both mobile and TV. Server
-entry separates the HTTPS/HTTP selector from the address and recognises a
+discovery searches the local network and, when connected, visible Tailscale devices.
+Soup tries Jellyfin's built-in discovery first, then standard Jellyfin ports and
+Tailscale HTTPS addresses on known devices. Verified servers appear as selectable
+cards; manual entry is always available. Discovery is bounded and may not find
+unadvertised custom ports, reverse-proxy hostnames or servers behind subnet routers.
+It never scans arbitrary LAN address ranges or runs after a saved sign-in is restored.
+Manual entry separates the HTTPS/HTTP selector from the address and recognises a
 protocol typed into the field. Connection and sign-in errors stay pinned above
 the scrollable form so they remain readable at constrained heights.
 
@@ -131,8 +137,8 @@ The build hook compiles the pinned upstream `libtailscale` source with Go and
 the Android NDK for every ABI requested by Flutter. Android 12 / API 31 is the
 minimum supported version.
 
-On first launch, **Use Tailscale** is off. Select **Next** to enter a Jellyfin
-10.11+ address reachable from your device, or enable Tailscale to reveal its
+On first launch, **Use Tailscale** is off. Select **Next** to find a Jellyfin
+10.11+ server reachable from your device, or enable Tailscale to reveal its
 sign-in QR code. Scan with another device and finish authorization. If device
 approval is required, Soup waits for the administrator; after connection,
 select **Next**. You can turn Tailscale off at any point in that connection step.
@@ -147,6 +153,8 @@ until you explicitly change the connection choice.
 The onboarding layout supports touch, D-pad focus, reduced motion,
 and constrained TV heights. [Review screenshots and regeneration instructions](docs/screenshots/onboarding/README.md)
 are available for the actual Flutter widgets rendered with demonstration data.
+The [discovery verification report](docs/development/android-tv-discovery-2026-09-09.md)
+documents network limits, automated coverage and Chromecast checks.
 
 ## Jellyfin API generation
 

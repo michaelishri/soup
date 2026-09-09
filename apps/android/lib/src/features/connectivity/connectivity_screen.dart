@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
@@ -36,10 +37,16 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
   final _usernameFocus = FocusNode(debugLabel: 'Jellyfin username');
   final _passwordFocus = FocusNode(debugLabel: 'Jellyfin password');
   final _nextFocus = FocusNode(debugLabel: 'setup Next');
+  final _manualFocus = FocusNode(debugLabel: 'enter server manually');
+  final _retryDiscoveryFocus = FocusNode(debugLabel: 'search servers again');
+  final _backFocus = FocusNode(debugLabel: 'setup Back');
+  final _discoveryNodes = <String, FocusNode>{};
   final _scroll = ScrollController();
   late SetupPhase _lastPhase;
   late bool _wasConnected;
   late bool _wasInitialized;
+  late bool _wasDiscovery;
+  bool _wasBusy = false;
   bool _tv = false;
   bool _inputReady = false;
   bool _editingTv = false;
@@ -53,10 +60,18 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     _lastPhase = model.phase;
     _wasConnected = model.tailscaleConnected;
     _wasInitialized = model.initialized;
+    _wasDiscovery = model.showingServerDiscovery;
+    _wasBusy = model.isBusy;
     _server.addListener(_serverChanged);
     _server.text = model.serverUrl?.toString() ?? '';
     _serverFocus.onKeyEvent = (_, event) => _serverKey(event);
     _protocolFocus.onKeyEvent = (_, event) => _serverKey(event);
+    _manualFocus.onKeyEvent = (_, event) => _discoveryKey(event, 'manual');
+    _retryDiscoveryFocus.onKeyEvent = (_, event) =>
+        _discoveryKey(event, 'retry');
+    _backFocus.onKeyEvent = (_, event) => model.showingServerDiscovery
+        ? _discoveryKey(event, 'back')
+        : KeyEventResult.ignored;
     _nextFocus.onKeyEvent = (_, event) {
       if (model.phase == SetupPhase.server &&
           (event is KeyDownEvent || event is KeyRepeatEvent) &&
@@ -113,10 +128,18 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     final phaseChanged = model.phase != _lastPhase;
     final connectionChanged = model.tailscaleConnected != _wasConnected;
     final initialized = model.initialized && !_wasInitialized;
+    final discoveryChanged = model.showingServerDiscovery != _wasDiscovery;
+    final checkFailed =
+        _wasBusy &&
+        !model.isBusy &&
+        model.showingServerDiscovery &&
+        model.error != null;
+    _wasDiscovery = model.showingServerDiscovery;
+    _wasBusy = model.isBusy;
     _lastPhase = model.phase;
     _wasConnected = model.tailscaleConnected;
     _wasInitialized = model.initialized;
-    if (phaseChanged) {
+    if (phaseChanged || discoveryChanged) {
       _editGeneration++;
       _password.clear();
       if (_editingTv) unawaited(widget.tvTextInput.dismiss());
@@ -125,6 +148,8 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
       }
     }
     if (phaseChanged ||
+        discoveryChanged ||
+        checkFailed ||
         initialized ||
         (connectionChanged && model.phase == SetupPhase.connection)) {
       _focusStep();
@@ -153,7 +178,15 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
             );
           }
         case SetupPhase.server:
-          _serverFocus.requestFocus();
+          if (model.showingServerDiscovery) {
+            final selected = _discoveryNodes[model.selectedDiscoveryId];
+            (selected?.context != null
+                    ? selected!
+                    : _serverDiscoveryFocus.firstOrNull ?? _manualFocus)
+                .requestFocus();
+          } else {
+            _serverFocus.requestFocus();
+          }
         case SetupPhase.credentials:
           if (!_tv && !retry) return;
           (retry && _username.text.trim().isNotEmpty
@@ -172,6 +205,72 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     _password.clear();
     model.back();
   }
+
+  List<FocusNode> get _serverDiscoveryFocus => [
+    for (final server in model.discovery.servers)
+      if (server.info.supportsSoup &&
+          _discoveryNodes[server.info.id]?.context != null)
+        _discoveryNodes[server.info.id]!,
+  ];
+
+  KeyEventResult _discoveryKey(KeyEvent event, String id) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final nodes = [
+      ..._serverDiscoveryFocus,
+      if (!model.discovery.searching) _retryDiscoveryFocus,
+      _manualFocus,
+    ];
+    final current = switch (id) {
+      'manual' => _manualFocus,
+      'retry' => _retryDiscoveryFocus,
+      'back' => _backFocus,
+      _ => _discoveryNodes[id],
+    };
+    final index = nodes.indexOf(current ?? _manualFocus);
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowDown:
+        if (index >= 0 && index + 1 < nodes.length) {
+          nodes[index + 1].requestFocus();
+        }
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowUp:
+        if (index > 0) {
+          nodes[index - 1].requestFocus();
+        } else if (id == 'back' && nodes.length > 1) {
+          nodes[nodes.length - 2].requestFocus();
+        }
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowLeft:
+        if (id == 'manual') _backFocus.requestFocus();
+        return KeyEventResult.handled;
+      case LogicalKeyboardKey.arrowRight:
+        if (id == 'back') _manualFocus.requestFocus();
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
+  }
+
+  FocusNode _discoveryNode(String id) => _discoveryNodes.putIfAbsent(id, () {
+    final node = FocusNode(debugLabel: 'discovered server $id');
+    node.onKeyEvent = (_, event) => _discoveryKey(event, id);
+    node.addListener(() {
+      if (!node.hasFocus) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !node.hasFocus || node.context == null) return;
+        unawaited(
+          Scrollable.ensureVisible(
+            node.context!,
+            duration: _focusDuration,
+            alignment: 0.5,
+          ),
+        );
+      });
+    });
+    return node;
+  });
 
   void _serverChanged() {
     final value = _server.value;
@@ -323,6 +422,12 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     _usernameFocus.dispose();
     _passwordFocus.dispose();
     _nextFocus.dispose();
+    _manualFocus.dispose();
+    _retryDiscoveryFocus.dispose();
+    _backFocus.dispose();
+    for (final node in _discoveryNodes.values) {
+      node.dispose();
+    }
     _scroll.dispose();
     super.dispose();
   }
@@ -591,7 +696,9 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
               SetupPhase.connection =>
                 'Your films, shows and favourites.\nLet’s bring them a little closer.',
               SetupPhase.server =>
-                model.tailscaleEnabled
+                model.showingServerDiscovery
+                    ? 'Your library is closer than you think.\nChoose a server and settle in.'
+                    : model.tailscaleEnabled
                     ? 'Connect to your Jellyfin server through your Tailscale network.'
                     : 'Connect to a Jellyfin server reachable from this device.',
               SetupPhase.credentials =>
@@ -761,6 +868,9 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
           ),
         ),
       ],
+      SetupPhase.server when model.showingServerDiscovery => _discoveryFields(
+        context,
+      ),
       SetupPhase.server => [
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -1262,7 +1372,164 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     );
   }
 
+  List<Widget> _discoveryFields(BuildContext context) {
+    final snapshot = model.discovery;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final message = snapshot.searching
+        ? 'Finding your Jellyfin server…'
+        : switch (snapshot.phase) {
+            DiscoveryPhase.unavailable =>
+              'Discovery is unavailable. You can still enter your server address.',
+            DiscoveryPhase.partial =>
+              snapshot.servers.isEmpty
+                  ? 'No servers found yet. The search could not check everything.'
+                  : 'Some devices could not be checked.',
+            _ =>
+              snapshot.servers.isEmpty
+                  ? 'No servers found. Try again or enter your server address.'
+                  : snapshot.servers.length == 1
+                  ? 'Your next watch is waiting.'
+                  : 'Choose where you’d like to watch.',
+          };
+    return [
+      Semantics(
+        liveRegion: true,
+        child: Row(
+          children: [
+            if (snapshot.searching) ...[
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                message,
+                key: const ValueKey('server-discovery-status'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 16),
+      for (final server in snapshot.servers) ...[
+        OutlinedButton(
+          key: ValueKey('discovered-server-${server.info.id}'),
+          focusNode: _discoveryNode(server.info.id),
+          style: _buttonMotion.copyWith(
+            padding: const WidgetStatePropertyAll(EdgeInsets.all(16)),
+            alignment: Alignment.centerLeft,
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (states) => states.contains(WidgetState.focused)
+                  ? SoupTheme.onboardingSignal
+                  : colors.surfaceContainerLow,
+            ),
+          ),
+          onPressed: model.isBusy || !server.info.supportsSoup
+              ? null
+              : () => model.connectDiscoveredServer(server),
+          child: Row(
+            children: [
+              const Icon(Icons.video_library_outlined, size: 28),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      server.info.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      server.url.toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      server.info.supportsSoup
+                          ? server.sources.contains(DiscoverySource.tailscale)
+                                ? 'TAILSCALE'
+                                : 'LOCAL NETWORK'
+                          : 'Requires Jellyfin 10.11 or newer',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: server.info.supportsSoup
+                            ? colors.primary
+                            : colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (server.info.supportsSoup) ...[
+                if (MediaQuery.sizeOf(context).width >= 600)
+                  const Text('Connect'),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward, size: 20),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (!snapshot.searching)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const ValueKey('server-discovery-retry'),
+            focusNode: _retryDiscoveryFocus,
+            style: _buttonMotion,
+            onPressed: model.isBusy
+                ? null
+                : () {
+                    _manualFocus.requestFocus();
+                    model.searchServers(again: true);
+                  },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Search again'),
+          ),
+        ),
+    ];
+  }
+
   Widget _footer() {
+    if (model.showingServerDiscovery) {
+      return Row(
+        key: const ValueKey('setup-footer'),
+        children: [
+          TextButton(
+            key: const ValueKey('onboarding-back-button'),
+            focusNode: _backFocus,
+            style: _buttonMotion,
+            onPressed: model.isBusy ? null : _back,
+            child: const Text('Back'),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: FilledButton(
+              key: const ValueKey('enter-server-manually'),
+              focusNode: _manualFocus,
+              style: _buttonMotion,
+              onPressed: model.isBusy ? null : model.enterServerManually,
+              child: Text(
+                model.isBusy ? 'Connecting…' : 'Enter address manually',
+              ),
+            ),
+          ),
+        ],
+      );
+    }
     final connection = model.phase == SetupPhase.connection;
     final enabled = connection
         ? model.canContinueConnection
@@ -1273,6 +1540,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
         if (!connection) ...[
           TextButton(
             key: const ValueKey('onboarding-back-button'),
+            focusNode: _backFocus,
             style: _buttonMotion,
             onPressed: model.isBusy && model.phase != SetupPhase.credentials
                 ? null

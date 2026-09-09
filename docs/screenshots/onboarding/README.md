@@ -10,6 +10,9 @@ The gallery includes the SOUP-95 server entry update: an HTTPS/HTTP selector
 beside the address, with no dedicated paste button. SOUP-96 refreshes these
 captures for the root README.
 
+SOUP-98 adds server discovery cards, with manual entry available throughout the
+search. The example server and its Tailscale address are fictional.
+
 Fine diagonal frames and the bottom filmstrip edge are painted in a separate,
 noninteractive layer. A 36-second cycle updates at 20 fps without rebuilding
 forms or moving focus. Reduced motion, accessible navigation, inactive routes
@@ -27,6 +30,7 @@ native editor is tested separately on Guest Room TV.
 | Welcome | [TV](welcome-tv.png) | [Phone](welcome-phone.png) |
 | Tailscale QR | [TV](tailscale-qr-tv.png) | [Phone](tailscale-qr-phone.png) |
 | Tailscale connected | [TV](tailscale-connected-tv.png) | [Phone](tailscale-connected-phone.png) |
+| Discovered Jellyfin server | [TV](jellyfin-discovery-tv.png) | [Phone](jellyfin-discovery-phone.png) |
 | Jellyfin server | [TV](jellyfin-server-tv.png) | [Phone](jellyfin-server-phone.png) |
 | Quick Connect / password | [TV](jellyfin-sign-in-tv.png) | [Phone](jellyfin-sign-in-phone.png) |
 | Appearance (initial scroll position) | [TV](appearance-tv.png) | [Phone](appearance-phone.png) |
