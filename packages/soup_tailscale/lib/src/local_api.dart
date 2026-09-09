@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'peers.dart';
+
 class TailscaleBackendStatus {
   const TailscaleBackendStatus({
     required this.backendState,
@@ -57,10 +59,31 @@ class TailscaleLocalApiClient {
     return TailscaleBackendStatus.fromJson(json);
   }
 
-  Future<String> _request(String method, String path) async {
+  Future<List<TailscalePeer>> peers() async {
+    final body = await _request(
+      'GET',
+      'status',
+      timeout: const Duration(seconds: 2),
+    );
+    final json = jsonDecode(body);
+    if (json is! Map || json['BackendState'] != 'Running') {
+      throw const FormatException('Tailscale is not connected.');
+    }
+    return TailscalePeer.parse(json['Peer']);
+  }
+
+  Future<String> _request(
+    String method,
+    String path, {
+    Duration? timeout,
+  }) async {
     final client = HttpClient()..findProxy = (_) => 'DIRECT';
     try {
-      return await _send(client, method, path).timeout(requestTimeout);
+      return await _send(
+        client,
+        method,
+        path,
+      ).timeout(timeout ?? requestTimeout);
     } finally {
       // Also abort the socket/body stream when the deadline expires.
       client.close(force: true);

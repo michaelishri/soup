@@ -103,6 +103,12 @@ class _TrackedClient extends MockClient {
 }
 
 class FakeTailscaleClient implements TailscaleClient {
+  @override
+  Future<List<TailscalePeer>> peers() async => const [];
+
+  @override
+  TailscaleDatagramSession openDatagrams() =>
+      throw UnsupportedError('No fake UDP session.');
   final _statuses = StreamController<TailscaleStatus>.broadcast(sync: true);
   TailscaleStatus _status = const TailscaleStatus.disconnected();
   int restores = 0;
