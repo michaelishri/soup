@@ -29,6 +29,10 @@ class ConnectivityScreen extends StatefulWidget {
 class _ConnectivityScreenState extends State<ConnectivityScreen>
     with WidgetsBindingObserver {
   final _server = TextEditingController();
+  // IME/suggestion-row resizing can reparent the page and credential panel.
+  // Preserve their editing clients rather than closing and reopening the IME.
+  final _pageKey = GlobalKey(debugLabel: 'setup page');
+  final _passwordPanelKey = GlobalKey(debugLabel: 'password panel');
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _switchFocus = FocusNode(debugLabel: 'use Tailscale');
@@ -464,6 +468,7 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
                     // the fixed chrome needs. Let the whole page scroll then.
                     final tiny = constraints.maxHeight < 280;
                     final page = Padding(
+                      key: _pageKey,
                       padding: EdgeInsets.symmetric(
                         horizontal: horizontal,
                         vertical: short ? 20 : 36,
@@ -1023,22 +1028,25 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
       ),
     );
     final quick = panel('quick-connect-panel', _quickConnectContent(context));
-    final password = panel('password-panel', [
-      Text('Username and password', style: theme.textTheme.titleLarge),
-      const SizedBox(height: 16),
-      ..._fields(context, short, duration),
-      if (model.error case final error?) ...[
-        const SizedBox(height: 12),
-        Semantics(
-          liveRegion: true,
-          child: Text(
-            error,
-            key: const ValueKey('connection-error'),
-            style: TextStyle(color: theme.colorScheme.error),
+    final password = KeyedSubtree(
+      key: _passwordPanelKey,
+      child: panel('password-panel', [
+        Text('Username and password', style: theme.textTheme.titleLarge),
+        const SizedBox(height: 16),
+        ..._fields(context, short, duration),
+        if (model.error case final error?) ...[
+          const SizedBox(height: 12),
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              error,
+              key: const ValueKey('connection-error'),
+              style: TextStyle(color: theme.colorScheme.error),
+            ),
           ),
-        ),
-      ],
-    ]);
+        ],
+      ]),
+    );
     return SingleChildScrollView(
       key: const ValueKey('setup-scroll'),
       controller: _scroll,

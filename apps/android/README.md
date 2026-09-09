@@ -53,6 +53,8 @@ flutter build apk --debug
 ```
 
 The native Android build requires the Android SDK/NDK and Go. Flutter widget and
-transport tests run headlessly without an Android emulator. See
+transport tests run headlessly without an Android emulator. Run native browser
+return lifecycle tests with `cd android && ./gradlew :app:testDebugUnitTest`.
+These JVM tests do not replace real phone/browser acceptance. See
 [onboarding screenshots](../../docs/screenshots/onboarding/README.md) for
 reproducible UI review captures and their validation limits.

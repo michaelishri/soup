@@ -21,6 +21,49 @@ void main() {
     () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null),
   );
+  for (final size in [const Size(320, 568), const Size(960, 720)]) {
+    testWidgets('typing and keyboard resize preserve credential input at $size', (
+      tester,
+    ) async {
+      final fixture = QuickConnectFixture();
+      final (model, _) = await setup(
+        tester,
+        size: size,
+        factory: fixture.factory,
+      );
+      await model.continueConnection();
+      await model.checkServer('http://jellyfin:8096');
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('username-field'));
+      await tester.ensureVisible(field);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      final editable = tester.state<EditableTextState>(
+        find.descendant(of: field, matching: find.byType(EditableText)),
+      );
+      for (final text in ['a', '', 'b']) {
+        tester.testTextInput.enterText(text);
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+        expect(tester.testTextInput.isVisible, isTrue);
+      }
+      // The IME and its suggestion row can change available height after the
+      // first character. Keep the same editing client across layout thresholds.
+      tester.view.viewInsets = FakeViewPadding(bottom: size.height - 270);
+      await tester.pumpAndSettle();
+      expect(
+        tester.state<EditableTextState>(
+          find.descendant(of: field, matching: find.byType(EditableText)),
+        ),
+        same(editable),
+      );
+      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+      tester.testTextInput.enterText('bc');
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(field).controller!.text, 'bc');
+    });
+  }
   for (final size in [
     const Size(960, 540),
     const Size(1280, 720),

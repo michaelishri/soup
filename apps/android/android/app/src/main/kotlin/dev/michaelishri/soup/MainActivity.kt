@@ -1,6 +1,9 @@
 package dev.michaelishri.soup
 
 import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,6 +19,26 @@ class MainActivity : FlutterActivity() {
     private val tvTextInput = TvTextInput(this)
     private var textInputChannel: MethodChannel? = null
     private var networkChannel: MethodChannel? = null
+    private var browserChannel: MethodChannel? = null
+    private val browserHandler = Handler(Looper.getMainLooper())
+    private val browserReturn = BrowserReturn {
+        // Return to this activity, even when an installer or another activity
+        // is the task root. Do not depend on the browser exposing its service
+        // through TaskInfo (the plugin's best-effort close silently can skip it).
+        startActivity(Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        })
+    }
+
+    override fun onStop() {
+        super.onStop()
+        browserReturn.onStopped()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        browserReturn.onResumed()
+    }
 
     override fun provideFlutterEngine(context: Context): FlutterEngine {
         // libtailscale lives for the Android process. Reuse its owning Dart
@@ -36,6 +59,32 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        browserChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "dev.michaelishri.soup/browser_return",
+        )
+        browserChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "prepare" -> {
+                    browserReturn.begin()
+                    result.success(null)
+                }
+                "cancel" -> {
+                    browserReturn.cancel()
+                    result.success(null)
+                }
+                "returnToSoup" -> {
+                    val timeout = Runnable { browserReturn.cancel() }
+                    browserHandler.postDelayed(timeout, 5000)
+                    browserReturn.requestReturn { resumed ->
+                        browserHandler.removeCallbacks(timeout)
+                        if (resumed) result.success(null)
+                        else result.error("browser_return", "Soup did not resume", null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
         textInputChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "dev.michaelishri.soup/tv_text_input",
@@ -61,6 +110,10 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         Log.i("SoupLifecycle", "Detaching activity; retaining Flutter engine")
         tvTextInput.dismiss()
+        browserReturn.cancel()
+        browserHandler.removeCallbacksAndMessages(null)
+        browserChannel?.setMethodCallHandler(null)
+        browserChannel = null
         textInputChannel?.setMethodCallHandler(null)
         networkChannel?.setMethodCallHandler(null)
         textInputChannel = null

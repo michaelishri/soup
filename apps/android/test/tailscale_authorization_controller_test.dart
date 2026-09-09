@@ -69,6 +69,19 @@ void main() {
   });
 
   test(
+    'transient starting retains the tab until the native connection is usable',
+    () async {
+      await controller.open();
+      controller.update(const TailscaleStatus.starting(), attempt: 1);
+      await flush();
+      expect(browser.closes, 0);
+      controller.update(FakeTailscaleClient.connectedStatus, attempt: 1);
+      await flush();
+      expect(browser.closes, 1);
+    },
+  );
+
+  test(
     'double taps and refreshed links cannot overlap browser operations',
     () async {
       browser.launchGate = Completer<void>();

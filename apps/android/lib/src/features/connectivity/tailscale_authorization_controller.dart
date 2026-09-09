@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_custom_tabs/flutter_custom_tabs.dart' as tabs;
 import 'package:soup_tailscale/soup_tailscale.dart';
 import 'package:url_launcher/url_launcher.dart' as urls;
@@ -15,27 +16,41 @@ abstract interface class TailscaleAuthorizationBrowser {
 class PlatformTailscaleAuthorizationBrowser
     implements TailscaleAuthorizationBrowser {
   const PlatformTailscaleAuthorizationBrowser();
+  static const _returnChannel = MethodChannel(
+    'dev.michaelishri.soup/browser_return',
+  );
 
   @override
   Future<bool> supportsCustomTabs() =>
       urls.supportsLaunchMode(urls.LaunchMode.inAppBrowserView);
 
   @override
-  Future<void> openCustomTab(Uri url) => tabs.launchUrl(
-    url,
-    customTabsOptions: const tabs.CustomTabsOptions(
-      showTitle: true,
-      urlBarHidingEnabled: false,
-      browser: tabs.CustomTabsBrowserConfiguration(prefersDefaultBrowser: true),
-    ),
-  );
+  Future<void> openCustomTab(Uri url) async {
+    await _returnChannel.invokeMethod<void>('prepare');
+    try {
+      await tabs.launchUrl(
+        url,
+        customTabsOptions: const tabs.CustomTabsOptions(
+          showTitle: true,
+          urlBarHidingEnabled: false,
+          browser: tabs.CustomTabsBrowserConfiguration(
+            prefersDefaultBrowser: true,
+          ),
+        ),
+      );
+    } on Exception {
+      await _returnChannel.invokeMethod<void>('cancel');
+      rethrow;
+    }
+  }
 
   @override
   Future<bool> openExternal(Uri url) =>
       urls.launchUrl(url, mode: urls.LaunchMode.externalApplication);
 
   @override
-  Future<void> closeCustomTab() => tabs.closeCustomTabs();
+  Future<void> closeCustomTab() =>
+      _returnChannel.invokeMethod<void>('returnToSoup');
 }
 
 /// Owns the browser beyond the lifetime of either sign-in screen. Native node
@@ -62,6 +77,12 @@ class TailscaleAuthorizationController extends ChangeNotifier
 
   void update(TailscaleStatus status, {required int attempt}) {
     if (_disposed) return;
+    // The native backend may pass through Starting after login, before its
+    // loopback proxy is usable. Keep ownership until that transition finishes.
+    if (_attempt == attempt &&
+        status.phase == TailscaleConnectionPhase.starting) {
+      return;
+    }
     if (status.phase == TailscaleConnectionPhase.connected &&
         status.proxy == null &&
         _attempt == attempt) {
@@ -91,6 +112,7 @@ class TailscaleAuthorizationController extends ChangeNotifier
     _session = session;
     _pending = true;
     failed = false;
+    externalBrowser = false;
     closeFailed = false;
     if (!_observing) {
       WidgetsBinding.instance.addObserver(this);

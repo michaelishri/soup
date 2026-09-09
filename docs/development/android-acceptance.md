@@ -105,6 +105,17 @@ return still needs real phone verification. Only a Chromecast is connected and
 the installed emulator is Android TV. Controller/widget tests cover automatic
 dismissal, approval, races, manual return, fallback and saved-session recovery;
 they do not substitute for the native browser checks in A3–A4.
+SOUP-101 follows the user's build-3 phone report: the Custom Tab remained open
+and the username IME disappeared on first input. Native return now targets Soup's
+activity directly, waits for the tab's stop transition and acknowledges completion
+only after Soup resumes; it no longer relies on the plugin's task-root/browser
+service heuristics. Transient Tailscale startup retains the browser session.
+Credential editing clients survive compact/wide/keyboard layout changes, and
+repeated typing no longer republishes an already-paused Quick Connect state.
+Widget regressions reproduced replacement of the editing client before the fix.
+The next phone run must verify both automatic return and typing/clear/retype with
+the user's IME; JVM lifecycle tests do not prove browser-specific Android behaviour.
+
 Auth-key entry remains absent from Soup onboarding. The package-level auth-key
 API remains supported; its real provisioning check from SOUP-78 also needs a
 disposable test credential and a suitable native harness.

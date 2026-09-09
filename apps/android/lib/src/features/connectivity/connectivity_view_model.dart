@@ -511,10 +511,12 @@ class ConnectivityViewModel extends ChangeNotifier {
   void pauseQuickConnect() {
     if (_phase != SetupPhase.credentials) return;
     _resumeOnForeground = false;
-    _stopQuickConnect();
-    if (_quickConnectPhase != QuickConnectPhase.unavailable) {
-      _quickConnectPhase = QuickConnectPhase.paused;
+    if (_quickConnectPhase == QuickConnectPhase.paused ||
+        _quickConnectPhase == QuickConnectPhase.unavailable) {
+      return;
     }
+    _stopQuickConnect();
+    _quickConnectPhase = QuickConnectPhase.paused;
     _notify();
   }
 
