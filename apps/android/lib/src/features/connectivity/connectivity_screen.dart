@@ -9,6 +9,7 @@ import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
+import 'package:soup/src/features/shared/tailscale_authorization_button.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
@@ -1180,6 +1181,37 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     final url = status.authorizationUrl;
     final stacked = MediaQuery.sizeOf(context).width < 840;
     if (status.phase == TailscaleConnectionPhase.awaitingLogin && url != null) {
+      if (!_inputReady) return const SizedBox.shrink();
+      if (!_tv) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TailscaleAuthorizationButton(
+              authorizationUrl: url,
+              style: _buttonMotion,
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                'Waiting for sign-in',
+                key: const ValueKey('connection-status'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('retry-tailscale-login-button'),
+              style: _buttonMotion,
+              onPressed: model.isBusy ? null : model.retryTailscale,
+              child: const Text('Get a new link'),
+            ),
+          ],
+        );
+      }
       final qr = Container(
         key: const ValueKey('tailscale-authorization-qr'),
         clipBehavior: Clip.antiAlias,
@@ -1354,7 +1386,9 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
                         ? 'Try again, or turn off Tailscale to connect directly.'
                         : approval
                         ? 'Ask your administrator to approve this device in Tailscale. You can continue once it is approved.'
-                        : 'Your sign-in code will appear here.',
+                        : _tv
+                        ? 'Your sign-in code will appear here.'
+                        : 'Your sign-in link will appear here.',
                   ),
                   if (failed)
                     TextButton(

@@ -53,8 +53,8 @@ release signing, Google Play publication and Play-installed acceptance.
 Use an Android phone and Android TV/Google TV, or suitable accelerated emulators.
 Record coverage separately: a phone pass does not prove remote/TV behavior.
 Provide a test Jellyfin account/server with playable media and a user-controlled
-Tailscale test account/tailnet. The user completes real QR sign-in and any
-administrator approval. Record unavailable multi-tailnet or approval scenarios
+Tailscale test account/tailnet. The user completes real browser sign-in on mobile
+or QR sign-in on TV, and any administrator approval. Record unavailable multi-tailnet or approval scenarios
 as blocked rather than passed. Keep credentials and live authorization URLs out
 of screenshots and ticket evidence.
 
@@ -84,10 +84,10 @@ SOUP-18.
 | --- | --- | --- | --- |
 | A1: Install and branding | Launch the native app; inspect the selected can/play mark in the app and launcher, including available circular/squircle masks. No clipped artwork, wrong legacy logo or startup failure. | Blocked: device | Partial: install, launch, in-app branding and TV launch intent verified; launcher masks pending |
 | A2: Direct connection | Start with Tailscale off; enter the test server; exercise invalid and valid credentials, Back, draft preservation and keyboard insets. Browse real artwork/details and play real media with pause/seek/resume and progress reporting. Restart and verify session restoration. | Blocked: device/account | Partial: direct server form and native keyboard reached; server/account needed |
-| A3: Fresh Tailscale registration | Enable Tailscale, scan the real QR on another device, choose the intended tailnet where available, and complete sign-in/administrator approval. Waiting and success states are correct; connection requires explicit Next. | Blocked: device/account | Partial: user authorization completed; connected/Next handoff verified; separate approval and multi-tailnet scenarios pending |
-| A4: Registration recovery | Cancel during preparation/waiting; obtain a new code; retry a failed attempt; toggle Tailscale off/on. An old attempt cannot complete the new one or advance the UI. Background/reopen and restart; verify both restored-node and legacy-session behavior with suitable fixtures. | Blocked: device/account | Partial: toggle off/on and saved-node restoration verified; failure/approval and legacy-session paths pending |
+| A3: Fresh Tailscale registration | Enable Tailscale. On mobile, tap Authorise device on Tailscale, complete browser sign-in and return to Soup; on TV, scan the real QR on another device. Choose the intended tailnet where available and complete administrator approval. Waiting and success states are correct; connection requires explicit Next. | Blocked: device/account | Partial: user authorization completed; connected/Next handoff verified; separate approval and multi-tailnet scenarios pending |
+| A4: Registration recovery | Cancel during preparation/waiting; obtain a new link on mobile or code on TV; retry a failed attempt; toggle Tailscale off/on. On mobile, verify browser-launch failure is retryable and returning before sign-in preserves the pending attempt. An old attempt cannot complete the new one or advance the UI. Background/reopen and restart; verify restored-node, saved-session reauthorisation and legacy-session behavior with suitable fixtures. | Blocked: device/account | Partial: toggle off/on and saved-node restoration verified; failure/approval and legacy-session paths pending |
 | A5: Tailscale media path | Through the embedded node, sign into Jellyfin, load artwork/details and play real media. Verify controls, progress, error recovery and restored access after app restart. | Blocked: device/account | Partial: fixture discovery/authentication exercised through the embedded node; real server/media account needed |
-| A6: Onboarding interaction | Verify phone touch/keyboard and TV remote/keyboard traversal, readable QR quiet zone, visible actions at short heights, stable header/footer, success transition, rapid Back/Next and reduced-motion behavior. | Blocked: device | Partial: SOUP-90 verifies success/Back focus, native keyboard navigation, drafts, validation and retry; native reduced-motion/enlarged-text checks pending |
+| A6: Onboarding interaction | Verify phone touch/keyboard and TV remote/keyboard traversal, readable TV QR quiet zone, accessible mobile authorisation button, visible actions at short heights, stable header/footer, success transition, rapid Back/Next and reduced-motion behavior. | Blocked: device | Partial: SOUP-90 verifies success/Back focus, native keyboard navigation, drafts, validation and retry; native reduced-motion/enlarged-text checks pending |
 | A7: Appearance and persistence | Exercise Fruity/Blockbuster × Festival/Soup/Ocean/Grove/Mono × light/dark (20 combinations). Check first-use selection, explicit Apply, switching without losing the destination, settings persistence after restart/sign-out, and fixed-style setup/login. | Blocked: device/account | Partial: first-use focus/Continue verified with fixture; full combinations and persistence checks pending |
 | A8: Browsing and accessibility | Exercise current Home, TV/Movies, details/episodes, playback and Settings with empty/loading/error/retry and missing-artwork states. Verify directional focus, return from details, active-vs-focused navigation, transparent rail focus, expansion/collapse, full hero visibility on return, enlarged text, contrast, reduced motion and usable touch targets. | Blocked: device/account | Partial: fixture empty library and D-pad Settings navigation verified; real browsing/media and accessibility pending |
 | A9: Visual acceptance | Review the current palette/layout/branding and animations on both form factors. Compare with the current gallery and record the user's acceptance or concrete changes requested. | Pending | Pending |
@@ -98,10 +98,12 @@ Any unavailable size remains an explicit gap. Automated contrast, corrupt-settin
 fallback and fake-network widget evidence can support this matrix but cannot
 replace the native runtime cases.
 
-Browser-launch and auth-key entry are intentionally absent from Soup onboarding
-since SOUP-82. Do not restore them to satisfy superseded SOUP-77/78 text. The
-package-level auth-key API remains supported; its real provisioning check from
-SOUP-78 also needs a disposable test credential and a suitable native harness.
+SOUP-99 adds browser launch on phones and tablets for onboarding and saved-session
+reauthorisation. TVs retain QR sign-in. Native phone browser launch and return
+remain unverified: only a Chromecast was connected during implementation.
+Auth-key entry remains absent from Soup onboarding. The package-level auth-key
+API remains supported; its real provisioning check from SOUP-78 also needs a
+disposable test credential and a suitable native harness.
 Keep that package-only check open in SOUP-18 until exercised or explicitly
 deferred; never store the credential in the evidence.
 

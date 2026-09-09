@@ -35,16 +35,24 @@ void main() {
         .setMockMethodCallHandler(inputChannel, null);
   });
 
-  for (final size in [
-    const Size(412, 915),
-    const Size(960, 540),
-    const Size(1280, 720),
-    const Size(1920, 1080),
+  for (final (size, television) in [
+    (const Size(412, 915), false),
+    (const Size(960, 540), false),
+    (const Size(960, 540), true),
+    (const Size(1280, 720), true),
+    (const Size(1920, 1080), true),
   ]) {
-    testWidgets('full-screen optional setup and QR fit at $size', (
+    testWidgets('optional setup fits at $size (TV: $television)', (
       tester,
     ) async {
-      final (model, client) = await setup(tester, size: size);
+      final (model, client) = await setup(
+        tester,
+        size: size,
+        tvTextInput: television ? FakeTvTextInput() : const TvTextInput(),
+      );
+      final authorizationKey = television
+          ? 'tailscale-authorization-qr'
+          : 'tailscale-authorization-button';
       final canvas = tester.getRect(find.byKey(const ValueKey('setup-canvas')));
       expect(canvas, Offset.zero & size);
       expect(find.byKey(const ValueKey('setup-card')), findsNothing);
@@ -64,22 +72,24 @@ void main() {
       );
       expect(client.restores, 0);
       expect(client.interactiveConnects, 0);
-      expect(
-        find.byKey(const ValueKey('tailscale-authorization-qr')),
-        findsNothing,
-      );
+      expect(find.byKey(ValueKey(authorizationKey)), findsNothing);
       await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
       await tester.pumpAndSettle();
       expect(model.tailscaleEnabled, isTrue);
       expect(
-        find.byKey(const ValueKey('tailscale-authorization-qr')),
-        findsOneWidget,
+        find.text('Authorise device on Tailscale'),
+        television ? findsNothing : findsOneWidget,
       );
+      expect(
+        find.text('Scan to sign in'),
+        television ? findsOneWidget : findsNothing,
+      );
+      expect(find.byKey(ValueKey(authorizationKey)), findsOneWidget);
       expect(button(tester, 'connection-next-button').onPressed, isNull);
       expect(find.text('Advanced options'), findsNothing);
       expect(find.text('Open sign-in page'), findsNothing);
-      final qr = find.byKey(const ValueKey('tailscale-authorization-qr'));
-      await tester.ensureVisible(qr);
+      final authorization = find.byKey(ValueKey(authorizationKey));
+      await tester.ensureVisible(authorization);
       await tester.pumpAndSettle();
       final viewport = tester.getRect(
         find.byKey(const ValueKey('setup-scroll')),
@@ -88,15 +98,19 @@ void main() {
         find.byKey(const ValueKey('retry-tailscale-login-button')),
       );
       expect(retry.bottom, lessThanOrEqualTo(viewport.bottom + 1));
-      final code = tester.getRect(qr);
-      expect(code.top, greaterThanOrEqualTo(viewport.top - 1));
-      expect(code.bottom, lessThanOrEqualTo(viewport.bottom + 1));
+      final authorizationRect = tester.getRect(authorization);
+      expect(authorizationRect.top, greaterThanOrEqualTo(viewport.top - 1));
+      expect(authorizationRect.bottom, lessThanOrEqualTo(viewport.bottom + 1));
       final next = tester.getRect(
         find.byKey(const ValueKey('connection-next-button')),
       );
       expect(next.bottom, lessThan(size.height));
-      expect(next, originalNext, reason: 'QR reveal must not move navigation');
-      expect(next.overlaps(code), isFalse);
+      expect(
+        next,
+        originalNext,
+        reason: 'Authorisation reveal must not move navigation',
+      );
+      expect(next.overlaps(authorizationRect), isFalse);
       expect(tester.takeException(), isNull);
     });
   }
@@ -104,7 +118,7 @@ void main() {
   testWidgets('QR fades in when its URL arrives after preparation', (
     tester,
   ) async {
-    final (_, client) = await setup(tester);
+    final (_, client) = await setup(tester, tvTextInput: FakeTvTextInput());
     client.preparing = true;
     await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
     await tester.pump();
@@ -190,7 +204,10 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     try {
-      final (model, client) = await setup(tester);
+      final (model, client) = await setup(
+        tester,
+        tvTextInput: FakeTvTextInput(),
+      );
       await tester.sendKeyEvent(LogicalKeyboardKey.select);
       await tester.pumpAndSettle();
       final next = find.byKey(const ValueKey('connection-next-button'));
@@ -523,7 +540,7 @@ void main() {
     },
   );
 
-  testWidgets('QR approval and success stay on connection until Next', (
+  testWidgets('approval and success stay on connection until Next', (
     tester,
   ) async {
     final (model, client) = await setup(tester);
@@ -784,7 +801,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(
-      find.byKey(const ValueKey('tailscale-authorization-qr')),
+      find.byKey(const ValueKey('tailscale-authorization-button')),
       findsOneWidget,
     );
     final switcher = tester.widget<AnimatedSwitcher>(
@@ -848,10 +865,12 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(toggle);
       await tester.pumpAndSettle();
-      final qr = find.byKey(const ValueKey('tailscale-authorization-qr'));
-      await tester.ensureVisible(qr);
+      final authorization = find.byKey(
+        const ValueKey('tailscale-authorization-button'),
+      );
+      await tester.ensureVisible(authorization);
       await tester.pumpAndSettle();
-      expect(qr.hitTestable(), findsOneWidget);
+      expect(authorization.hitTestable(), findsOneWidget);
       await tester.ensureVisible(toggle);
       await tester.pumpAndSettle();
       await tester.tap(toggle);

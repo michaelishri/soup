@@ -132,7 +132,7 @@ class _SoupAppState extends State<SoupApp> {
                 return AppStatusScreen(
                   title: 'Reconnecting to Tailscale',
                   message: waitingForLogin
-                      ? 'Scan to reconnect. Your Jellyfin sign-in is saved.'
+                      ? 'Sign in to Tailscale to reconnect. Your Jellyfin sign-in is saved.'
                       : status.phase ==
                             TailscaleConnectionPhase.awaitingApproval
                       ? 'Approve this device in Tailscale. Your Jellyfin sign-in is saved.'

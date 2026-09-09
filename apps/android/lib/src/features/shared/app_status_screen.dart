@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
+import 'package:soup/src/features/shared/tailscale_authorization_button.dart';
+import 'package:soup/src/features/shared/tv_text_input.dart';
 
 /// Startup and connection recovery are separate from first-time setup.
 class AppStatusScreen extends StatelessWidget {
@@ -10,6 +12,7 @@ class AppStatusScreen extends StatelessWidget {
     this.busy = false,
     this.onRetry,
     this.authorizationUrl,
+    this.tvTextInput = const TvTextInput(),
     super.key,
   });
 
@@ -18,6 +21,7 @@ class AppStatusScreen extends StatelessWidget {
   final bool busy;
   final VoidCallback? onRetry;
   final Uri? authorizationUrl;
+  final TvTextInput tvTextInput;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -45,15 +49,10 @@ class AppStatusScreen extends StatelessWidget {
                 ),
                 if (authorizationUrl case final url?) ...[
                   const SizedBox(height: 20),
-                  Semantics(
-                    label: 'Scan to reconnect to Tailscale: $url',
-                    child: QrImageView(
-                      data: url.toString(),
-                      size: 160,
-                      backgroundColor: Colors.white,
-                    ),
+                  _RecoveryAuthorization(
+                    authorizationUrl: url,
+                    tvTextInput: tvTextInput,
                   ),
-                  Text(url.toString(), textAlign: TextAlign.center),
                 ] else if (busy) ...[
                   const SizedBox(height: 24),
                   const CircularProgressIndicator(),
@@ -72,5 +71,50 @@ class AppStatusScreen extends StatelessWidget {
         ),
       ),
     ),
+  );
+}
+
+class _RecoveryAuthorization extends StatefulWidget {
+  const _RecoveryAuthorization({
+    required this.authorizationUrl,
+    required this.tvTextInput,
+  });
+
+  final Uri authorizationUrl;
+  final TvTextInput tvTextInput;
+
+  @override
+  State<_RecoveryAuthorization> createState() => _RecoveryAuthorizationState();
+}
+
+class _RecoveryAuthorizationState extends State<_RecoveryAuthorization> {
+  late final _television = widget.tvTextInput.isTelevision();
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+    future: _television,
+    builder: (context, snapshot) {
+      if (!snapshot.hasData) return const SizedBox.shrink();
+      final url = widget.authorizationUrl;
+      if (!snapshot.data!) {
+        return TailscaleAuthorizationButton(authorizationUrl: url);
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Scan to reconnect.'),
+          const SizedBox(height: 12),
+          Semantics(
+            label: 'Scan to reconnect to Tailscale: $url',
+            child: QrImageView(
+              data: url.toString(),
+              size: 160,
+              backgroundColor: Colors.white,
+            ),
+          ),
+          Text(url.toString(), textAlign: TextAlign.center),
+        ],
+      );
+    },
   );
 }

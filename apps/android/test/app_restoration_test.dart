@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:drift/drift.dart' show DatabaseConnection;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/app.dart';
 import 'package:soup/src/data/appearance/appearance_settings.dart';
 import 'package:soup/src/data/appearance/appearance_store.dart';
@@ -12,20 +14,32 @@ import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/appearance/appearance_controller.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/shared/app_status_screen.dart';
+import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'support/connectivity_fakes.dart';
 import 'support/onboarding_fonts.dart';
+import 'support/url_launcher_fake.dart';
+import 'widget_test.dart' show FakeTvTextInput;
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadOnboardingFonts);
+  const inputChannel = MethodChannel('dev.michaelishri.soup/tv_text_input');
   late FakeTailscaleClient client;
   late MemorySessionStore sessions;
   late MemoryConnectionPreferencesStore connection;
   late _AppearanceStore appearance;
   late SoupDatabase database;
+  late FakeUrlLauncher launcher;
+  late UrlLauncherPlatform previousLauncher;
 
   setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(inputChannel, (_) async => false);
+    previousLauncher = UrlLauncherPlatform.instance;
+    UrlLauncherPlatform.instance = launcher = FakeUrlLauncher();
     client = FakeTailscaleClient()..restoreConnected = true;
     sessions = MemorySessionStore(testSession);
     connection = MemoryConnectionPreferencesStore(ConnectionMode.direct);
@@ -38,6 +52,9 @@ void main() {
     );
   });
   tearDown(() async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(inputChannel, null);
+    UrlLauncherPlatform.instance = previousLauncher;
     client.dispose();
     await database.close();
   });
@@ -186,17 +203,62 @@ void main() {
     expect(controller.loadError, isNull);
   });
 
-  testWidgets('reconnection QR remains usable on small and TV screens', (
+  testWidgets('mobile reauthorisation returns to the saved library', (
     tester,
   ) async {
-    for (final size in [const Size(320, 480), const Size(960, 540)]) {
+    connection.mode = ConnectionMode.tailscale;
+    await mount(tester);
+    await tester.pumpAndSettle();
+    client.restoreConnected = false;
+    client.emit(const TailscaleStatus.disconnected());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reconnecting to Tailscale'), findsOneWidget);
+    expect(find.byType(QrImageView), findsNothing);
+    expect(launcher.launches, isEmpty);
+    await tester.tap(find.text('Authorise device on Tailscale'));
+    await tester.pumpAndSettle();
+    expect(launcher.launches, [
+      (
+        client.status.authorizationUrl.toString(),
+        PreferredLaunchMode.externalApplication,
+      ),
+    ]);
+    expect(client.interactiveConnects, 1);
+    expect(sessions.session, testSession);
+    client.emit(const TailscaleStatus.awaitingApproval());
+    await tester.pump();
+    expect(find.text('Authorise device on Tailscale'), findsNothing);
+    expect(find.text('Reconnecting to Tailscale'), findsOneWidget);
+    client.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('No playlists yet'), findsOneWidget);
+    expect(sessions.session, testSession);
+    expect(sessions.clears, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reconnection authorisation adapts to device type and viewport', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    for (final (size, television) in [
+      (const Size(320, 480), false),
+      (const Size(960, 540), false),
+      (const Size(640, 360), true),
+      (const Size(960, 540), true),
+    ]) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
       await tester.pumpWidget(
         MaterialApp(
           home: AppStatusScreen(
+            key: ValueKey((size, television)),
+            tvTextInput: television ? FakeTvTextInput() : const TvTextInput(),
             title: 'Reconnecting to Tailscale',
-            message: 'Scan to reconnect. Your Jellyfin sign-in is saved.',
+            message:
+                'Sign in to Tailscale to reconnect. Your Jellyfin sign-in is saved.',
             authorizationUrl: Uri.parse(
               'https://login.tailscale.com/a/example',
             ),
@@ -205,6 +267,20 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(
+        find.byType(QrImageView),
+        television ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.text('Authorise device on Tailscale'),
+        television ? findsNothing : findsOneWidget,
+      );
+      final action = television
+          ? find.byType(QrImageView)
+          : find.byKey(const ValueKey('tailscale-authorization-button'));
+      await tester.ensureVisible(action);
+      await tester.pumpAndSettle();
+      expect(action.hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
     tester.view.reset();

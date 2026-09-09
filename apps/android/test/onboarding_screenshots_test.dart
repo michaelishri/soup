@@ -100,7 +100,7 @@ void main() {
       await capture('welcome');
       await tester.tap(find.byKey(const ValueKey('tailscale-toggle')));
       await tester.pumpAndSettle();
-      await capture('tailscale-qr');
+      await capture(label == 'tv' ? 'tailscale-qr' : 'tailscale-authorisation');
       client.complete();
       await tester.pumpAndSettle();
       await capture('tailscale-connected');

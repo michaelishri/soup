@@ -13,6 +13,11 @@ captures for the root README.
 SOUP-98 adds server discovery cards, with manual entry available throughout the
 search. The example server and its Tailscale address are fictional.
 
+SOUP-99 replaces the phone Tailscale QR with **Authorise device on Tailscale**,
+which opens the authorisation URL in the external browser. TV retains its QR.
+Browser launch and return require native phone validation; these fixture renders
+verify the interface only.
+
 Fine diagonal frames and the bottom filmstrip edge are painted in a separate,
 noninteractive layer. A 36-second cycle updates at 20 fps without rebuilding
 forms or moving focus. Reduced motion, accessible navigation, inactive routes
@@ -28,7 +33,7 @@ native editor is tested separately on Guest Room TV.
 | Step | Android TV (960×540 logical) | Phone (412×915 logical) |
 | --- | --- | --- |
 | Welcome | [TV](welcome-tv.png) | [Phone](welcome-phone.png) |
-| Tailscale QR | [TV](tailscale-qr-tv.png) | [Phone](tailscale-qr-phone.png) |
+| Tailscale authorisation | [TV QR](tailscale-qr-tv.png) | [Phone button](tailscale-authorisation-phone.png) |
 | Tailscale connected | [TV](tailscale-connected-tv.png) | [Phone](tailscale-connected-phone.png) |
 | Discovered Jellyfin server | [TV](jellyfin-discovery-tv.png) | [Phone](jellyfin-discovery-phone.png) |
 | Jellyfin server | [TV](jellyfin-server-tv.png) | [Phone](jellyfin-server-phone.png) |

@@ -44,7 +44,7 @@ for series. Playback negotiates direct play with Jellyfin and falls back to HLS
 transcoding when required, with resume seeking, transport controls, progress
 reporting, and selectable WebVTT subtitles. The authenticated loopback playback
 bridge uses the same selected connection as the rest of the app. Tailscale setup
-uses an authorization QR code scanned with another device on both mobile and TV. Server
+opens authorisation in the browser on mobile and displays a QR code on TV. Server
 discovery searches the local network and, when connected, visible Tailscale devices.
 Soup tries Jellyfin's built-in discovery first, then standard Jellyfin ports and
 Tailscale HTTPS addresses on known devices. Verified servers appear as selectable
@@ -82,8 +82,9 @@ layout builder are intentionally deferred.
 Secrets are handled deliberately:
 
 - Interactive registration sends no Tailscale credential through Soup. The
-  embedded node supplies an HTTPS authorization URL that Soup renders as a QR
-  code. Browser-launch and auth-key options are not offered in Soup onboarding.
+  embedded node supplies an HTTPS authorization URL. Phones and tablets open it
+  in the external browser using **Authorise device on Tailscale**; Android TV
+  renders it as a QR code. Auth-key entry is not offered in Soup onboarding.
 - The Jellyfin password is cleared immediately after submission or backward navigation and is never
   persisted.
 - The Jellyfin access token and Soup device ID are stored with Android-backed
@@ -138,9 +139,11 @@ the Android NDK for every ABI requested by Flutter. Android 12 / API 31 is the
 minimum supported version.
 
 On first launch, **Use Tailscale** is off. Select **Next** to find a Jellyfin
-10.11+ server reachable from your device, or enable Tailscale to reveal its
-sign-in QR code. Scan with another device and finish authorization. If device
-approval is required, Soup waits for the administrator; after connection,
+10.11+ server reachable from your device, or enable Tailscale. On mobile, tap
+**Authorise device on Tailscale**, sign in in your browser, then return to Soup.
+On Android TV, scan the QR code with another device and finish authorization.
+Saved accounts that need to reconnect use the same mobile button or TV QR flow.
+If device approval is required, Soup waits for the administrator; after connection,
 select **Next**. You can turn Tailscale off at any point in that connection step.
 
 Soup checks the server before offering Quick Connect (when enabled on the
