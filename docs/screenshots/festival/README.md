@@ -15,6 +15,9 @@ it; on phones it stacks above it. Copy is independent of artwork contrast.
 The Blockbuster layout retains its billboard and rail arrangement, with the
 same Festival colours and typography.
 
+SOUP-96 refreshes this gallery for the root README, including the focusable
+account button added in SOUP-95.
+
 These are production widget captures with bundled fonts and original geometric
 sample artwork drawn by the test fixture. Titles, account and library data are
 fictional. No real library images or account details are committed.

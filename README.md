@@ -4,6 +4,29 @@ Soup is a Jellyfin client that connects directly to your server or through an
 optional embedded Tailscale connection. Embedded Tailscale does not require a
 separate VPN app.
 
+## Screenshots
+
+The current Festival design, rendered from the app's Flutter widgets with sample
+accounts and library artwork. The QR and Quick Connect codes are demonstrations.
+
+### Onboarding on Android TV
+
+| Choose your connection | Connect with Tailscale (optional) |
+| --- | --- |
+| ![Welcome screen with the optional Tailscale switch](docs/screenshots/onboarding/welcome-tv.png) | ![Optional Tailscale setup with a demonstration authorization QR code](docs/screenshots/onboarding/tailscale-qr-tv.png) |
+
+| Add your server | Sign in |
+| --- | --- |
+| ![Server address entry with an HTTPS and HTTP selector](docs/screenshots/onboarding/jellyfin-server-tv.png) | ![Jellyfin sign-in with Quick Connect and username and password options](docs/screenshots/onboarding/jellyfin-sign-in-tv.png) |
+
+### Sample signed-in homepage
+
+![Festival homepage with a featured film and sample Continue Watching row](docs/screenshots/festival/home-light-tv.png)
+
+Browse the [complete onboarding gallery](docs/screenshots/onboarding/README.md)
+and [Festival gallery](docs/screenshots/festival/README.md) for phone layouts,
+additional setup steps, and light and dark themes.
+
 ## Supported target
 
 - Android 12+ mobile and Android TV: Flutter/Dart in `apps/android`.
@@ -11,19 +34,20 @@ separate VPN app.
 
 The Android prototype includes the complete setup path: optional embedded Tailscale,
 direct or authenticated app-local SOCKS5 networking, Jellyfin 10.11 discovery, and
-username/password sign-in. The UI depends on a substitutable `TailscaleClient`
-boundary and adapts between touch-sized phone layouts and D-pad-friendly TV
-layouts. After sign-in, Soup restores the secure session and loads My Media,
-Continue Watching, and Latest Media, including artwork, through the same
-selected connection. Libraries open into browsable grids, and item details
+Quick Connect or username/password sign-in. The UI depends on a substitutable
+`TailscaleClient` boundary and adapts between touch-sized phone layouts and
+D-pad-friendly TV layouts. After sign-in, Soup restores the secure session and loads Continue
+Watching, Recently Added Movies, and Recently Added TV, including artwork,
+through the same selected connection. Libraries open into browsable grids, and item details
 show artwork, metadata, overview, Play/Resume, plus season and episode navigation
 for series. Playback negotiates direct play with Jellyfin and falls back to HLS
 transcoding when required, with resume seeking, transport controls, progress
 reporting, and selectable WebVTT subtitles. The authenticated loopback playback
 bridge uses the same selected connection as the rest of the app. Tailscale setup
 uses an authorization QR code scanned with another device on both mobile and TV. Server
-address paste remains available, while connection and sign-in errors stay
-pinned above the scrollable form so they remain readable at constrained heights.
+entry separates the HTTPS/HTTP selector from the address and recognises a
+protocol typed into the field. Connection and sign-in errors stay pinned above
+the scrollable form so they remain readable at constrained heights.
 
 ## Customisable interface
 
@@ -113,13 +137,14 @@ sign-in QR code. Scan with another device and finish authorization. If device
 approval is required, Soup waits for the administrator; after connection,
 select **Next**. You can turn Tailscale off at any point in that connection step.
 
-Soup checks the server before asking for your username and password. **Back**
-lets you edit the server or connection choice. Both HTTP and HTTPS URLs are
-supported, with normal certificate validation and no automatic fallback from
-Tailscale to direct networking. Existing saved accounts remain on Tailscale
+Soup checks the server before offering Quick Connect (when enabled on the
+server) or username and password sign-in. **Back** lets you edit the server or
+connection choice. Both HTTP and HTTPS URLs are supported, with normal
+certificate validation and no automatic fallback from Tailscale to direct
+networking. Existing saved accounts remain on Tailscale
 until you explicitly change the connection choice.
 
-The warm, centered onboarding panel supports touch, D-pad focus, reduced motion,
+The onboarding layout supports touch, D-pad focus, reduced motion,
 and constrained TV heights. [Review screenshots and regeneration instructions](docs/screenshots/onboarding/README.md)
 are available for the actual Flutter widgets rendered with demonstration data.
 

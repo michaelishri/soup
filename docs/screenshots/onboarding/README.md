@@ -6,6 +6,10 @@ headings sit in crisp introduction panels with an offset print shadow; controls
 use small corners and a strong colour change for remote focus. Quick Connect and
 password sign-in share equal columns on TV and stack on phones.
 
+The gallery includes the SOUP-95 server entry update: an HTTPS/HTTP selector
+beside the address, with no dedicated paste button. SOUP-96 refreshes these
+captures for the root README.
+
 Fine diagonal frames and the bottom filmstrip edge are painted in a separate,
 noninteractive layer. A 36-second cycle updates at 20 fps without rebuilding
 forms or moving focus. Reduced motion, accessible navigation, inactive routes
