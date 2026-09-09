@@ -50,9 +50,12 @@ class ConnectivityViewModel extends ChangeNotifier {
   bool get showingServerDiscovery =>
       discoveryService != null && !_manualServer && _phase == SetupPhase.server;
 
-  bool get _canDiscover =>
+  bool get _canDiscover => !isBusy && _canAcceptDiscovery;
+
+  // Next may save preferences while a prefetched search finishes. Preserve
+  // current-generation results during that write; navigation cancels stale runs.
+  bool get _canAcceptDiscovery =>
       !_disposed &&
-      !isBusy &&
       _initialized &&
       !_initializing &&
       _foreground &&
@@ -80,7 +83,9 @@ class ConnectivityViewModel extends ChangeNotifier {
       _discoveryRun = run;
       _discoverySubscription = run.snapshots.listen(
         (snapshot) {
-          if (!_canDiscover || generation != _discoveryGeneration) return;
+          if (!_canAcceptDiscovery || generation != _discoveryGeneration) {
+            return;
+          }
           _discovery = JellyfinDiscoverySnapshot(
             phase: snapshot.phase,
             servers: List.unmodifiable(
@@ -93,7 +98,9 @@ class ConnectivityViewModel extends ChangeNotifier {
           _notify();
         },
         onError: (Object _) {
-          if (!_canDiscover || generation != _discoveryGeneration) return;
+          if (!_canAcceptDiscovery || generation != _discoveryGeneration) {
+            return;
+          }
           _discovery = JellyfinDiscoverySnapshot(
             servers: _discovery.servers,
             phase: DiscoveryPhase.unavailable,

@@ -102,3 +102,19 @@ existing signed-in homepage returned after update and after force-stop/reopen,
 without onboarding. Both captured process logs contain no fatal or unhandled
 exception entries. The temporary review app was uninstalled and the LAN fixture
 stopped after testing.
+
+## Merge review follow-up
+
+The user installed the published `b269302` APK on a phone, reported that it
+worked well, and approved merging. Detailed phone scenarios were not recorded.
+
+Final review reproduced a race in which discovery completed or failed while
+Next was writing connection preferences. The busy guard discarded the final
+event and left the server screen searching indefinitely. Current-generation
+events are now accepted during that write; starting a new search remains
+busy-aware and lifecycle/generation checks still discard stale events. Both
+regression cases failed before the fix and cover terminal state, retained server
+cards and Retry afterward. This follow-up is newer than the APK identified above.
+
+After this fix, `task qa` passes all analyzers and 294 tests (258 app, 12
+Tailscale transport, 24 generated API).

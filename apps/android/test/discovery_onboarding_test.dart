@@ -26,6 +26,7 @@ void main() {
     MemorySessionStore? sessions,
     FakeTailscaleClient? tailscale,
     ConnectionMode? savedMode,
+    ConnectionPreferencesStore? connectionStore,
     FakeJellyfinClientFactory? clients,
   }) {
     final client = tailscale ?? FakeTailscaleClient();
@@ -33,7 +34,8 @@ void main() {
       client,
       jellyfinClientFactory: clients ?? FakeJellyfinClientFactory(),
       sessionStore: sessions ?? MemorySessionStore(),
-      connectionStore: MemoryConnectionPreferencesStore(savedMode),
+      connectionStore:
+          connectionStore ?? MemoryConnectionPreferencesStore(savedMode),
       discoveryService: discovery,
     );
     addTearDown(model.dispose);
@@ -77,6 +79,50 @@ void main() {
       expect(discovery.runs, hasLength(1));
     },
   );
+
+  for (final fail in [false, true]) {
+    test(
+      'discovery ${fail ? 'failure' : 'completion'} survives saving Next',
+      () async {
+        final store = _PausedConnectionStore();
+        final discovery = FakeDiscoveryService();
+        final model = makeModel(
+          discovery,
+          tailscale: FakeTailscaleClient()..immediateConnect = true,
+          connectionStore: store,
+        );
+        await model.initialize();
+        await model.setTailscaleEnabled(true);
+        final next = model.continueConnection();
+        await store.started.future;
+        expect(model.isBusy, isTrue);
+        final run = discovery.runs.single;
+        if (fail) {
+          run.events.addError(StateError('Discovery failed'));
+        } else {
+          run.emit(
+            JellyfinDiscoverySnapshot(
+              phase: DiscoveryPhase.complete,
+              servers: [discoveryServer()],
+            ),
+          );
+          run.cancel();
+        }
+        await Future<void>.delayed(Duration.zero);
+        store.release.complete();
+        await next;
+        expect(model.phase, SetupPhase.server);
+        expect(
+          model.discovery.phase,
+          fail ? DiscoveryPhase.unavailable : DiscoveryPhase.complete,
+        );
+        expect(model.discovery.servers, hasLength(fail ? 0 : 1));
+        expect(discovery.runs, hasLength(1));
+        model.searchServers(again: true);
+        expect(discovery.runs, hasLength(2));
+      },
+    );
+  }
 
   for (final mode in ConnectionMode.values) {
     test('saved $mode session never starts discovery', () async {
@@ -420,4 +466,16 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+class _PausedConnectionStore extends MemoryConnectionPreferencesStore {
+  final started = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<void> write(ConnectionMode value) async {
+    started.complete();
+    await release.future;
+    await super.write(value);
+  }
 }
