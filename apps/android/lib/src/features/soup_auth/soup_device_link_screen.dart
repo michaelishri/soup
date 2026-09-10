@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
+import 'package:soup/src/features/connectivity/onboarding_intro_panel.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup/src/features/soup_auth/soup_device_link_view_model.dart';
+import 'package:soup_identity/soup_identity.dart';
 
 /// TV-first Soup Identity device-link step (feature-flagged Wave 1B shell).
 class SoupDeviceLinkScreen extends StatefulWidget {
@@ -69,7 +71,6 @@ class _SoupDeviceLinkScreenState extends State<SoupDeviceLinkScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final wide = MediaQuery.sizeOf(context).width >= 840;
     final link = model.link;
     final waiting =
         model.phase == SoupDeviceLinkPhase.waiting ||
@@ -116,330 +117,326 @@ class _SoupDeviceLinkScreenState extends State<SoupDeviceLinkScreen>
     return Scaffold(
       body: OnboardingBackdrop(
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: wide ? 32 : 20,
-              vertical: wide ? 16 : 20,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 980),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (wide) ...[
-                      Expanded(child: _intro(theme)),
-                      const SizedBox(width: 24),
-                    ],
-                    Expanded(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: SoupTheme.onboardingSurface,
-                          border: Border.all(
-                            color: SoupTheme.onboardingInk,
-                            width: 2,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: SoupTheme.onboardingInk,
-                              offset: Offset(6, 6),
-                            ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(
-                            20,
-                            wide ? 16 : 20,
-                            20,
-                            wide ? 12 : 16,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (!wide) ...[
-                                _intro(theme),
-                                const SizedBox(height: 16),
-                              ],
-                              Text(
-                                showGoogleCode
-                                    ? 'Scan to sign in with Google'
-                                    : 'Finishing Soup invite',
-                                style: theme.textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                showGoogleCode
-                                    ? 'Use your phone to complete Google sign-in with Soup. This TV keeps polling until you’re approved.'
-                                    : 'Connecting to your invited Jellyfin server. This usually finishes in under a minute.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  height: 1.3,
-                                ),
-                              ),
-                              SizedBox(height: wide ? 12 : 16),
-                              if (showGoogleCode && link != null) ...[
-                                LayoutBuilder(
-                                  builder: (context, cardConstraints) {
-                                    // Keep QR + code side-by-side on TV
-                                    // widths so the card fits the screen.
-                                    final stacked =
-                                        !wide &&
-                                        cardConstraints.maxWidth < 440;
-                                    final qr = _qr(
-                                      link.verificationUriComplete.toString(),
-                                      size: stacked
-                                          ? 160
-                                          : (wide ? 168 : 200),
-                                    );
-                                    final details = _codeDetails(
-                                      theme,
-                                      link.userCode,
-                                      status,
-                                    );
-                                    if (stacked) {
-                                      return Column(
-                                        children: [
-                                          qr,
-                                          const SizedBox(height: 12),
-                                          details,
-                                        ],
-                                      );
-                                    }
-                                    return Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        qr,
-                                        const SizedBox(width: 16),
-                                        Expanded(child: details),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ] else if (showGoogleCode &&
-                                  (model.phase ==
-                                          SoupDeviceLinkPhase.starting ||
-                                      model.phase ==
-                                          SoupDeviceLinkPhase.idle ||
-                                      model.phase ==
-                                          SoupDeviceLinkPhase
-                                              .needsGoogleSignIn)) ...[
-                                const SizedBox(
-                                  height: 40,
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  status,
-                                  key: const ValueKey(
-                                    'soup-device-link-status',
-                                  ),
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                              ] else ...[
-                                if (model.isBusy ||
-                                    model.phase ==
-                                        SoupDeviceLinkPhase.exchanging ||
-                                    model.phase ==
-                                        SoupDeviceLinkPhase
-                                            .connectingTransport ||
-                                    model.phase ==
-                                        SoupDeviceLinkPhase.loadingRoster) ...[
-                                  const SizedBox(
-                                    height: 40,
-                                    child: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
-                                Semantics(
-                                  liveRegion: true,
-                                  child: Text(
-                                    status,
-                                    key: const ValueKey(
-                                      'soup-device-link-status',
-                                    ),
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ),
-                              ],
-                              SizedBox(height: wide ? 12 : 16),
-                              if (canRetryExchange) ...[
-                                FilledButton(
-                                  key: const ValueKey(
-                                    'soup-device-link-retry-exchange',
-                                  ),
-                                  autofocus: true,
-                                  onPressed: model.isBusy
-                                      ? null
-                                      : () => unawaited(
-                                          model.silentReExchange(),
-                                        ),
-                                  child: const Text(
-                                    'Retry Jellyfin sign-in',
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                TextButton(
-                                  key: const ValueKey(
-                                    'soup-device-link-start-over',
-                                  ),
-                                  onPressed: model.isBusy
-                                      ? null
-                                      : () => unawaited(() async {
-                                          await model.clearSession();
-                                          await model.startDeviceLink(
-                                            newCode: true,
-                                          );
-                                        }()),
-                                  child: const Text('Start over'),
-                                ),
-                                if (widget.onUseDirectLogin != null)
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: TextButton(
-                                      key: const ValueKey(
-                                        'soup-device-link-direct-login',
-                                      ),
-                                      onPressed: model.isBusy
-                                          ? null
-                                          : widget.onUseDirectLogin,
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: const Text(
-                                        'Sign in with Jellyfin',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final short = constraints.maxHeight < 650;
+              final wide =
+                  constraints.maxWidth >= 840 &&
+                  constraints.maxHeight >= 420 &&
+                  MediaQuery.textScalerOf(context).scale(16) <= 22.4;
+              final horizontal = constraints.maxWidth < 600 ? 24.0 : 48.0;
+              final card = _card(
+                theme: theme,
+                wide: wide,
+                expand: wide,
+                showGoogleCode: showGoogleCode,
+                canRetryExchange: canRetryExchange,
+                waiting: waiting,
+                status: status,
+                link: link,
+              );
+              return Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontal,
+                  vertical: short ? 20 : 36,
+                ),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1280),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _header(context),
+                        SizedBox(height: short ? 24 : 48),
+                        Expanded(
+                          child: wide
+                              ? Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const Expanded(
+                                      flex: 4,
+                                      child: OnboardingIntroPanel(
+                                        eyebrow: 'SOUP ACCOUNT',
+                                        headline:
+                                            'SIGN IN ONCE.\nWATCH ANYWHERE.',
+                                        body:
+                                            'Link this TV to your Google account through Soup. If a home invite includes a Tailscale key, Soup joins automatically.',
+                                        wide: true,
+                                        fillHeight: true,
                                       ),
                                     ),
-                                  ),
-                              ] else ...[
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: Row(
+                                    const SizedBox(width: 56),
+                                    Expanded(
+                                      flex: 6,
+                                      child: SizedBox.expand(child: card),
+                                    ),
+                                  ],
+                                )
+                              : SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
                                     children: [
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        widthFactor: 1,
-                                        child: FilledButton(
-                                          key: const ValueKey(
-                                            'soup-device-link-new-code',
-                                          ),
-                                          autofocus: true,
-                                          onPressed: model.isBusy && waiting
-                                              ? null
-                                              : () => unawaited(
-                                                  model.startDeviceLink(
-                                                    newCode: true,
-                                                  ),
-                                                ),
-                                          child: Text(
-                                            model.phase ==
-                                                    SoupDeviceLinkPhase
-                                                        .starting
-                                                ? 'Preparing…'
-                                                : 'Get a new code',
-                                          ),
-                                        ),
+                                      const OnboardingIntroPanel(
+                                        eyebrow: 'SOUP ACCOUNT',
+                                        headline:
+                                            'SIGN IN ONCE.\nWATCH ANYWHERE.',
+                                        body:
+                                            'Link this TV to your Google account through Soup. If a home invite includes a Tailscale key, Soup joins automatically.',
+                                        wide: false,
                                       ),
-                                      if (widget.onUseDirectLogin != null) ...[
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Align(
-                                            alignment: Alignment.centerRight,
-                                            child: TextButton(
-                                              key: const ValueKey(
-                                                'soup-device-link-direct-login',
-                                              ),
-                                              onPressed: model.isBusy
-                                                  ? null
-                                                  : widget.onUseDirectLogin,
-                                              style: TextButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
-                                                    ),
-                                                minimumSize: Size.zero,
-                                                tapTargetSize:
-                                                    MaterialTapTargetSize
-                                                        .shrinkWrap,
-                                              ),
-                                              child: const Text(
-                                                'Sign in with Jellyfin',
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                      const SizedBox(height: 16),
+                                      card,
                                     ],
                                   ),
                                 ),
-                              ],
-                            ],
-                          ),
                         ),
-                      ),
+                        // Match Jellyfin setup footer band so the blue panel
+                        // shares the same vertical budget.
+                        SizedBox(height: short ? 20 : 32),
+                        const SizedBox(height: 54),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _intro(ThemeData theme) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: const BoxDecoration(
-        color: SoupTheme.onboardingAccent,
-        boxShadow: [
+  Widget _header(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        const SoupMark(size: 46),
+        const SizedBox(width: 10),
+        Text(
+          'SOUP',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            // Match connectivity header height (label + progress track).
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'Account',
+                  textAlign: TextAlign.end,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const SizedBox(height: 5),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _card({
+    required ThemeData theme,
+    required bool wide,
+    required bool expand,
+    required bool showGoogleCode,
+    required bool canRetryExchange,
+    required bool waiting,
+    required String status,
+    required DeviceLinkStart? link,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: SoupTheme.onboardingSurface,
+        border: Border.all(color: SoupTheme.onboardingInk, width: 2),
+        boxShadow: const [
           BoxShadow(color: SoupTheme.onboardingInk, offset: Offset(6, 6)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SoupMark(size: 48),
-          const SizedBox(height: 16),
-          Text(
-            'SOUP ACCOUNT',
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: SoupTheme.onboardingSignal,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, wide ? 16 : 20, 20, wide ? 12 : 16),
+        child: Column(
+          mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              showGoogleCode
+                  ? 'Scan to sign in with Google'
+                  : 'Finishing Soup invite',
+              style: theme.textTheme.titleLarge,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'SIGN IN ONCE.\nWATCH ANYWHERE.',
-            style: theme.textTheme.headlineLarge?.copyWith(
-              color: SoupTheme.onboardingSurface,
-              height: 0.98,
-              fontSize: 44,
+            const SizedBox(height: 4),
+            Text(
+              showGoogleCode
+                  ? 'Use your phone to complete Google sign-in with Soup. This TV keeps polling until you’re approved.'
+                  : 'Connecting to your invited Jellyfin server. This usually finishes in under a minute.',
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.3),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Link this TV to your Google account through Soup. If a home invite includes a Tailscale key, Soup joins automatically.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: SoupTheme.onboardingSurface.withValues(alpha: 0.86),
-              height: 1.35,
-            ),
-          ),
-        ],
+            SizedBox(height: wide ? 12 : 16),
+            if (showGoogleCode && link != null) ...[
+              LayoutBuilder(
+                builder: (context, cardConstraints) {
+                  // Keep QR + code side-by-side on TV widths so the card
+                  // fits the screen.
+                  final stacked = !wide && cardConstraints.maxWidth < 440;
+                  final qr = _qr(
+                    link.verificationUriComplete.toString(),
+                    size: stacked ? 160 : (wide ? 168 : 200),
+                  );
+                  final details = _codeDetails(theme, link.userCode, status);
+                  if (stacked) {
+                    return Column(
+                      children: [qr, const SizedBox(height: 12), details],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      qr,
+                      const SizedBox(width: 16),
+                      Expanded(child: details),
+                    ],
+                  );
+                },
+              ),
+            ] else if (showGoogleCode &&
+                (model.phase == SoupDeviceLinkPhase.starting ||
+                    model.phase == SoupDeviceLinkPhase.idle ||
+                    model.phase == SoupDeviceLinkPhase.needsGoogleSignIn)) ...[
+              const SizedBox(
+                height: 40,
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                status,
+                key: const ValueKey('soup-device-link-status'),
+                style: theme.textTheme.bodySmall,
+              ),
+            ] else ...[
+              if (model.isBusy ||
+                  model.phase == SoupDeviceLinkPhase.exchanging ||
+                  model.phase == SoupDeviceLinkPhase.connectingTransport ||
+                  model.phase == SoupDeviceLinkPhase.loadingRoster) ...[
+                const SizedBox(
+                  height: 40,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                const SizedBox(height: 8),
+              ],
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  status,
+                  key: const ValueKey('soup-device-link-status'),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ],
+            if (expand) const Spacer() else SizedBox(height: wide ? 12 : 16),
+            if (canRetryExchange) ...[
+              FilledButton(
+                key: const ValueKey('soup-device-link-retry-exchange'),
+                autofocus: true,
+                onPressed: model.isBusy
+                    ? null
+                    : () => unawaited(model.silentReExchange()),
+                child: const Text('Retry Jellyfin sign-in'),
+              ),
+              const SizedBox(height: 4),
+              TextButton(
+                key: const ValueKey('soup-device-link-start-over'),
+                onPressed: model.isBusy
+                    ? null
+                    : () => unawaited(() async {
+                        await model.clearSession();
+                        await model.startDeviceLink(newCode: true);
+                      }()),
+                child: const Text('Start over'),
+              ),
+              if (widget.onUseDirectLogin != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const ValueKey('soup-device-link-direct-login'),
+                    onPressed: model.isBusy ? null : widget.onUseDirectLogin,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Sign in with Jellyfin'),
+                  ),
+                ),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: Row(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: 1,
+                      child: FilledButton(
+                        key: const ValueKey('soup-device-link-new-code'),
+                        autofocus: true,
+                        onPressed: model.isBusy && waiting
+                            ? null
+                            : () => unawaited(
+                                model.startDeviceLink(newCode: true),
+                              ),
+                        child: Text(
+                          model.phase == SoupDeviceLinkPhase.starting
+                              ? 'Preparing…'
+                              : 'Get a new code',
+                        ),
+                      ),
+                    ),
+                    if (widget.onUseDirectLogin != null) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            key: const ValueKey(
+                              'soup-device-link-direct-login',
+                            ),
+                            onPressed: model.isBusy
+                                ? null
+                                : widget.onUseDirectLogin,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Sign in with Jellyfin'),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

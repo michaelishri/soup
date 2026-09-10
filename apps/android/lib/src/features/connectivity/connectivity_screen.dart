@@ -8,6 +8,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/features/appearance/soup_theme.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/connectivity/onboarding_backdrop.dart';
+import 'package:soup/src/features/connectivity/onboarding_intro_panel.dart';
 import 'package:soup/src/features/shared/soup_mark.dart';
 import 'package:soup/src/features/shared/tv_text_input.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -504,15 +505,10 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
                                             children: [
                                               Expanded(
                                                 flex: 4,
-                                                child: Align(
-                                                  alignment:
-                                                      Alignment.centerLeft,
-                                                  child: SingleChildScrollView(
-                                                    child: _intro(
-                                                      context,
-                                                      wide: true,
-                                                    ),
-                                                  ),
+                                                child: _intro(
+                                                  context,
+                                                  wide: true,
+                                                  fillHeight: true,
                                                 ),
                                               ),
                                               const SizedBox(width: 56),
@@ -639,83 +635,43 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
     );
   }
 
-  Widget _intro(BuildContext context, {required bool wide}) {
-    final theme = Theme.of(context);
-    final title = switch (model.phase) {
-      SetupPhase.connection => 'Welcome to Soup',
-      SetupPhase.server => 'Find your Jellyfin server',
-      SetupPhase.credentials =>
-        'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}',
-      SetupPhase.ready => 'You’re all set',
+  Widget _intro(
+    BuildContext context, {
+    required bool wide,
+    bool fillHeight = false,
+  }) {
+    final (eyebrow, headline, body) = switch (model.phase) {
+      SetupPhase.connection => (
+        'GET STARTED',
+        'WELCOME TO SOUP',
+        'Your films, shows and favourites.\nLet’s bring them a little closer.',
+      ),
+      SetupPhase.server => (
+        'YOUR SERVER',
+        'YOUR LIBRARY\nSTARTS HERE.',
+        model.showingServerDiscovery
+            ? 'Your library is closer than you think.\nChoose a server and settle in.'
+            : model.tailscaleEnabled
+            ? 'Connect to your Jellyfin server through your Tailscale network.'
+            : 'Connect to a Jellyfin server reachable from this device.',
+      ),
+      SetupPhase.credentials => (
+        'SIGN IN',
+        'MAKE YOURSELF\nAT HOME.',
+        'Sign in to ${model.serverInfo?.name ?? 'Jellyfin'}. Your next favourite is waiting.',
+      ),
+      SetupPhase.ready => (
+        'READY',
+        'YOU’RE ALL SET',
+        'Your library is ready.',
+      ),
     };
-    return Container(
-      key: const ValueKey('setup-intro'),
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: SoupTheme.onboardingAccent,
-        boxShadow: [
-          BoxShadow(color: SoupTheme.onboardingInk, offset: Offset(6, 6)),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            switch (model.phase) {
-              SetupPhase.connection => 'A LITTLE SETUP. A LOT TO WATCH.',
-              SetupPhase.server => 'YOUR LIBRARY STARTS HERE.',
-              SetupPhase.credentials ||
-              SetupPhase.ready => 'MAKE YOURSELF AT HOME.',
-            },
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: SoupTheme.onboardingSignal,
-              letterSpacing: 1.2,
-              fontWeight: FontWeight.w700,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Semantics(
-            header: true,
-            label: title,
-            child: ExcludeSemantics(
-              child: Text(
-                title.toUpperCase(),
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  color: SoupTheme.onboardingSurface,
-                  fontSize: wide ? 60 : 48,
-                  letterSpacing: -0.5,
-                  height: 0.98,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(width: 44, height: 4, color: SoupTheme.onboardingSignal),
-          const SizedBox(height: 16),
-          Text(
-            switch (model.phase) {
-              SetupPhase.connection =>
-                'Your films, shows and favourites.\nLet’s bring them a little closer.',
-              SetupPhase.server =>
-                model.showingServerDiscovery
-                    ? 'Your library is closer than you think.\nChoose a server and settle in.'
-                    : model.tailscaleEnabled
-                    ? 'Connect to your Jellyfin server through your Tailscale network.'
-                    : 'Connect to a Jellyfin server reachable from this device.',
-              SetupPhase.credentials =>
-                'Use your Jellyfin account. Your next favourite is waiting.',
-              SetupPhase.ready => 'Your library is ready.',
-            },
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: SoupTheme.onboardingSurface,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
+    return OnboardingIntroPanel(
+      eyebrow: eyebrow,
+      headline: headline,
+      body: body,
+      wide: wide,
+      fillHeight: fillHeight,
     );
   }
 
