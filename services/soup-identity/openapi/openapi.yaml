@@ -1,0 +1,783 @@
+openapi: 3.1.0
+info:
+  title: Soup Identity API
+  version: 1.0.0
+  description: |
+    Thin Soup identity microservice (v1 frozen).
+    Trust rules: Soup never calls Jellyfin; no QC mailbox; multi-server is always `servers[]`.
+servers:
+  - url: http://localhost:8787
+    description: Local docker-compose / `npm run dev`
+tags:
+  - name: auth
+  - name: sessions
+  - name: me
+  - name: assertions
+  - name: plugin
+  - name: discovery
+security:
+  - SoupBearer: []
+
+paths:
+  /healthz:
+    get:
+      tags: [discovery]
+      summary: Liveness
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+
+  /.well-known/jwks.json:
+    get:
+      tags: [discovery]
+      summary: Public JWKS for assertion verification
+      security: []
+      responses:
+        "200":
+          description: JWK Set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Jwks"
+
+  /auth/device/link:
+    post:
+      tags: [auth]
+      summary: Start Netflix-style device-link (TV QR / user code)
+      security: []
+      responses:
+        "200":
+          description: Device codes for polling and display
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceLinkStart"
+
+  /auth/device/link/{deviceCode}:
+    get:
+      tags: [auth]
+      summary: Poll device-link until approved
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/deviceCode"
+      responses:
+        "200":
+          description: Pending, expired, or completed with tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceLinkPoll"
+        "404":
+          description: Unknown device code
+
+  /auth/device/approve:
+    post:
+      tags: [auth]
+      summary: Approve a device-link user code after Google (or dev) identity
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceLinkApprove"
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [approved]
+        "400":
+          description: Invalid or expired code
+        "404":
+          description: Unknown user code
+
+  /auth/google/start:
+    get:
+      tags: [auth]
+      summary: Begin Google OIDC (browser). Query user_code binds to device-link.
+      security: []
+      parameters:
+        - name: user_code
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to Google (or local approve page when ALLOW_DEV_LOGIN)
+        "503":
+          description: Google client not configured and dev login disabled
+
+  /auth/google/callback:
+    get:
+      tags: [auth]
+      summary: Google OIDC callback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: HTML success page for phone browser
+        "400":
+          description: OAuth error
+
+  /auth/dev/complete:
+    post:
+      tags: [auth]
+      summary: Dev-only approve helper when Google client env is unset
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_code]
+              properties:
+                user_code:
+                  type: string
+                google_sub:
+                  type: string
+                email:
+                  type: string
+      responses:
+        "200":
+          description: Approved via DEV_GOOGLE_* defaults or body overrides
+        "403":
+          description: Dev login disabled
+
+  /v1/sessions/refresh:
+    post:
+      tags: [sessions]
+      summary: Exchange refresh token for new access + rotated refresh
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: New session tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionTokens"
+        "401":
+          description: Invalid or revoked refresh
+
+  /v1/sessions/revoke:
+    post:
+      tags: [sessions]
+      summary: Revoke current refresh session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "204":
+          description: Revoked (idempotent)
+        "401":
+          description: Unauthorized
+
+  /v1/me:
+    get:
+      tags: [me]
+      summary: Current Soup subject
+      responses:
+        "200":
+          description: Subject profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subject"
+        "401":
+          description: Unauthorized
+
+  /v1/me/servers:
+    get:
+      tags: [me]
+      summary: Entitled servers roster (always list-shaped)
+      description: >
+        Atomically claims any claimable transport grant per server and returns
+        material once in transport_grant; later reads return null for that grant.
+      responses:
+        "200":
+          description: Roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerRoster"
+        "401":
+          description: Unauthorized
+
+  /v1/assertions:
+    post:
+      tags: [assertions]
+      summary: Mint short-lived JWT assertion for a target server (Pattern A)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_id]
+              properties:
+                server_id:
+                  type: string
+      responses:
+        "200":
+          description: Assertion JWT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssertionResponse"
+        "401":
+          description: Unauthorized
+        "403":
+          description: Not entitled to server
+        "404":
+          description: Unknown server
+
+  /v1/servers/{serverId}:
+    put:
+      tags: [plugin]
+      summary: Register or update a Jellyfin server (plugin auth)
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerUpsert"
+      responses:
+        "200":
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerRecord"
+        "401":
+          description: Invalid plugin credentials
+    delete:
+      tags: [plugin]
+      summary: Delete server and its entitlements
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Not found
+
+  /v1/servers/{serverId}/entitlements/{googleSub}:
+    put:
+      tags: [plugin]
+      summary: Entitle a Google subject to this server
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+        - $ref: "#/components/parameters/googleSub"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntitlementUpsert"
+      responses:
+        "200":
+          description: Upserted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntitlementRecord"
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Unknown server
+    delete:
+      tags: [plugin]
+      summary: Revoke entitlement
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+        - $ref: "#/components/parameters/googleSub"
+      responses:
+        "204":
+          description: Revoked
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Not found
+
+  /v1/servers/{serverId}/entitlements/{googleSub}/transport-grants:
+    post:
+      tags: [plugin]
+      summary: Deposit one-time transport grant (Tailscale auth-key blob)
+      description: >
+        Encrypts material at rest, applies TTL, and invalidates prior unclaimed
+        grants for the same (server_id, google_sub). Plugin list omits material.
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+        - $ref: "#/components/parameters/googleSub"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransportGrantDeposit"
+      responses:
+        "201":
+          description: Grant deposited (material omitted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransportGrantRecord"
+        "400":
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Unknown server or entitlement
+    get:
+      tags: [plugin]
+      summary: List transport grants (material omitted)
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+        - $ref: "#/components/parameters/googleSub"
+      responses:
+        "200":
+          description: Grants without material
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grants]
+                properties:
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TransportGrantRecord"
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Unknown server
+
+  /v1/servers/{serverId}/entitlements/{googleSub}/transport-grants/{grantId}:
+    delete:
+      tags: [plugin]
+      summary: Revoke a transport grant
+      security:
+        - PluginBasic: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+        - $ref: "#/components/parameters/googleSub"
+        - name: grantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked
+        "401":
+          description: Invalid plugin credentials
+        "404":
+          description: Not found
+
+  /v1/me/servers/{serverId}/transport-grant/claim:
+    post:
+      tags: [app]
+      summary: Claim a single-use transport grant for one server
+      description: >
+        Atomic single-claim. Equivalent semantics to the claim performed by
+        GET /v1/me/servers. Returns material once; subsequent claims are 410.
+      security:
+        - SoupBearer: []
+      parameters:
+        - $ref: "#/components/parameters/serverId"
+      responses:
+        "200":
+          description: Claimed grant with material
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transport_grant]
+                properties:
+                  transport_grant:
+                    $ref: "#/components/schemas/TransportGrantRecord"
+        "403":
+          description: Not entitled
+        "410":
+          description: No claimable grant (expired, claimed, revoked, or missing)
+
+components:
+  securitySchemes:
+    SoupBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived Soup access token from device-link or refresh
+    PluginBasic:
+      type: http
+      scheme: basic
+      description: plugin_id:plugin_secret issued at plugin setup / BOOTSTRAP_PLUGIN_*
+
+  parameters:
+    deviceCode:
+      name: deviceCode
+      in: path
+      required: true
+      schema:
+        type: string
+    serverId:
+      name: serverId
+      in: path
+      required: true
+      schema:
+        type: string
+    googleSub:
+      name: googleSub
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    DeviceLinkStart:
+      type: object
+      required:
+        - device_code
+        - user_code
+        - verification_uri
+        - verification_uri_complete
+        - expires_in
+        - interval
+      properties:
+        device_code:
+          type: string
+        user_code:
+          type: string
+        verification_uri:
+          type: string
+          format: uri
+        verification_uri_complete:
+          type: string
+          format: uri
+        expires_in:
+          type: integer
+        interval:
+          type: integer
+
+    DeviceLinkPoll:
+      oneOf:
+        - type: object
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [pending, expired]
+        - allOf:
+            - type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [approved]
+            - $ref: "#/components/schemas/SessionTokens"
+
+    DeviceLinkApprove:
+      type: object
+      required: [user_code, google_sub]
+      properties:
+        user_code:
+          type: string
+        google_sub:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+
+    SessionTokens:
+      type: object
+      required: [access_token, refresh_token, expires_in, token_type, google_sub]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_in:
+          type: integer
+        token_type:
+          type: string
+          enum: [Bearer]
+        google_sub:
+          type: string
+        email:
+          type: string
+          nullable: true
+
+    Subject:
+      type: object
+      required: [google_sub]
+      properties:
+        google_sub:
+          type: string
+        email:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        picture_url:
+          type: string
+          nullable: true
+
+    ServerRoster:
+      type: object
+      required: [servers]
+      properties:
+        servers:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterServer"
+
+    RosterServer:
+      type: object
+      required: [id, name, audience]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        base_url:
+          type: string
+          nullable: true
+        magic_dns:
+          type: string
+          nullable: true
+        audience:
+          type: string
+        entitlement:
+          type: object
+          additionalProperties: true
+        transport_grant:
+          description: >
+            On first successful roster read, Soup atomically claims any claimable
+            grant and returns material once. Subsequent reads return null.
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/TransportGrantRecord"
+
+    AssertionResponse:
+      type: object
+      required: [assertion, expires_in, server_id, audience]
+      properties:
+        assertion:
+          type: string
+          description: Compact JWT (sub=Google sub, aud=server audience, exp 2–5m)
+        expires_in:
+          type: integer
+        server_id:
+          type: string
+        audience:
+          type: string
+
+    ServerUpsert:
+      type: object
+      required: [name, audience]
+      properties:
+        name:
+          type: string
+        base_url:
+          type: string
+        magic_dns:
+          type: string
+        audience:
+          type: string
+          description: JWT aud value the plugin expects
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ServerRecord:
+      type: object
+      required: [server_id, name, audience, plugin_id]
+      properties:
+        server_id:
+          type: string
+        name:
+          type: string
+        base_url:
+          type: string
+          nullable: true
+        magic_dns:
+          type: string
+          nullable: true
+        audience:
+          type: string
+        plugin_id:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    EntitlementUpsert:
+      type: object
+      properties:
+        display_name:
+          type: string
+        jellyfin_user_hint:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    EntitlementRecord:
+      type: object
+      required: [server_id, google_sub]
+      properties:
+        server_id:
+          type: string
+        google_sub:
+          type: string
+        display_name:
+          type: string
+          nullable: true
+        jellyfin_user_hint:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    TransportGrantDeposit:
+      type: object
+      required: [grant_type, material, ttl_seconds]
+      properties:
+        grant_type:
+          type: string
+          enum: [tailscale_auth_key]
+        material:
+          type: string
+          description: Full tskey-auth-… (stored encrypted at rest)
+        ttl_seconds:
+          type: integer
+          minimum: 60
+          maximum: 86400
+          description: >
+            Soup grant TTL in seconds (60–86400). Should be ≤ Tailscale key
+            expirySeconds so unused keys die with the mailbox entry.
+        tailscale_key_id:
+          type: string
+          description: Tailscale key id for later DELETE without parsing material
+        capabilities:
+          type: object
+          additionalProperties: true
+          description: Optional mint flags echo for audit
+        single_claim:
+          type: boolean
+          default: true
+
+    TransportGrantRecord:
+      type: object
+      required: [id, grant_type, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        grant_type:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        claimed_at:
+          type: string
+          format: date-time
+          nullable: true
+        material:
+          type: string
+          description: Only returned once on claim; omitted from plugin list
+        tailscale_key_id:
+          type: string
+          nullable: true
+        capabilities:
+          type: object
+          additionalProperties: true

@@ -99,6 +99,10 @@ abstract interface class TailscaleClient {
 
   Future<void> connectInteractively();
 
+  /// Join with a one-time Tailscale auth key and wait until connected.
+  ///
+  /// Used by Soup roster transport grants; legacy onboarding uses
+  /// [connectInteractively] instead.
   Future<void> connectWithAuthKey({required String authKey});
 
   Future<void> disconnect();
@@ -106,6 +110,34 @@ abstract interface class TailscaleClient {
   Future<List<TailscalePeer>> peers();
 
   TailscaleDatagramSession openDatagrams();
+}
+
+extension TailscaleClientWait on TailscaleClient {
+  /// Resolves when [status]/[statuses] reach connected, or throws on failure.
+  ///
+  /// [connectWithAuthKey] already waits internally; this is a Wave 3 hook when
+  /// the app needs to re-confirm connectivity without starting a new join.
+  Future<TailscaleStatus> waitUntilConnected({
+    Duration timeout = const Duration(seconds: 120),
+  }) async {
+    bool isTerminal(TailscaleStatus value) =>
+        value.phase == TailscaleConnectionPhase.connected ||
+        value.phase == TailscaleConnectionPhase.failed;
+
+    TailscaleStatus finish(TailscaleStatus value) {
+      if (value.phase == TailscaleConnectionPhase.failed) {
+        throw TailscaleException(
+          'waitUntilConnected',
+          value.detail ?? 'Tailscale connection failed.',
+        );
+      }
+      return value;
+    }
+
+    if (isTerminal(status)) return finish(status);
+    final next = await statuses.firstWhere(isTerminal).timeout(timeout);
+    return finish(next);
+  }
 }
 
 class NativeTailscaleClient implements TailscaleClient {
@@ -564,7 +596,9 @@ void _check(int server, String operation, int result) {
   final message = _nativeError(server);
   throw TailscaleException(
     operation,
-    message.isEmpty ? 'native error $result' : message,
+    redactNativeSecrets(
+      message.isEmpty ? 'native error $result' : message,
+    ),
   );
 }
 
@@ -583,5 +617,13 @@ String _friendlyError(Object error) {
   if (value.contains('asset') || value.contains('symbol')) {
     return 'The embedded Tailscale library could not be loaded.';
   }
-  return value;
+  return redactNativeSecrets(value);
+}
+
+/// Strip auth-key shaped substrings from native error text before surfacing.
+String redactNativeSecrets(String input) {
+  return input.replaceAllMapped(
+    RegExp(r'tskey-(?:auth|api|client)-[A-Za-z0-9_-]+', caseSensitive: false),
+    (_) => '[redacted]',
+  );
 }

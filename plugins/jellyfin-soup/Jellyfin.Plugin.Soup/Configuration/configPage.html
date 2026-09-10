@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Soup Auth</title>
+</head>
+<body>
+<div id="SoupAuthConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="SoupAuthConfigForm">
+                <div class="sectionTitleContainer flex align-items-center">
+                    <h2 class="sectionTitle">Soup Auth</h2>
+                </div>
+                <p>Outbound Jellyfin → Soup only. Invite Google subjects here; clients exchange Soup assertions at <code>POST /SoupAuth/Exchange</code>.</p>
+
+                <div class="inputContainer">
+                    <label class="inputLabel" for="SoupBaseUrl">Soup base URL</label>
+                    <input id="SoupBaseUrl" type="text" is="emby-input" />
+                    <div class="fieldDescription">Example: http://localhost:8787</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="PluginId">Plugin credential id</label>
+                    <input id="PluginId" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="PluginSecret">Plugin credential secret</label>
+                    <input id="PluginSecret" type="password" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="ServerId">Soup server id</label>
+                    <input id="ServerId" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="ServerName">Server display name</label>
+                    <input id="ServerName" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="Audience">Assertion audience (JWT aud)</label>
+                    <input id="Audience" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="AssertionIssuer">Assertion issuer</label>
+                    <input id="AssertionIssuer" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="JellyfinBaseUrl">Jellyfin base URL (optional)</label>
+                    <input id="JellyfinBaseUrl" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="MagicDns">MagicDNS / Tailscale host (optional)</label>
+                    <input id="MagicDns" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="UsernamePrefix">Auto-user username prefix</label>
+                    <input id="UsernamePrefix" type="text" is="emby-input" />
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="CreateMissingUsers" type="checkbox" is="emby-checkbox" />
+                        <span>Create Jellyfin users on first exchange</span>
+                    </label>
+                </div>
+
+                <div class="sectionTitleContainer flex align-items-center" style="margin-top:1.5em;">
+                    <h2 class="sectionTitle">Tailscale auth-key mint</h2>
+                </div>
+                <p class="fieldDescription">
+                    Prefer a tailnet OAuth client with <code>auth_keys</code> scope bound to <code>tag:soup-guest</code>.
+                    On invite (when a Google sub is known), the plugin mints a single-use ephemeral key and deposits it to Soup.
+                    Credentials stay on this Jellyfin host — Soup never receives them.
+                </p>
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label class="emby-checkbox-label">
+                        <input id="MintTailscaleAuthKeyOnInvite" type="checkbox" is="emby-checkbox" />
+                        <span>Mint Tailscale auth key on invite and deposit to Soup</span>
+                    </label>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleTailnet">Tailnet</label>
+                    <input id="TailscaleTailnet" type="text" is="emby-input" />
+                    <div class="fieldDescription">Use <code>-</code> with OAuth access tokens (default).</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleOAuthClientId">OAuth client id (preferred)</label>
+                    <input id="TailscaleOAuthClientId" type="text" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleOAuthClientSecret">OAuth client secret</label>
+                    <input id="TailscaleOAuthClientSecret" type="password" is="emby-input" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleApiToken">API token (fallback)</label>
+                    <input id="TailscaleApiToken" type="password" is="emby-input" />
+                    <div class="fieldDescription">Only used when OAuth client id/secret are empty. Prefer OAuth.</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleGuestTags">Guest tags</label>
+                    <input id="TailscaleGuestTags" type="text" is="emby-input" />
+                    <div class="fieldDescription">Comma-separated, e.g. <code>tag:soup-guest</code></div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel" for="TailscaleAuthKeyExpirySeconds">Auth key expiry (seconds)</label>
+                    <input id="TailscaleAuthKeyExpirySeconds" type="number" is="emby-input" />
+                    <div class="fieldDescription">Recommend 1800. Soup grant TTL is set slightly shorter.</div>
+                </div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block emby-button">
+                        <span>Save</span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="sectionTitleContainer flex align-items-center" style="margin-top:2em;">
+                <h2 class="sectionTitle">Soup sync</h2>
+            </div>
+            <div class="fieldDescription" id="SoupSyncStatus"></div>
+            <div style="display:flex; gap:0.5em; flex-wrap:wrap; margin:0.75em 0 1.5em;">
+                <button is="emby-button" type="button" class="raised block emby-button" id="RegisterServerBtn"><span>Register server</span></button>
+                <button is="emby-button" type="button" class="raised block emby-button" id="SyncBtn"><span>Sync entitlements</span></button>
+            </div>
+
+            <div class="sectionTitleContainer flex align-items-center">
+                <h2 class="sectionTitle">Invite entitlement</h2>
+            </div>
+            <p class="fieldDescription">Prefer Google <code>sub</code>. Email-only invites stay Pending until the subject is known (first exchange with matching email, or a later invite that supplies the sub).</p>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteGoogleSub">Google sub</label>
+                <input id="InviteGoogleSub" type="text" is="emby-input" />
+            </div>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteEmail">Email (optional / pending)</label>
+                <input id="InviteEmail" type="email" is="emby-input" />
+            </div>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteDisplayName">Display name</label>
+                <input id="InviteDisplayName" type="text" is="emby-input" />
+            </div>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteUserHint">Jellyfin username hint</label>
+                <input id="InviteUserHint" type="text" is="emby-input" />
+            </div>
+            <button is="emby-button" type="button" class="raised button-submit block emby-button" id="InviteBtn">
+                <span>Invite</span>
+            </button>
+
+            <div class="sectionTitleContainer flex align-items-center" style="margin-top:2em;">
+                <h2 class="sectionTitle">Entitlements</h2>
+            </div>
+            <div id="EntitlementList"></div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        var SoupAuthConfig = {
+            pluginUniqueId: 'c8a7e6d5-4b3a-2918-07f6-e5d4c3b2a190'
+        };
+
+        function setStatus(msg) {
+            var el = document.querySelector('#SoupSyncStatus');
+            if (el) el.textContent = msg || '';
+        }
+
+        function loadEntitlements() {
+            ApiClient.ajax({
+                type: 'GET',
+                url: ApiClient.getUrl('SoupAuth/Entitlements'),
+                dataType: 'json'
+            }).then(function (rows) {
+                var root = document.querySelector('#EntitlementList');
+                if (!rows || !rows.length) {
+                    root.innerHTML = '<p class="fieldDescription">No entitlements yet.</p>';
+                    return;
+                }
+                var html = '<table class="detailTable" style="width:100%"><thead><tr>' +
+                    '<th>Status</th><th>Google sub</th><th>Email</th><th>Name</th><th>Synced</th><th>TS key</th><th></th>' +
+                    '</tr></thead><tbody>';
+                rows.forEach(function (row) {
+                    var id = row.Id || row.id;
+                    html += '<tr>' +
+                        '<td>' + (row.Status || row.status || '') + '</td>' +
+                        '<td><code>' + (row.GoogleSub || row.googleSub || '') + '</code></td>' +
+                        '<td>' + (row.Email || row.email || '') + '</td>' +
+                        '<td>' + (row.DisplayName || row.displayName || '') + '</td>' +
+                        '<td>' + ((row.SyncedToSoup || row.syncedToSoup) ? 'yes' : 'no') + '</td>' +
+                        '<td><code>' + (row.TailscaleKeyId || row.tailscaleKeyId || '') + '</code></td>' +
+                        '<td style="white-space:nowrap;">' +
+                        '<button type="button" class="raised emby-button soup-remint" data-id="' + id + '">Remint</button> ' +
+                        '<button type="button" class="raised emby-button soup-revoke" data-id="' + id + '">Revoke</button>' +
+                        '</td>' +
+                        '</tr>';
+                });
+                html += '</tbody></table>';
+                root.innerHTML = html;
+                root.querySelectorAll('.soup-revoke').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var id = btn.getAttribute('data-id');
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({
+                            type: 'DELETE',
+                            url: ApiClient.getUrl('SoupAuth/Entitlements/' + encodeURIComponent(id))
+                        }).then(function () {
+                            Dashboard.hideLoadingMsg();
+                            loadEntitlements();
+                        }).catch(function (err) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('Revoke failed: ' + (err && err.message ? err.message : err));
+                        });
+                    });
+                });
+                root.querySelectorAll('.soup-remint').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var id = btn.getAttribute('data-id');
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({
+                            type: 'POST',
+                            url: ApiClient.getUrl('SoupAuth/Entitlements/' + encodeURIComponent(id) + '/TransportGrant'),
+                            dataType: 'json'
+                        }).then(function () {
+                            Dashboard.hideLoadingMsg();
+                            loadEntitlements();
+                        }).catch(function (err) {
+                            Dashboard.hideLoadingMsg();
+                            Dashboard.alert('Remint failed: ' + (err && err.message ? err.message : err));
+                        });
+                    });
+                });
+            }).catch(function (err) {
+                setStatus('Failed to load entitlements (save config and ensure you are admin).');
+            });
+        }
+
+        document.querySelector('#SoupAuthConfigPage')
+            .addEventListener('pageshow', function () {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(SoupAuthConfig.pluginUniqueId).then(function (config) {
+                    document.querySelector('#SoupBaseUrl').value = config.SoupBaseUrl || '';
+                    document.querySelector('#PluginId').value = config.PluginId || '';
+                    document.querySelector('#PluginSecret').value = config.PluginSecret || '';
+                    document.querySelector('#ServerId').value = config.ServerId || '';
+                    document.querySelector('#ServerName').value = config.ServerName || '';
+                    document.querySelector('#Audience').value = config.Audience || '';
+                    document.querySelector('#AssertionIssuer').value = config.AssertionIssuer || '';
+                    document.querySelector('#JellyfinBaseUrl').value = config.JellyfinBaseUrl || '';
+                    document.querySelector('#MagicDns').value = config.MagicDns || '';
+                    document.querySelector('#UsernamePrefix').value = config.UsernamePrefix || '';
+                    document.querySelector('#CreateMissingUsers').checked = !!config.CreateMissingUsers;
+                    document.querySelector('#MintTailscaleAuthKeyOnInvite').checked =
+                        config.MintTailscaleAuthKeyOnInvite !== false;
+                    document.querySelector('#TailscaleTailnet').value = config.TailscaleTailnet || '-';
+                    document.querySelector('#TailscaleOAuthClientId').value = config.TailscaleOAuthClientId || '';
+                    document.querySelector('#TailscaleOAuthClientSecret').value = config.TailscaleOAuthClientSecret || '';
+                    document.querySelector('#TailscaleApiToken').value = config.TailscaleApiToken || '';
+                    document.querySelector('#TailscaleGuestTags').value = config.TailscaleGuestTags || 'tag:soup-guest';
+                    document.querySelector('#TailscaleAuthKeyExpirySeconds').value =
+                        config.TailscaleAuthKeyExpirySeconds || 1800;
+                    Dashboard.hideLoadingMsg();
+                    loadEntitlements();
+                });
+            });
+
+        document.querySelector('#SoupAuthConfigForm')
+            .addEventListener('submit', function (e) {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(SoupAuthConfig.pluginUniqueId).then(function (config) {
+                    config.SoupBaseUrl = document.querySelector('#SoupBaseUrl').value;
+                    config.PluginId = document.querySelector('#PluginId').value;
+                    config.PluginSecret = document.querySelector('#PluginSecret').value;
+                    config.ServerId = document.querySelector('#ServerId').value;
+                    config.ServerName = document.querySelector('#ServerName').value;
+                    config.Audience = document.querySelector('#Audience').value;
+                    config.AssertionIssuer = document.querySelector('#AssertionIssuer').value;
+                    config.JellyfinBaseUrl = document.querySelector('#JellyfinBaseUrl').value;
+                    config.MagicDns = document.querySelector('#MagicDns').value;
+                    config.UsernamePrefix = document.querySelector('#UsernamePrefix').value;
+                    config.CreateMissingUsers = document.querySelector('#CreateMissingUsers').checked;
+                    config.MintTailscaleAuthKeyOnInvite =
+                        document.querySelector('#MintTailscaleAuthKeyOnInvite').checked;
+                    config.TailscaleTailnet = document.querySelector('#TailscaleTailnet').value;
+                    config.TailscaleOAuthClientId = document.querySelector('#TailscaleOAuthClientId').value;
+                    config.TailscaleOAuthClientSecret = document.querySelector('#TailscaleOAuthClientSecret').value;
+                    config.TailscaleApiToken = document.querySelector('#TailscaleApiToken').value;
+                    config.TailscaleGuestTags = document.querySelector('#TailscaleGuestTags').value;
+                    config.TailscaleAuthKeyExpirySeconds =
+                        parseInt(document.querySelector('#TailscaleAuthKeyExpirySeconds').value, 10) || 1800;
+                    ApiClient.updatePluginConfiguration(SoupAuthConfig.pluginUniqueId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                e.preventDefault();
+                return false;
+            });
+
+        document.querySelector('#InviteBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/Entitlements/Invite'),
+                data: JSON.stringify({
+                    GoogleSub: document.querySelector('#InviteGoogleSub').value || null,
+                    Email: document.querySelector('#InviteEmail').value || null,
+                    DisplayName: document.querySelector('#InviteDisplayName').value || null,
+                    JellyfinUserHint: document.querySelector('#InviteUserHint').value || null
+                }),
+                contentType: 'application/json',
+                dataType: 'json'
+            }).then(function () {
+                Dashboard.hideLoadingMsg();
+                document.querySelector('#InviteGoogleSub').value = '';
+                document.querySelector('#InviteEmail').value = '';
+                document.querySelector('#InviteDisplayName').value = '';
+                document.querySelector('#InviteUserHint').value = '';
+                loadEntitlements();
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                Dashboard.alert('Invite failed: ' + (err && err.message ? err.message : err));
+            });
+        });
+
+        document.querySelector('#RegisterServerBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/RegisterServer'),
+                dataType: 'json'
+            }).then(function () {
+                Dashboard.hideLoadingMsg();
+                setStatus('Server registered with Soup.');
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Register failed.');
+                Dashboard.alert('Register failed: ' + (err && err.message ? err.message : err));
+            });
+        });
+
+        document.querySelector('#SyncBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/Sync'),
+                dataType: 'json'
+            }).then(function (res) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Synced ' + (res.synced || res.Synced || 0) + ' entitlement(s).');
+                loadEntitlements();
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Sync failed.');
+                Dashboard.alert('Sync failed: ' + (err && err.message ? err.message : err));
+            });
+        });
+    </script>
+</div>
+</body>
+</html>

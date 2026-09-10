@@ -74,5 +74,24 @@ unverified on this host.
 The [onboarding screenshots](../screenshots/onboarding/README.md) can be regenerated
 using the headless Flutter test renderer without an emulator.
 
+## Emulator Tailscale and ABI
+
+Embedded Tailscale needs an AVD ABI that matches the APK (`x86_64` or `arm64-v8a`).
+On a Linux/x86_64 host use:
+
+```sh
+task emulator:tv:start
+# defaults to Soup_Android_TV_x86_64 / system-images;android-36;android-tv;x86_64
+```
+
+A 32-bit `android-tv;x86` AVD is reported as Flutter `unsupported` and has been
+observed to hard-close Soup on first Tailscale enable while loading
+`libtailscale.so`. With the x86_64 TV image, enabling Tailscale reaches the
+authorization QR without a process crash.
+
+Physical Chromecast/ARM devices remain the reference for Tailscale enrollment.
+See [emulator discovery notes](android-tv-discovery-2026-09-09.md#emulator-networking-testing-only)
+for LAN Jellyfin testing without Tailscale.
+
 The remaining phone/TV runtime checks are consolidated in
 [Android acceptance — SOUP-18](android-acceptance.md).

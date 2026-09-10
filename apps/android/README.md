@@ -30,6 +30,32 @@ subtitles, and the authenticated playback bridge all use the selected transport.
 After the first successful sign-in, the existing appearance setup lets the user
 choose their library layout, palette, and brightness.
 
+## Soup Identity auth (feature-flagged)
+
+Optional Netflix-style Soup invite path **beside** legacy direct / interactive
+Tailscale + password/Quick Connect. Off by default
+(`SOUP_IDENTITY_AUTH=true` to enable).
+
+When enabled: Google device-link → roster auto-select → optional
+`connectWithAuthKey` → `POST /v1/assertions` → `POST /SoupAuth/Exchange` →
+library. Cold start restores Soup session and silently re-exchanges Jellyfin
+tokens; Google UI returns only if Soup refresh is dead.
+
+```sh
+flutter run --dart-define=SOUP_IDENTITY_AUTH=true \
+  --dart-define=SOUP_IDENTITY_MOCK=true
+```
+
+- `SOUP_IDENTITY_AUTH=true` — Soup Google device-link + Pattern A exchange
+- `SOUP_IDENTITY_MOCK=true` — in-memory client when `services/soup-identity` is down
+- `SOUP_IDENTITY_BASE_URL` — defaults to `http://10.0.2.2:8787` (Android emulator → host)
+- `SOUP_TRANSPORT_AUTH_KEY=false` — keep device-link but skip auth-key Tailscale join
+
+Soup session tokens are stored under `soup.session` via
+`SecureSoupSessionStore`, separate from the existing Jellyfin
+`SecureSessionStore`. See
+[Wave 3 invite notes](../../docs/development/android-soup-invite-wave3-2026-09-10.md).
+
 ## Development
 
 Use the root Taskfile, or:

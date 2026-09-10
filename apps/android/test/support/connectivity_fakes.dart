@@ -113,10 +113,13 @@ class FakeTailscaleClient implements TailscaleClient {
   TailscaleStatus _status = const TailscaleStatus.disconnected();
   int restores = 0;
   int interactiveConnects = 0;
+  int authKeyConnects = 0;
   int disconnects = 0;
+  String? lastAuthKey;
   bool restoreConnected = false;
   Completer<void>? restoreGate;
   bool immediateConnect = false;
+  bool authKeyConnectsSucceed = true;
   bool delayCancellation = false;
   bool preparing = false;
   Object? connectError;
@@ -166,8 +169,19 @@ class FakeTailscaleClient implements TailscaleClient {
   }
 
   @override
-  Future<void> connectWithAuthKey({required String authKey}) =>
-      throw StateError('Auth keys must not be used by onboarding');
+  Future<void> connectWithAuthKey({required String authKey}) async {
+    authKeyConnects++;
+    lastAuthKey = authKey;
+    if (connectError case final error?) throw error;
+    if (immediateConnect || authKeyConnectsSucceed) {
+      emit(connectedStatus);
+      return;
+    }
+    _pending = Completer<void>();
+    emit(const TailscaleStatus.starting());
+    await _pending!.future;
+  }
+
   @override
   Future<void> disconnect() async {
     disconnects++;

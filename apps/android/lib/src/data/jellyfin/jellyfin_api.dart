@@ -457,6 +457,74 @@ class JellyfinApi
     ),
   );
 
+  /// Pattern A: exchange a Soup assertion for a Jellyfin session via the plugin.
+  ///
+  /// Sends Soup's [deviceId] plus matching App / Device / Version so
+  /// `AuthenticateDirect` binds the token to this install (Wave 1D spike).
+  Future<JellyfinSession> exchangeSoupAuth({
+    required Uri serverUrl,
+    required String assertion,
+    String deviceName = 'Soup Android',
+  }) async {
+    final uri = serverUrl.resolve('SoupAuth/Exchange');
+    final response = await _client
+        .post(
+          uri,
+          headers: {
+            ..._mediaBrowserHeaders(),
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'assertion': assertion,
+            'deviceId': deviceId,
+            'deviceName': deviceName,
+            'app': clientName,
+            'appVersion': clientVersion,
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode == 401) {
+      throw const JellyfinApiException(
+        'Soup could not verify your sign-in with Jellyfin.',
+        statusCode: 401,
+      );
+    }
+    if (response.statusCode == 403) {
+      throw const JellyfinApiException(
+        'You are not invited on this Jellyfin server yet.',
+        statusCode: 403,
+      );
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw JellyfinApiException(
+        'Could not finish Soup Jellyfin sign-in (HTTP ${response.statusCode}).',
+        statusCode: response.statusCode,
+      );
+    }
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map) {
+        throw const FormatException();
+      }
+      final result = generated.AuthenticationResult.fromJson(
+        Map<String, dynamic>.from(decoded),
+      );
+      return _sessionFromResult(result, serverUrl);
+    } on JellyfinApiException {
+      rethrow;
+    } on Object {
+      throw const JellyfinApiException(
+        'Jellyfin returned an incomplete Soup exchange response.',
+      );
+    }
+  }
+
+  /// Light authenticated probe used for cold-start / silent re-auth.
+  Future<void> validateSession(JellyfinSession session) async {
+    await _getJson(session, 'Users/${session.userId}');
+  }
+
   static JellyfinQuickConnectRequest _quickConnectRequest(
     generated.QuickConnectResult? result,
   ) {
@@ -989,6 +1057,7 @@ class JellyfinApi
     if (response.statusCode == 401) {
       throw const JellyfinApiException(
         'Your Jellyfin session has expired. Sign in again.',
+        statusCode: 401,
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -1025,6 +1094,12 @@ class JellyfinApi
     'X-Emby-Token': session.accessToken,
     'Authorization':
         'MediaBrowser Client="$clientName", Device="Soup Android", DeviceId="$deviceId", Version="$clientVersion", Token="${session.accessToken}"',
+  };
+
+  Map<String, String> _mediaBrowserHeaders() => {
+    'Accept': 'application/json',
+    'Authorization':
+        'MediaBrowser Client="$clientName", Device="Soup Android", DeviceId="$deviceId", Version="$clientVersion"',
   };
 
   static List<JellyfinItem> _itemsFromResponse(Object? value) {

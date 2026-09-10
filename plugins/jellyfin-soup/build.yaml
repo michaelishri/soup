@@ -1,0 +1,17 @@
+---
+name: "Soup Auth"
+guid: "c8a7e6d5-4b3a-2918-07f6-e5d4c3b2a190"
+version: "0.1.0.0"
+targetAbi: "10.11.0.0"
+framework: "net9.0"
+overview: "Soup entitlement mailbox: invite by Google sub and exchange Soup assertions for Jellyfin sessions."
+description: >
+  Outbound-only Jellyfin plugin for Soup identity. Admins invite/revoke Google subjects,
+  the plugin upserts entitlements to Soup, and clients exchange short-lived Soup JWTs at
+  POST /SoupAuth/Exchange for a normal Jellyfin AuthenticationResult.
+category: "Authentication"
+owner: "soup"
+artifacts:
+  - "Jellyfin.Plugin.Soup.dll"
+changelog: >
+  Wave 1A scaffold: config, entitlement UI, Soup client, SoupAuth/Exchange.

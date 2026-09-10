@@ -6,9 +6,14 @@ vars:
   AVDMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/avdmanager'
   EMULATOR: '{{.ANDROID_SDK}}/emulator/emulator'
   SDKMANAGER: '{{.ANDROID_SDK}}/cmdline-tools/latest/bin/sdkmanager'
-  TV_AVD: '{{.TV_AVD | default "Soup_Android_TV_API_34"}}'
+  # Linux/x86_64 hosts need the x86_64 TV image; Apple Silicon can override:
+  #   task emulator:tv:start TV_AVD=Soup_Android_TV_API_34 \
+  #     TV_IMAGE=system-images;android-34;android-tv;arm64-v8a
+  HOST_ARCH:
+    sh: uname -m
+  TV_AVD: '{{.TV_AVD | default (eq .HOST_ARCH "arm64" | ternary "Soup_Android_TV_API_34" "Soup_Android_TV_x86_64")}}'
   TV_DEVICE: '{{.TV_DEVICE | default "tv_1080p"}}'
-  TV_IMAGE: '{{.TV_IMAGE | default "system-images;android-34;android-tv;arm64-v8a"}}'
+  TV_IMAGE: '{{.TV_IMAGE | default (eq .HOST_ARCH "arm64" | ternary "system-images;android-34;android-tv;arm64-v8a" "system-images;android-36;android-tv;x86_64")}}'
   EMULATOR_SERIAL: '{{.EMULATOR_SERIAL | default "emulator-5554"}}'
 
 tasks:
@@ -42,11 +47,12 @@ tasks:
       - git submodule update --init --recursive
 
   deps:all:
-    desc: Install dependencies for the app and both Dart packages
+    desc: Install dependencies for the app and Dart packages
     cmds:
       - task: deps:app
       - task: deps:tailscale
       - task: deps:jellyfin
+      - task: deps:soup-identity
 
   deps:app:
     desc: Install Flutter dependencies for the Android app
@@ -66,6 +72,12 @@ tasks:
     cmds:
       - dart pub get
 
+  deps:soup-identity:
+    desc: Install Dart dependencies for the Soup Identity client package
+    dir: packages/soup_identity
+    cmds:
+      - dart pub get
+
   format:
     desc: Format handwritten and generated Dart source and tests
     cmds:
@@ -73,6 +85,7 @@ tasks:
         dart format
         apps/android/lib apps/android/test
         packages/soup_tailscale/lib packages/soup_tailscale/test
+        packages/soup_identity/lib packages/soup_identity/test
         packages/jellyfin_api/lib packages/jellyfin_api/test
 
   format:check:
@@ -82,14 +95,16 @@ tasks:
         dart format --output=none --set-exit-if-changed
         apps/android/lib apps/android/test
         packages/soup_tailscale/lib packages/soup_tailscale/test
+        packages/soup_identity/lib packages/soup_identity/test
         packages/jellyfin_api/lib packages/jellyfin_api/test
 
   analyze:
-    desc: Run static analysis for the app and both packages
+    desc: Run static analysis for the app and packages
     cmds:
       - task: analyze:app
       - task: analyze:tailscale
       - task: analyze:jellyfin
+      - task: analyze:soup-identity
 
   analyze:app:
     desc: Analyze the Flutter Android app
@@ -109,13 +124,20 @@ tasks:
     cmds:
       - dart analyze
 
+  analyze:soup-identity:
+    desc: Analyze the Soup Identity Dart client package
+    dir: packages/soup_identity
+    cmds:
+      - dart analyze
+
   test:
     aliases: [test:all]
-    desc: Run tests for the app and both packages
+    desc: Run tests for the app and packages
     cmds:
       - task: test:app
       - task: test:tailscale
       - task: test:jellyfin
+      - task: test:soup-identity
 
   test:app:
     desc: Run Android app tests; pass extra flags after --
@@ -134,6 +156,12 @@ tasks:
     dir: packages/jellyfin_api
     cmds:
       - flutter test {{.CLI_ARGS}}
+
+  test:soup-identity:
+    desc: Run Soup Identity client package tests
+    dir: packages/soup_identity
+    cmds:
+      - dart test {{.CLI_ARGS}}
 
   test:coverage:
     desc: Run Android app tests and write an LCOV coverage report

@@ -42,6 +42,8 @@ dependencies:
   qr_flutter: ^4.1.0
   shared_preferences: ^2.5.3
   socks5_proxy: ^2.1.1
+  soup_identity:
+    path: ../../packages/soup_identity
   soup_tailscale:
     path: ../../packages/soup_tailscale
   video_player: ^2.14.0

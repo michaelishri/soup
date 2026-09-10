@@ -7,6 +7,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_client_factory.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/data/session/session_store.dart';
+import 'package:soup_identity/soup_identity.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 enum SetupPhase { connection, server, credentials, ready }
@@ -279,6 +280,70 @@ class ConnectivityViewModel extends ChangeNotifier {
   Future<void> retryTailscale() {
     if (!tailscaleEnabled || isBusy) return Future.value();
     return _startTailscale(newCode: true);
+  }
+
+  /// Adopt an already-connected Tailscale node from Soup auth-key join (Wave 2C).
+  ///
+  /// Does not disconnect or open the interactive QR path. Legacy onboarding
+  /// still uses [setTailscaleEnabled] / [connectInteractively] when Soup did
+  /// not supply a transport grant.
+  Future<void> adoptSoupAuthKeyTransport() async {
+    if (_disposed || !initialized) return;
+    _stopQuickConnect(clear: true);
+    ++_connectionGeneration;
+    _mode = ConnectionMode.tailscale;
+    _connecting = false;
+    _acceptStatuses = true;
+    _status = _tailscaleClient.status;
+    _error = null;
+    _manualServer = false;
+    _notify();
+    try {
+      await connectionStore.write(ConnectionMode.tailscale);
+    } on Object catch (error) {
+      if (!_disposed) _error = _friendlyError(error);
+    }
+    if (_disposed) return;
+    if (tailscaleConnected) {
+      _phase = _session == null ? SetupPhase.server : SetupPhase.ready;
+      searchServers();
+    } else {
+      _phase = SetupPhase.connection;
+      _error ??= 'Reconnect to Tailscale to continue.';
+    }
+    _notify();
+  }
+
+  /// Adopt a Jellyfin session produced by Soup Pattern A exchange (Wave 3).
+  ///
+  /// Skips password / Quick Connect. Assumes Tailscale was already adopted via
+  /// [adoptSoupAuthKeyTransport] when a transport grant was present.
+  Future<void> adoptSoupJellyfinSession(JellyfinSession session) async {
+    if (_disposed || !initialized) return;
+    _stopQuickConnect(clear: true);
+    _formGeneration++;
+    _error = null;
+    _isBusy = true;
+    _notify();
+    try {
+      await _mutateSession(() async {
+        await sessionStore.write(session);
+        if (_disposed) {
+          await sessionStore.clear();
+          return;
+        }
+        _session = session;
+        _serverUrl = session.serverUrl;
+        _phase = SetupPhase.ready;
+      });
+    } on Object catch (error) {
+      if (!_disposed) _error = _friendlyError(error);
+    } finally {
+      if (!_disposed) {
+        _isBusy = false;
+        _notify();
+      }
+    }
   }
 
   Future<void> reconnectSession() {
@@ -753,10 +818,13 @@ class ConnectivityViewModel extends ChangeNotifier {
   }
 
   static String _friendlyError(Object error) {
-    if (error is JellyfinApiException) return error.message;
-    return error.toString().replaceFirst(
-      RegExp(r'^(Exception|StateError):\s*'),
-      '',
+    if (error is JellyfinApiException) return redactSecrets(error.message);
+    if (error is TailscaleException) return redactSecrets(error.message);
+    return redactSecrets(
+      error.toString().replaceFirst(
+        RegExp(r'^(Exception|StateError):\s*'),
+        '',
+      ),
     );
   }
 

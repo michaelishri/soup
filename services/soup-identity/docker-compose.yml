@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: soup
+      POSTGRES_PASSWORD: soup
+      POSTGRES_DB: soup_identity
+    ports:
+      - "5433:5432"
+    volumes:
+      - soup_identity_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soup -d soup_identity"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  soup-identity:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      PUBLIC_BASE_URL: http://localhost:8787
+      DATABASE_URL: postgres://soup:soup@postgres:5432/soup_identity
+      ALLOW_DEV_LOGIN: "true"
+      DEV_GOOGLE_SUB: dev-google-sub-001
+      DEV_GOOGLE_EMAIL: dev@example.com
+      JWT_ALG: EdDSA
+      ASSERTION_TTL_SECONDS: "180"
+      ASSERTION_ISSUER: https://soup.local/identity
+      BOOTSTRAP_PLUGIN_ID: dev-plugin
+      BOOTSTRAP_PLUGIN_SECRET: dev-plugin-secret-change-me
+      TRANSPORT_GRANT_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      # Optional real Google OIDC:
+      # GOOGLE_CLIENT_ID: ...
+      # GOOGLE_CLIENT_SECRET: ...
+      # GOOGLE_REDIRECT_URI: http://localhost:8787/auth/google/callback
+    volumes:
+      - soup_identity_keys:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  soup_identity_pg:
+  soup_identity_keys:

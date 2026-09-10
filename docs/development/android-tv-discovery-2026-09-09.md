@@ -118,3 +118,36 @@ cards and Retry afterward. This follow-up is newer than the APK identified above
 
 After this fix, `task qa` passes all analyzers and 294 tests (258 app, 12
 Tailscale transport, 24 generated API).
+
+## Emulator networking (testing only)
+
+Default Android emulator networking is a NAT segment (`10.0.2.15/24`). Soup LAN
+discovery only UDP-broadcasts Jellyfin's query on port 7359 to each interface's
+broadcast address. Packets to `10.0.2.255` never reach a real home LAN, so the
+emulator will not list a Jellyfin on another LAN device even when that server
+is healthy.
+
+**Workaround — manual entry (preferred for emulator QA):**
+
+1. Leave Tailscale off.
+2. Choose **Enter address manually**.
+3. Enter `http://<jellyfin-lan-ip>:8096` (or HTTPS / port `8920` as appropriate).
+
+Outbound TCP from the emulator to host-LAN IPs often still works under NAT even
+though broadcast discovery fails. Confirm with
+`adb shell ping -c 1 <jellyfin-lan-ip>` or by selecting Next after manual entry.
+
+**If TCP to the LAN IP fails**, forward through the host (testing only), then
+point Soup at the emulator's host alias:
+
+```sh
+# example on the PC: listen on 18096 and proxy to the LAN Jellyfin
+# socat TCP-LISTEN:18096,fork,reuseaddr TCP:<jellyfin-lan-ip>:8096
+```
+
+In Soup: `http://10.0.2.2:18096`. `adb reverse` only maps emulator→host
+loopback, so it does not replace a forward to another LAN host.
+
+For real UDP discovery, use a physical device on the same LAN, or a connected
+Tailscale session once embedded Tailscale is enrolled (directed peer discovery).
+Do not change production discovery to scan LAN ranges or seed `10.0.2.2`.

@@ -10,6 +10,8 @@ import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
+import 'package:soup/src/data/soup/soup_identity_flags.dart';
+import 'package:soup/src/data/soup/soup_session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup/src/features/appearance/appearance_controller.dart';
@@ -19,6 +21,9 @@ import 'package:soup/src/features/details/details_screen.dart';
 import 'package:soup/src/features/library/library_screen.dart';
 import 'package:soup/src/features/playback/playback_screen.dart';
 import 'package:soup/src/features/shared/app_status_screen.dart';
+import 'package:soup/src/features/soup_auth/soup_device_link_screen.dart';
+import 'package:soup/src/features/soup_auth/soup_device_link_view_model.dart';
+import 'package:soup_identity/soup_identity.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
 
 class SoupApp extends StatefulWidget {
@@ -26,6 +31,9 @@ class SoupApp extends StatefulWidget {
     required this.tailscaleClient,
     this.jellyfinClientFactory = const DefaultJellyfinClientFactory(),
     this.sessionStore = const SecureSessionStore(),
+    this.soupSessionStore = const SecureSoupSessionStore(),
+    this.soupIdentityFlags = SoupIdentityFlags.fromEnvironment,
+    this.soupIdentityClient,
     this.connectionStore,
     this.appearanceStore,
     this.database,
@@ -36,6 +44,9 @@ class SoupApp extends StatefulWidget {
   final TailscaleClient tailscaleClient;
   final JellyfinClientFactory jellyfinClientFactory;
   final SessionStore sessionStore;
+  final SoupSessionStore soupSessionStore;
+  final SoupIdentityFlags soupIdentityFlags;
+  final SoupIdentityClient? soupIdentityClient;
   final ConnectionPreferencesStore? connectionStore;
   final AppearanceStore? appearanceStore;
   final SoupDatabase? database;
@@ -48,10 +59,13 @@ class SoupApp extends StatefulWidget {
 class _SoupAppState extends State<SoupApp> {
   late final ConnectivityViewModel _viewModel;
   late final AppearanceController _appearanceController;
+  SoupDeviceLinkViewModel? _soupAuth;
   SoupDatabase? _database;
   late final bool _ownsDatabase;
   Object? _navigationIdentity;
   GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  bool _adoptedSoupTransport = false;
+  bool _adoptedSoupJellyfin = false;
 
   @override
   void initState() {
@@ -69,12 +83,31 @@ class _SoupAppState extends State<SoupApp> {
     _appearanceController = AppearanceController(
       widget.appearanceStore ?? SharedPreferencesAppearanceStore(),
     )..initialize();
+    if (widget.soupIdentityFlags.enabled) {
+      final client =
+          widget.soupIdentityClient ??
+          (widget.soupIdentityFlags.useMock
+              ? MockSoupIdentityClient()
+              : HttpSoupIdentityClient(
+                  baseUrl: widget.soupIdentityFlags.baseUri,
+                ));
+      _soupAuth = SoupDeviceLinkViewModel(
+        client: client,
+        sessionStore: widget.soupSessionStore,
+        jellyfinSessionStore: widget.sessionStore,
+        jellyfinApiProvider: () => _viewModel.authenticatedApi(),
+        tailscaleClient: widget.tailscaleClient,
+        connectTransportGrants:
+            widget.soupIdentityFlags.connectTransportGrants,
+      )..initialize();
+    }
   }
 
   @override
   void dispose() {
     _viewModel.dispose();
     _appearanceController.dispose();
+    _soupAuth?.dispose();
     final database = _database;
     if (_ownsDatabase && database != null) unawaited(database.close());
     super.dispose();
@@ -82,8 +115,13 @@ class _SoupAppState extends State<SoupApp> {
 
   @override
   Widget build(BuildContext context) {
+    final soupAuth = _soupAuth;
     return ListenableBuilder(
-      listenable: Listenable.merge([_viewModel, _appearanceController]),
+      listenable: Listenable.merge([
+        _viewModel,
+        _appearanceController,
+        ?soupAuth,
+      ]),
       builder: (context, _) {
         final session = _viewModel.session;
         final authenticated =
@@ -108,10 +146,12 @@ class _SoupAppState extends State<SoupApp> {
           home: Builder(
             builder: (context) {
               if (!_viewModel.initialized ||
-                  !_appearanceController.initialized) {
+                  !_appearanceController.initialized ||
+                  (soupAuth != null && !soupAuth.initialized)) {
                 final error =
                     _viewModel.initializationError ??
-                    _appearanceController.loadError;
+                    _appearanceController.loadError ??
+                    soupAuth?.error;
                 return AppStatusScreen(
                   title: error == null
                       ? 'Opening Soup'
@@ -123,7 +163,40 @@ class _SoupAppState extends State<SoupApp> {
                       : () {
                           _viewModel.initialize();
                           _appearanceController.initialize();
+                          unawaited(soupAuth?.initialize());
                         },
+                );
+              }
+              // Wave 3: Soup Identity gate beside legacy onboarding.
+              if (soupAuth != null && soupAuth.showsAuthShell) {
+                return SoupDeviceLinkScreen(viewModel: soupAuth);
+              }
+              if (soupAuth != null &&
+                  soupAuth.transportConnected &&
+                  !_adoptedSoupTransport &&
+                  _viewModel.initialized) {
+                _adoptedSoupTransport = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  unawaited(_viewModel.adoptSoupAuthKeyTransport());
+                });
+              }
+              final soupJellyfin = soupAuth?.jellyfinSession;
+              if (soupAuth != null &&
+                  soupJellyfin != null &&
+                  !_adoptedSoupJellyfin &&
+                  _viewModel.initialized) {
+                _adoptedSoupJellyfin = true;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  unawaited(
+                    _viewModel.adoptSoupJellyfinSession(soupJellyfin),
+                  );
+                });
+              }
+              if (soupAuth != null && soupJellyfin != null && session == null) {
+                return const AppStatusScreen(
+                  title: 'Opening Soup',
+                  message: 'Finishing your Jellyfin sign-in…',
+                  busy: true,
                 );
               }
               if (session != null && !authenticated) {
@@ -158,9 +231,16 @@ class _SoupAppState extends State<SoupApp> {
                 return _AuthenticatedHome(
                   key: ValueKey('${session.serverId}:${session.userId}'),
                   viewModel: _viewModel,
+                  soupAuth: soupAuth,
                   appearanceController: _appearanceController,
                   session: session,
                   database: _database ??= SoupDatabase(),
+                  onSignOut: () async {
+                    await _viewModel.signOut();
+                    await soupAuth?.clearSession();
+                    _adoptedSoupTransport = false;
+                    _adoptedSoupJellyfin = false;
+                  },
                 );
               }
               return ConnectivityScreen(viewModel: _viewModel);
@@ -178,13 +258,17 @@ class _AuthenticatedHome extends StatefulWidget {
     required this.session,
     required this.appearanceController,
     required this.database,
+    required this.onSignOut,
+    this.soupAuth,
     super.key,
   });
 
   final ConnectivityViewModel viewModel;
+  final SoupDeviceLinkViewModel? soupAuth;
   final JellyfinSession session;
   final AppearanceController appearanceController;
   final SoupDatabase database;
+  final Future<void> Function() onSignOut;
 
   @override
   State<_AuthenticatedHome> createState() => _AuthenticatedHomeState();
@@ -193,8 +277,33 @@ class _AuthenticatedHome extends StatefulWidget {
 class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
   late Future<_AuthenticatedDependencies> _dependencies = _loadDependencies();
   _AuthenticatedDependencies? _resolvedDependencies;
+  late JellyfinSession _session = widget.session;
 
   Future<_AuthenticatedDependencies> _loadDependencies() async {
+    var session = widget.session;
+    final soupAuth = widget.soupAuth;
+    if (soupAuth != null && soupAuth.performJellyfinExchange) {
+      try {
+        final ok = await soupAuth.ensureJellyfinSessionValid();
+        if (!ok) {
+          throw const JellyfinApiException(
+            'Your Soup sign-in expired. Sign in with Google again.',
+            statusCode: 401,
+          );
+        }
+        session = soupAuth.jellyfinSession ?? session;
+        if (!identical(session, widget.viewModel.session) &&
+            soupAuth.jellyfinSession != null) {
+          await widget.viewModel.adoptSoupJellyfinSession(
+            soupAuth.jellyfinSession!,
+          );
+          session = soupAuth.jellyfinSession!;
+        }
+      } on JellyfinApiException {
+        rethrow;
+      }
+    }
+    _session = session;
     final api = await widget.viewModel.authenticatedApi();
     final dependencies = _AuthenticatedDependencies(
       api: api,
@@ -202,12 +311,12 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
         database: widget.database,
         librarySource: api,
         detailsSource: api,
-        session: widget.session,
+        session: session,
       ),
       artworkRepository: ArtworkCache(
         database: widget.database,
         networkSource: api,
-        session: widget.session,
+        session: session,
       ),
     );
     if (!mounted) {
@@ -239,8 +348,8 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
             source: api,
             metadataRepository: dependencies.metadataRepository,
             artworkRepository: dependencies.artworkRepository,
-            session: widget.session,
-            onSignOut: widget.viewModel.signOut,
+            session: _session,
+            onSignOut: widget.onSignOut,
             appearance: widget.appearanceController.effectiveSettings,
             onSaveAppearance: widget.appearanceController.save,
             onOpenItem: (item) {
@@ -251,14 +360,14 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
                     artworkSource: api,
                     metadataRepository: dependencies.metadataRepository,
                     artworkRepository: dependencies.artworkRepository,
-                    session: widget.session,
+                    session: _session,
                     item: item,
                     onPlay: (item, startAt) {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => PlaybackScreen(
                             api: api,
-                            session: widget.session,
+                            session: _session,
                             item: item,
                             startAt: startAt,
                           ),
@@ -272,12 +381,25 @@ class _AuthenticatedHomeState extends State<_AuthenticatedHome> {
           );
         }
         if (snapshot.hasError) {
+          final error = snapshot.error;
+          final expired =
+              error is JellyfinApiException && error.statusCode == 401;
           return AppStatusScreen(
-            title: 'Could not open your library',
-            message: 'Your sign-in is saved. Please try again.',
-            onRetry: () => setState(() {
-              _dependencies = _loadDependencies();
-            }),
+            title: expired
+                ? 'Soup sign-in needed'
+                : 'Could not open your library',
+            message: expired
+                ? 'Your Soup session expired. Sign in with Google again.'
+                : 'Your sign-in is saved. Please try again.',
+            onRetry: () {
+              if (expired) {
+                unawaited(widget.onSignOut());
+                return;
+              }
+              setState(() {
+                _dependencies = _loadDependencies();
+              });
+            },
           );
         }
         return const Scaffold(body: Center(child: CircularProgressIndicator()));

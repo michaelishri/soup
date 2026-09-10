@@ -51,6 +51,53 @@ void main() {
     );
   });
 
+  test('waitUntilConnected resolves for an already-connected status', () async {
+    final client = _RecordingTailscaleClient()
+      ..emit(
+        const TailscaleStatus.connected(
+          hostname: 'soup',
+          tailnetIp: '100.64.0.1',
+          proxy: TailscaleProxy(
+            host: '127.0.0.1',
+            port: 1,
+            password: 'secret',
+          ),
+        ),
+      );
+
+    final status = await client.waitUntilConnected(
+      timeout: const Duration(seconds: 1),
+    );
+    expect(status.phase, TailscaleConnectionPhase.connected);
+  });
+
+  test('waitUntilConnected throws when status becomes failed', () async {
+    final client = _RecordingTailscaleClient()
+      ..emit(const TailscaleStatus.failed('bad key'));
+
+    await expectLater(
+      client.waitUntilConnected(timeout: const Duration(seconds: 1)),
+      throwsA(
+        isA<TailscaleException>().having(
+          (e) => e.message,
+          'message',
+          'bad key',
+        ),
+      ),
+    );
+  });
+
+  test('redactNativeSecrets strips tskey material', () {
+    expect(
+      redactNativeSecrets('up failed: tskey-auth-abcDEF123'),
+      isNot(contains('tskey-auth')),
+    );
+    expect(
+      redactNativeSecrets('up failed: tskey-auth-abcDEF123'),
+      contains('[redacted]'),
+    );
+  });
+
   test('unavailable adapter rejects interactive registration clearly', () {
     final client = UnavailableTailscaleClient();
 
@@ -132,3 +179,39 @@ void main() {
     expect(status.backendState, 'NeedsLogin');
   });
 }
+
+class _RecordingTailscaleClient implements TailscaleClient {
+  final _statuses = StreamController<TailscaleStatus>.broadcast(sync: true);
+  TailscaleStatus _status = const TailscaleStatus.disconnected();
+
+  void emit(TailscaleStatus value) {
+    _status = value;
+    if (!_statuses.isClosed) _statuses.add(value);
+  }
+
+  @override
+  Stream<TailscaleStatus> get statuses => _statuses.stream;
+
+  @override
+  TailscaleStatus get status => _status;
+
+  @override
+  Future<void> restore() async {}
+
+  @override
+  Future<void> connectInteractively() async {}
+
+  @override
+  Future<void> connectWithAuthKey({required String authKey}) async {}
+
+  @override
+  Future<void> disconnect() async {}
+
+  @override
+  Future<List<TailscalePeer>> peers() async => const [];
+
+  @override
+  TailscaleDatagramSession openDatagrams() =>
+      throw UnsupportedError('No datagrams in test client');
+}
+

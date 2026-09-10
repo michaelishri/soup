@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:soup/src/data/jellyfin/jellyfin_api.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_view_model.dart';
 import 'package:soup_tailscale/soup_tailscale.dart';
@@ -70,6 +71,37 @@ void main() {
     expect(client.restores, 1);
     await model.authenticatedApi();
     expect(factory.modes, [ConnectionMode.tailscale]);
+  });
+
+  test('adoptSoupAuthKeyTransport skips interactive QR path', () async {
+    await model.initialize();
+    expect(model.mode, ConnectionMode.direct);
+    client.emit(FakeTailscaleClient.connectedStatus);
+    await model.adoptSoupAuthKeyTransport();
+    expect(model.mode, ConnectionMode.tailscale);
+    expect(model.tailscaleConnected, isTrue);
+    expect(model.phase, SetupPhase.server);
+    expect(preferences.mode, ConnectionMode.tailscale);
+    expect(client.interactiveConnects, 0);
+    expect(client.authKeyConnects, 0);
+  });
+
+  test('adoptSoupJellyfinSession skips password and Quick Connect', () async {
+    await model.initialize();
+    client.emit(FakeTailscaleClient.connectedStatus);
+    await model.adoptSoupAuthKeyTransport();
+    final soupSession = JellyfinSession(
+      serverUrl: Uri.parse('http://jellyfin.tailnet.ts.net/'),
+      serverId: 'jf-1',
+      userId: 'u1',
+      userName: 'Guest',
+      accessToken: 'soup-exchanged',
+    );
+    await model.adoptSoupJellyfinSession(soupSession);
+    expect(model.phase, SetupPhase.ready);
+    expect(model.session?.accessToken, 'soup-exchanged');
+    expect(sessions.session?.accessToken, 'soup-exchanged');
+    expect(model.quickConnectPhase, QuickConnectPhase.idle);
   });
 
   test(
