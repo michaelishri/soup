@@ -485,20 +485,29 @@ class JellyfinApi
         )
         .timeout(const Duration(seconds: 20));
     if (response.statusCode == 401) {
-      throw const JellyfinApiException(
-        'Soup could not verify your sign-in with Jellyfin.',
+      throw JellyfinApiException(
+        _soupExchangeErrorMessage(
+          response.body,
+          'Soup could not verify your sign-in with Jellyfin.',
+        ),
         statusCode: 401,
       );
     }
     if (response.statusCode == 403) {
-      throw const JellyfinApiException(
-        'You are not invited on this Jellyfin server yet.',
+      throw JellyfinApiException(
+        _soupExchangeErrorMessage(
+          response.body,
+          'You are not invited on this Jellyfin server yet.',
+        ),
         statusCode: 403,
       );
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw JellyfinApiException(
-        'Could not finish Soup Jellyfin sign-in (HTTP ${response.statusCode}).',
+        _soupExchangeErrorMessage(
+          response.body,
+          'Could not finish Soup Jellyfin sign-in (HTTP ${response.statusCode}).',
+        ),
         statusCode: response.statusCode,
       );
     }
@@ -1186,6 +1195,19 @@ class JellyfinApi
   static String _normaliseBasePath(String path) {
     final withoutTrailing = path.replaceFirst(RegExp(r'/+$'), '');
     return withoutTrailing.isEmpty ? '/' : '$withoutTrailing/';
+  }
+
+  static String _soupExchangeErrorMessage(String body, String fallback) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['message'] is String) {
+        final message = (decoded['message'] as String).trim();
+        if (message.isNotEmpty) return message;
+      }
+    } on Object {
+      // Keep fallback when the body is not JSON.
+    }
+    return fallback;
   }
 
   static JellyfinApiException _mapGeneratedError(

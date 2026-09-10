@@ -31,7 +31,12 @@ void main() {
     await model.initialize();
 
     await tester.pumpWidget(
-      MaterialApp(home: SoupDeviceLinkScreen(viewModel: model)),
+      MaterialApp(
+        home: SoupDeviceLinkScreen(
+          viewModel: model,
+          onUseDirectLogin: () {},
+        ),
+      ),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
@@ -42,6 +47,28 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('MOCK-'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('soup-device-link-direct-login')),
+      findsOneWidget,
+    );
+    expect(find.text('Sign in with Jellyfin'), findsOneWidget);
+
+    final jellyfinRect = tester.getRect(
+      find.byKey(const ValueKey('soup-device-link-direct-login')),
+    );
+    final newCodeRect = tester.getRect(
+      find.byKey(const ValueKey('soup-device-link-new-code')),
+    );
+    final cardRight = tester
+        .getRect(find.byKey(const ValueKey('soup-device-link-qr')))
+        .right;
+    // New code bottom-left; Jellyfin opt-out bottom-right on the same row.
+    expect(jellyfinRect.left, greaterThan(newCodeRect.right));
+    expect(
+      (jellyfinRect.center.dy - newCodeRect.center.dy).abs(),
+      lessThan(24),
+    );
+    expect(jellyfinRect.right, greaterThan(cardRight - 24));
 
     await tester.pumpWidget(const SizedBox.shrink());
     model.dispose();

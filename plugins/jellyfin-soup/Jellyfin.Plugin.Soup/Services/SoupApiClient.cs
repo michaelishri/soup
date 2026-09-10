@@ -63,15 +63,15 @@ public sealed class SoupApiClient
     }
 
     /// <summary>
-    /// PUT /v1/servers/{serverId}/entitlements/{googleSub}.
+    /// PUT /v1/servers/{serverId}/entitlements/{email}.
     /// </summary>
-    /// <param name="googleSub">Google subject.</param>
+    /// <param name="email">Google subject.</param>
     /// <param name="displayName">Optional display name.</param>
     /// <param name="jellyfinUserHint">Optional Jellyfin username hint.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Entitlement record JSON.</returns>
     public async Task<JsonElement> UpsertEntitlementAsync(
-        string googleSub,
+        string email,
         string? displayName,
         string? jellyfinUserHint,
         CancellationToken cancellationToken = default)
@@ -85,24 +85,24 @@ public sealed class SoupApiClient
 
         return await SendAsync(
                 HttpMethod.Put,
-                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(googleSub)}",
+                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(email)}",
                 body,
                 cancellationToken)
             .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// DELETE /v1/servers/{serverId}/entitlements/{googleSub}.
+    /// DELETE /v1/servers/{serverId}/entitlements/{email}.
     /// </summary>
-    /// <param name="googleSub">Google subject.</param>
+    /// <param name="email">Google subject.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    public async Task RevokeEntitlementAsync(string googleSub, CancellationToken cancellationToken = default)
+    public async Task RevokeEntitlementAsync(string email, CancellationToken cancellationToken = default)
     {
         var config = RequireConfig();
         await SendAsync(
                 HttpMethod.Delete,
-                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(googleSub)}",
+                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(email)}",
                 body: null,
                 cancellationToken,
                 allowNoContent: true)
@@ -110,9 +110,9 @@ public sealed class SoupApiClient
     }
 
     /// <summary>
-    /// POST /v1/servers/{serverId}/entitlements/{googleSub}/transport-grants
+    /// POST /v1/servers/{serverId}/entitlements/{email}/transport-grants
     /// </summary>
-    /// <param name="googleSub">Google subject.</param>
+    /// <param name="email">Google subject.</param>
     /// <param name="grantType">Grant type (e.g. <c>tailscale_auth_key</c>).</param>
     /// <param name="material">One-time grant material (auth key).</param>
     /// <param name="ttlSeconds">Soup grant TTL (should be ≤ Tailscale key expiry).</param>
@@ -121,7 +121,7 @@ public sealed class SoupApiClient
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Transport grant record JSON (material omitted on subsequent list).</returns>
     public async Task<JsonElement> DepositTransportGrantAsync(
-        string googleSub,
+        string email,
         string grantType,
         string material,
         int ttlSeconds,
@@ -142,7 +142,7 @@ public sealed class SoupApiClient
 
         return await SendAsync(
                 HttpMethod.Post,
-                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(googleSub)}/transport-grants",
+                $"/v1/servers/{Uri.EscapeDataString(config.ServerId)}/entitlements/{Uri.EscapeDataString(email)}/transport-grants",
                 body,
                 cancellationToken)
             .ConfigureAwait(false);

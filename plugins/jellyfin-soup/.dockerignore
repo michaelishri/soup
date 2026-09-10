@@ -1,0 +1,8 @@
+.publish/
+**/bin/
+**/obj/
+**/.vs/
+**/*.user
+**/*.suo
+.git/
+docker/plugin/.keep

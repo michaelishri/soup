@@ -4,7 +4,7 @@ import { openSecret, sealSecret } from "./secret_box.js";
 export type TransportGrantRow = {
   id: string;
   server_id: string;
-  google_sub: string;
+  email: string;
   grant_type: string;
   material: string;
   expires_at: Date;
@@ -32,7 +32,7 @@ export const GRANT_TTL_MAX_SECONDS = 86_400;
 
 export type DepositInput = {
   serverId: string;
-  googleSub: string;
+  email: string;
   grantType: string;
   material: string;
   ttlSeconds: number;
@@ -97,25 +97,25 @@ export async function depositTransportGrant(
       `UPDATE transport_grants
        SET revoked_at = now()
        WHERE server_id = $1
-         AND google_sub = $2
+         AND email = $2
          AND claimed_at IS NULL
          AND revoked_at IS NULL`,
-      [input.serverId, input.googleSub],
+      [input.serverId, input.email],
     );
 
     const sealed = sealSecret(input.material, encryptionKey);
     const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
     const { rows } = await client.query<TransportGrantRow>(
       `INSERT INTO transport_grants
-         (server_id, google_sub, grant_type, material, expires_at,
+         (server_id, email, grant_type, material, expires_at,
           tailscale_key_id, capabilities, single_claim)
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
-       RETURNING id, server_id, google_sub, grant_type, material, expires_at,
+       RETURNING id, server_id, email, grant_type, material, expires_at,
                  claimed_at, created_at, tailscale_key_id, capabilities,
                  revoked_at, single_claim`,
       [
         input.serverId,
-        input.googleSub,
+        input.email,
         input.grantType,
         sealed,
         expiresAt,
@@ -137,16 +137,16 @@ export async function depositTransportGrant(
 export async function listTransportGrants(
   db: Db,
   serverId: string,
-  googleSub: string,
+  email: string,
 ): Promise<TransportGrantRow[]> {
   const { rows } = await db.query<TransportGrantRow>(
-    `SELECT id, server_id, google_sub, grant_type, material, expires_at,
+    `SELECT id, server_id, email, grant_type, material, expires_at,
             claimed_at, created_at, tailscale_key_id, capabilities,
             revoked_at, single_claim
      FROM transport_grants
-     WHERE server_id = $1 AND google_sub = $2 AND revoked_at IS NULL
+     WHERE server_id = $1 AND email = $2 AND revoked_at IS NULL
      ORDER BY created_at DESC`,
-    [serverId, googleSub],
+    [serverId, email],
   );
   return rows;
 }
@@ -155,7 +155,7 @@ export async function revokeTransportGrant(
   db: Db,
   input: {
     serverId: string;
-    googleSub: string;
+    email: string;
     grantId: string;
     pluginId: string;
   },
@@ -171,9 +171,9 @@ export async function revokeTransportGrant(
      SET revoked_at = now()
      WHERE id = $1
        AND server_id = $2
-       AND google_sub = $3
+       AND email = $3
        AND revoked_at IS NULL`,
-    [input.grantId, input.serverId, input.googleSub],
+    [input.grantId, input.serverId, input.email],
   );
   return (result.rowCount ?? 0) > 0 ? "ok" : "not_found";
 }
@@ -186,7 +186,7 @@ export async function revokeEntitlementWithGrants(
   db: Db,
   input: {
     serverId: string;
-    googleSub: string;
+    email: string;
     pluginId: string;
   },
 ): Promise<"ok" | "not_found"> {
@@ -204,9 +204,9 @@ export async function revokeEntitlementWithGrants(
 
     const { rows: locked } = await client.query(
       `SELECT 1 FROM entitlements
-       WHERE server_id = $1 AND google_sub = $2
+       WHERE server_id = $1 AND email = $2
        FOR UPDATE`,
-      [input.serverId, input.googleSub],
+      [input.serverId, input.email],
     );
     if (!locked[0]) {
       await client.query("ROLLBACK");
@@ -216,12 +216,12 @@ export async function revokeEntitlementWithGrants(
     await client.query(
       `UPDATE transport_grants
        SET revoked_at = now()
-       WHERE server_id = $1 AND google_sub = $2 AND revoked_at IS NULL`,
-      [input.serverId, input.googleSub],
+       WHERE server_id = $1 AND email = $2 AND revoked_at IS NULL`,
+      [input.serverId, input.email],
     );
     await client.query(
-      `DELETE FROM entitlements WHERE server_id = $1 AND google_sub = $2`,
-      [input.serverId, input.googleSub],
+      `DELETE FROM entitlements WHERE server_id = $1 AND email = $2`,
+      [input.serverId, input.email],
     );
     await client.query("COMMIT");
     return "ok";
@@ -242,7 +242,7 @@ export async function claimTransportGrant(
   db: Db,
   encryptionKey: Buffer,
   serverId: string,
-  googleSub: string,
+  email: string,
 ): Promise<TransportGrantPublic | null> {
   const client = await db.connect();
   try {
@@ -250,9 +250,9 @@ export async function claimTransportGrant(
     // Serialize against entitlement revoke (FOR UPDATE on that path).
     const { rows: entitled } = await client.query(
       `SELECT 1 FROM entitlements
-       WHERE server_id = $1 AND google_sub = $2
+       WHERE server_id = $1 AND email = $2
        FOR SHARE`,
-      [serverId, googleSub],
+      [serverId, email],
     );
     if (!entitled[0]) {
       await client.query("COMMIT");
@@ -265,14 +265,14 @@ export async function claimTransportGrant(
     const { rows: candidates } = await client.query<{ id: string }>(
       `SELECT id FROM transport_grants
        WHERE server_id = $1
-         AND google_sub = $2
+         AND email = $2
          AND claimed_at IS NULL
          AND revoked_at IS NULL
          AND expires_at > now()
        ORDER BY created_at DESC
        LIMIT 1
        FOR UPDATE`,
-      [serverId, googleSub],
+      [serverId, email],
     );
     const candidate = candidates[0];
     if (!candidate) {
@@ -287,7 +287,7 @@ export async function claimTransportGrant(
          AND claimed_at IS NULL
          AND revoked_at IS NULL
          AND expires_at > now()
-       RETURNING id, server_id, google_sub, grant_type, material, expires_at,
+       RETURNING id, server_id, email, grant_type, material, expires_at,
                  claimed_at, created_at, tailscale_key_id, capabilities,
                  revoked_at, single_claim`,
       [candidate.id],

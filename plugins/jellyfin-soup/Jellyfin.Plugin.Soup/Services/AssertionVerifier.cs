@@ -39,6 +39,25 @@ public sealed class AssertionVerifier
 
         var jwksJson = await GetJwksCachedAsync(cancellationToken).ConfigureAwait(false);
         var jwks = new JsonWebKeySet(jwksJson);
+        var signingKeys = jwks.GetSigningKeys().ToList();
+        if (signingKeys.Count == 0)
+        {
+            // Microsoft.IdentityModel does not convert OKP/Ed25519 JWKs via GetSigningKeys().
+            // Prefer RS256 (or ES*) for Soup Identity so plugin verification works.
+            var okp = jwks.Keys.Any(k =>
+                string.Equals(k.Kty, "OKP", StringComparison.OrdinalIgnoreCase));
+            if (okp)
+            {
+                throw new SecurityTokenException(
+                    "Soup JWKS is EdDSA/OKP; this plugin needs RS256 (set JWT_ALG=RS256 on Soup Identity).");
+            }
+
+            signingKeys = jwks.Keys.Cast<SecurityKey>().ToList();
+            if (signingKeys.Count == 0)
+            {
+                throw new SecurityTokenException("Soup JWKS contained no usable signing keys");
+            }
+        }
 
         var parameters = new TokenValidationParameters
         {
@@ -49,7 +68,7 @@ public sealed class AssertionVerifier
             ValidateLifetime = true,
             RequireExpirationTime = true,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = jwks.GetSigningKeys(),
+            IssuerSigningKeys = signingKeys,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
 
@@ -68,13 +87,18 @@ public sealed class AssertionVerifier
             throw new SecurityTokenException("JWT typ must be soup_assertion");
         }
 
-        var sub = token.Subject;
-        if (string.IsNullOrWhiteSpace(sub))
+        var email = token.Subject;
+        if (string.IsNullOrWhiteSpace(email))
         {
-            throw new SecurityTokenException("Assertion missing sub");
+            token.TryGetPayloadValue<string>("email", out email);
         }
 
-        token.TryGetPayloadValue<string>("email", out var email);
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@', StringComparison.Ordinal))
+        {
+            throw new SecurityTokenException("Assertion missing email subject");
+        }
+
+        email = email.Trim().ToLowerInvariant();
         token.TryGetPayloadValue<string>("server_id", out var serverId);
 
         if (!string.IsNullOrWhiteSpace(serverId)
@@ -83,7 +107,7 @@ public sealed class AssertionVerifier
             throw new SecurityTokenException("Assertion server_id does not match this plugin");
         }
 
-        return new AssertionClaims(sub, email, serverId);
+        return new AssertionClaims(email, serverId);
     }
 
     private async Task<string> GetJwksCachedAsync(CancellationToken cancellationToken)
@@ -110,7 +134,6 @@ public sealed class AssertionVerifier
 /// <summary>
 /// Claims extracted from a verified Soup assertion.
 /// </summary>
-/// <param name="GoogleSub">Google OIDC subject.</param>
-/// <param name="Email">Optional email claim.</param>
+/// <param name="Email">Google account email (JWT <c>sub</c>).</param>
 /// <param name="ServerId">Optional server_id claim.</param>
-public sealed record AssertionClaims(string GoogleSub, string? Email, string? ServerId);
+public sealed record AssertionClaims(string Email, string? ServerId);

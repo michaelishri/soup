@@ -19,23 +19,22 @@ services:
     build: .
     ports:
       - "8787:8787"
+    env_file:
+      - .env
     environment:
       PORT: "8787"
-      PUBLIC_BASE_URL: http://localhost:8787
+      PUBLIC_BASE_URL: http://192.168.68.59:8787
       DATABASE_URL: postgres://soup:soup@postgres:5432/soup_identity
       ALLOW_DEV_LOGIN: "true"
-      DEV_GOOGLE_SUB: dev-google-sub-001
       DEV_GOOGLE_EMAIL: dev@example.com
-      JWT_ALG: EdDSA
+      JWT_ALG: RS256
       ASSERTION_TTL_SECONDS: "180"
       ASSERTION_ISSUER: https://soup.local/identity
       BOOTSTRAP_PLUGIN_ID: dev-plugin
       BOOTSTRAP_PLUGIN_SECRET: dev-plugin-secret-change-me
       TRANSPORT_GRANT_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-      # Optional real Google OIDC:
-      # GOOGLE_CLIENT_ID: ...
-      # GOOGLE_CLIENT_SECRET: ...
-      # GOOGLE_REDIRECT_URI: http://localhost:8787/auth/google/callback
+      # Prefer LAN callback so phone Google SSO returns to Soup Identity (overrides .env).
+      GOOGLE_REDIRECT_URI: http://192.168.68.59:8787/auth/google/callback
     volumes:
       - soup_identity_keys:/app/data
     depends_on:

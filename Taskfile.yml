@@ -315,6 +315,46 @@ tasks:
     cmds:
       - '"{{.ADB}}" -s "{{.EMULATOR_SERIAL}}" emu kill'
 
+  jellyfin:stage:
+    desc: Publish Soup Auth plugin into plugins/jellyfin-soup/docker/plugin
+    dir: plugins/jellyfin-soup
+    cmds:
+      - ./scripts/stage-plugin.sh
+
+  jellyfin:build:
+    desc: Stage the plugin and build soup-jellyfin:local
+    deps: [jellyfin:stage]
+    dir: plugins/jellyfin-soup
+    cmds:
+      - docker build -f docker/Dockerfile -t soup-jellyfin:local .
+
+  jellyfin:rebuild:
+    desc: Restage plugin, rebuild image, and recreate the Jellyfin container
+    deps: [jellyfin:build]
+    dir: plugins/jellyfin-soup
+    cmds:
+      # Project name "docker" matches volumes created by compose in docker/ (keeps admin user).
+      - docker compose -p docker -f docker/docker-compose.yml up -d --force-recreate
+
+  jellyfin:up:
+    desc: Build and start local Jellyfin with Soup Auth (http://localhost:8096)
+    deps: [jellyfin:build]
+    dir: plugins/jellyfin-soup
+    cmds:
+      - docker compose -p docker -f docker/docker-compose.yml up -d
+
+  jellyfin:down:
+    desc: Stop local Soup Jellyfin container
+    dir: plugins/jellyfin-soup
+    cmds:
+      - docker compose -f docker/docker-compose.yml down
+
+  jellyfin:logs:
+    desc: Tail Soup Jellyfin container logs
+    dir: plugins/jellyfin-soup
+    cmds:
+      - docker compose -f docker/docker-compose.yml logs -f --tail=100
+
   clean:
     desc: Remove Flutter build outputs for the app and Tailscale package
     cmds:

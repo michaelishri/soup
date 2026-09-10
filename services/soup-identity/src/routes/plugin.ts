@@ -12,6 +12,7 @@ import {
   toPluginRecord,
 } from "../lib/transport_grants.js";
 import { parseEncryptionKey } from "../lib/secret_box.js";
+import { isValidEmail, normalizeEmail } from "../auth/sessions.js";
 
 export function buildPluginRoutes(deps: { db: Db; env: Env }) {
   const app = new Hono<AppEnv>();
@@ -82,11 +83,18 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
   });
 
   app.put(
-    "/v1/servers/:serverId/entitlements/:googleSub",
+    "/v1/servers/:serverId/entitlements/:email",
     requirePlugin,
     async (c) => {
-      const serverId = c.req.param("serverId");
-      const googleSub = c.req.param("googleSub");
+      const serverId = c.req.param("serverId")!;
+      const rawEmail = c.req.param("email");
+      if (!rawEmail) {
+        return c.json({ error: "bad_request", message: "email required" }, 400);
+      }
+      const email = normalizeEmail(decodeURIComponent(rawEmail));
+      if (!isValidEmail(email)) {
+        return c.json({ error: "bad_request", message: "valid email required" }, 400);
+      }
       const pluginId = c.get("pluginId");
       const body = (await c.req
         .json<{
@@ -114,16 +122,16 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
 
       await deps.db.query(
         `INSERT INTO entitlements
-          (server_id, google_sub, display_name, jellyfin_user_hint, metadata)
+          (server_id, email, display_name, jellyfin_user_hint, metadata)
          VALUES ($1, $2, $3, $4, $5::jsonb)
-         ON CONFLICT (server_id, google_sub) DO UPDATE SET
+         ON CONFLICT (server_id, email) DO UPDATE SET
            display_name = EXCLUDED.display_name,
            jellyfin_user_hint = EXCLUDED.jellyfin_user_hint,
            metadata = EXCLUDED.metadata,
            updated_at = now()`,
         [
           serverId,
-          googleSub,
+          email,
           body.display_name ?? null,
           body.jellyfin_user_hint ?? null,
           JSON.stringify(body.metadata ?? {}),
@@ -132,7 +140,7 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
 
       return c.json({
         server_id: serverId,
-        google_sub: googleSub,
+        email: email,
         display_name: body.display_name ?? null,
         jellyfin_user_hint: body.jellyfin_user_hint ?? null,
         metadata: body.metadata ?? {},
@@ -141,12 +149,16 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
   );
 
   app.delete(
-    "/v1/servers/:serverId/entitlements/:googleSub",
+    "/v1/servers/:serverId/entitlements/:email",
     requirePlugin,
     async (c) => {
+      const email = normalizeEmail(decodeURIComponent(c.req.param("email")!));
+      if (!isValidEmail(email)) {
+        return c.json({ error: "bad_request", message: "valid email required" }, 400);
+      }
       const result = await revokeEntitlementWithGrants(deps.db, {
         serverId: c.req.param("serverId")!,
-        googleSub: c.req.param("googleSub")!,
+        email,
         pluginId: c.get("pluginId"),
       });
       if (result === "not_found") {
@@ -160,11 +172,18 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
   );
 
   app.post(
-    "/v1/servers/:serverId/entitlements/:googleSub/transport-grants",
+    "/v1/servers/:serverId/entitlements/:email/transport-grants",
     requirePlugin,
     async (c) => {
-      const serverId = c.req.param("serverId");
-      const googleSub = c.req.param("googleSub");
+      const serverId = c.req.param("serverId")!;
+      const rawEmail = c.req.param("email");
+      if (!rawEmail) {
+        return c.json({ error: "bad_request", message: "email required" }, 400);
+      }
+      const email = normalizeEmail(decodeURIComponent(rawEmail));
+      if (!isValidEmail(email)) {
+        return c.json({ error: "bad_request", message: "valid email required" }, 400);
+      }
       const pluginId = c.get("pluginId");
 
       const body = await c.req.json<{
@@ -216,8 +235,8 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
       }
 
       const { rows: entitled } = await deps.db.query(
-        `SELECT 1 FROM entitlements WHERE server_id = $1 AND google_sub = $2`,
-        [serverId, googleSub],
+        `SELECT 1 FROM entitlements WHERE server_id = $1 AND email = $2`,
+        [serverId, email],
       );
       if (!entitled[0]) {
         return c.json(
@@ -228,7 +247,7 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
 
       const row = await depositTransportGrant(deps.db, encryptionKey, {
         serverId: serverId!,
-        googleSub: googleSub!,
+        email: email!,
         grantType: body.grant_type,
         material: body.material,
         ttlSeconds: Math.floor(ttl),
@@ -242,11 +261,14 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
   );
 
   app.get(
-    "/v1/servers/:serverId/entitlements/:googleSub/transport-grants",
+    "/v1/servers/:serverId/entitlements/:email/transport-grants",
     requirePlugin,
     async (c) => {
       const serverId = c.req.param("serverId")!;
-      const googleSub = c.req.param("googleSub")!;
+      const email = normalizeEmail(decodeURIComponent(c.req.param("email")!));
+      if (!isValidEmail(email)) {
+        return c.json({ error: "bad_request", message: "valid email required" }, 400);
+      }
       const pluginId = c.get("pluginId");
       const { rows: owned } = await deps.db.query(
         `SELECT 1 FROM servers WHERE server_id = $1 AND plugin_id = $2`,
@@ -256,18 +278,22 @@ export function buildPluginRoutes(deps: { db: Db; env: Env }) {
         return c.json({ error: "not_found", message: "Unknown server" }, 404);
       }
 
-      const rows = await listTransportGrants(deps.db, serverId, googleSub);
+      const rows = await listTransportGrants(deps.db, serverId, email);
       return c.json({ grants: rows.map(toPluginRecord) });
     },
   );
 
   app.delete(
-    "/v1/servers/:serverId/entitlements/:googleSub/transport-grants/:grantId",
+    "/v1/servers/:serverId/entitlements/:email/transport-grants/:grantId",
     requirePlugin,
     async (c) => {
+      const email = normalizeEmail(decodeURIComponent(c.req.param("email")!));
+      if (!isValidEmail(email)) {
+        return c.json({ error: "bad_request", message: "valid email required" }, 400);
+      }
       const result = await revokeTransportGrant(deps.db, {
         serverId: c.req.param("serverId")!,
-        googleSub: c.req.param("googleSub")!,
+        email,
         grantId: c.req.param("grantId")!,
         pluginId: c.get("pluginId"),
       });

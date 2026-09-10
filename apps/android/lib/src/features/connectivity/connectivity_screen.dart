@@ -16,10 +16,14 @@ class ConnectivityScreen extends StatefulWidget {
   const ConnectivityScreen({
     required this.viewModel,
     this.tvTextInput = const TvTextInput(),
+    this.onUseSoupInvite,
     super.key,
   });
   final ConnectivityViewModel viewModel;
   final TvTextInput tvTextInput;
+
+  /// Return to Soup Identity device-link when Identity auth is available.
+  final VoidCallback? onUseSoupInvite;
 
   @override
   State<ConnectivityScreen> createState() => _ConnectivityScreenState();
@@ -829,6 +833,17 @@ class _ConnectivityScreenState extends State<ConnectivityScreen>
         if (!model.tailscaleEnabled) ...[
           const SizedBox(height: 20),
           Text('Select Next to connect directly to Jellyfin.', style: caption),
+        ],
+        if (widget.onUseSoupInvite != null) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const ValueKey('connectivity-use-soup-invite'),
+              onPressed: model.isBusy ? null : widget.onUseSoupInvite,
+              child: const Text('Use Soup invite instead'),
+            ),
+          ),
         ],
         _AnimatedReveal(
           duration: duration,

@@ -13,14 +13,9 @@ public class EntitlementEntry
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     /// <summary>
-    /// Gets or sets the Google OIDC subject. Empty while an email invite is pending.
+    /// Gets or sets the Google account email (join key). Required for Active entitlements.
     /// </summary>
-    public string GoogleSub { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Gets or sets an optional invite email (pending until <see cref="GoogleSub"/> is known).
-    /// </summary>
-    public string? Email { get; set; }
+    public string Email { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets a display name sent to Soup as <c>display_name</c>.
@@ -119,7 +114,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateMissingUsers { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the username prefix used when auto-creating users from Google sub.
+    /// Gets or sets the username prefix used when auto-creating users from Google email.
     /// </summary>
     public string UsernamePrefix { get; set; } = "soup-";
 

@@ -10,8 +10,7 @@ class SoupSession {
     required this.refreshToken,
     required this.expiresIn,
     required this.tokenType,
-    required this.googleSub,
-    this.email,
+    required this.email,
     this.lastServerId,
     this.accessExpiresAt,
   });
@@ -27,7 +26,6 @@ class SoupSession {
       refreshToken: tokens.refreshToken,
       expiresIn: tokens.expiresIn,
       tokenType: tokens.tokenType,
-      googleSub: tokens.googleSub,
       email: tokens.email,
       lastServerId: lastServerId,
       accessExpiresAt: now.add(Duration(seconds: tokens.expiresIn)),
@@ -38,8 +36,7 @@ class SoupSession {
   final String refreshToken;
   final int expiresIn;
   final String tokenType;
-  final String googleSub;
-  final String? email;
+  final String email;
   final String? lastServerId;
   final DateTime? accessExpiresAt;
 
@@ -48,7 +45,6 @@ class SoupSession {
     String? refreshToken,
     int? expiresIn,
     String? tokenType,
-    String? googleSub,
     String? email,
     String? lastServerId,
     DateTime? accessExpiresAt,
@@ -59,7 +55,6 @@ class SoupSession {
       refreshToken: refreshToken ?? this.refreshToken,
       expiresIn: expiresIn ?? this.expiresIn,
       tokenType: tokenType ?? this.tokenType,
-      googleSub: googleSub ?? this.googleSub,
       email: email ?? this.email,
       lastServerId: clearLastServerId
           ? null
@@ -73,7 +68,6 @@ class SoupSession {
     'refreshToken': refreshToken,
     'expiresIn': expiresIn,
     'tokenType': tokenType,
-    'googleSub': googleSub,
     'email': email,
     'lastServerId': lastServerId,
     'accessExpiresAt': accessExpiresAt?.toIso8601String(),
@@ -82,13 +76,14 @@ class SoupSession {
   static SoupSession fromJson(Map<String, Object?> json) {
     final accessToken = json['accessToken'] as String?;
     final refreshToken = json['refreshToken'] as String?;
-    final googleSub = json['googleSub'] as String?;
+    final email = (json['email'] as String?)?.trim().toLowerCase();
     if (accessToken == null ||
         accessToken.isEmpty ||
         refreshToken == null ||
         refreshToken.isEmpty ||
-        googleSub == null ||
-        googleSub.isEmpty) {
+        email == null ||
+        email.isEmpty ||
+        !email.contains('@')) {
       throw const FormatException();
     }
     return SoupSession(
@@ -96,8 +91,7 @@ class SoupSession {
       refreshToken: refreshToken,
       expiresIn: json['expiresIn'] as int? ?? 0,
       tokenType: json['tokenType'] as String? ?? 'Bearer',
-      googleSub: googleSub,
-      email: json['email'] as String?,
+      email: email,
       lastServerId: json['lastServerId'] as String?,
       accessExpiresAt: DateTime.tryParse(
         json['accessExpiresAt'] as String? ?? '',

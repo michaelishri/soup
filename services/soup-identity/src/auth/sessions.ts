@@ -10,58 +10,71 @@ import {
 
 const DEVICE_LINK_TTL_SECONDS = 600;
 
+/** Normalize Google email for join keys (lowercase trimmed). */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function isValidEmail(email: string): boolean {
+  const e = normalizeEmail(email);
+  // Practical check — Google emails are well-formed; reject empty / no-at.
+  return e.length > 3 && e.includes("@") && !e.includes(" ");
+}
+
 export async function upsertSubject(
   db: Db,
   subject: {
-    googleSub: string;
-    email?: string | null;
+    email: string;
+    googleSub?: string | null;
     name?: string | null;
     pictureUrl?: string | null;
   },
 ) {
+  const email = normalizeEmail(subject.email);
+  if (!isValidEmail(email)) {
+    throw new Error("A verified Google email is required");
+  }
   await db.query(
-    `INSERT INTO subjects (google_sub, email, name, picture_url)
+    `INSERT INTO subjects (email, google_sub, name, picture_url)
      VALUES ($1, $2, $3, $4)
-     ON CONFLICT (google_sub) DO UPDATE SET
-       email = COALESCE(EXCLUDED.email, subjects.email),
+     ON CONFLICT (email) DO UPDATE SET
+       google_sub = COALESCE(EXCLUDED.google_sub, subjects.google_sub),
        name = COALESCE(EXCLUDED.name, subjects.name),
        picture_url = COALESCE(EXCLUDED.picture_url, subjects.picture_url),
        updated_at = now()`,
     [
-      subject.googleSub,
-      subject.email ?? null,
+      email,
+      subject.googleSub ?? null,
       subject.name ?? null,
       subject.pictureUrl ?? null,
     ],
   );
+  return email;
 }
 
 export async function createSession(
   db: Db,
   keys: SigningKeys,
   env: Env,
-  input: { googleSub: string; email?: string | null; deviceName?: string },
+  input: { email: string; deviceName?: string },
 ) {
+  const email = normalizeEmail(input.email);
   const refreshToken = randomToken(48);
   const expiresAt = new Date(
     Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
   );
   await db.query(
-    `INSERT INTO sessions (google_sub, refresh_token_hash, device_name, expires_at)
+    `INSERT INTO sessions (email, refresh_token_hash, device_name, expires_at)
      VALUES ($1, $2, $3, $4)`,
-    [input.googleSub, sha256(refreshToken), input.deviceName ?? null, expiresAt],
+    [email, sha256(refreshToken), input.deviceName ?? null, expiresAt],
   );
-  const access = await signAccessToken(keys, env, {
-    sub: input.googleSub,
-    email: input.email,
-  });
+  const access = await signAccessToken(keys, env, { email });
   return {
     access_token: access.token,
     refresh_token: refreshToken,
     expires_in: access.expiresIn,
     token_type: "Bearer" as const,
-    google_sub: input.googleSub,
-    email: input.email ?? null,
+    email,
   };
 }
 
@@ -74,14 +87,12 @@ export async function refreshSession(
   const hash = sha256(refreshToken);
   const { rows } = await db.query<{
     id: string;
-    google_sub: string;
+    email: string;
     expires_at: Date;
     revoked_at: Date | null;
-    email: string | null;
   }>(
-    `SELECT s.id, s.google_sub, s.expires_at, s.revoked_at, sub.email
+    `SELECT s.id, s.email, s.expires_at, s.revoked_at
      FROM sessions s
-     JOIN subjects sub ON sub.google_sub = s.google_sub
      WHERE s.refresh_token_hash = $1`,
     [hash],
   );
@@ -90,7 +101,6 @@ export async function refreshSession(
     return null;
   }
 
-  // Rotate refresh token
   const newRefresh = randomToken(48);
   const expiresAt = new Date(
     Date.now() + env.REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000,
@@ -102,16 +112,12 @@ export async function refreshSession(
     [sha256(newRefresh), expiresAt, row.id],
   );
 
-  const access = await signAccessToken(keys, env, {
-    sub: row.google_sub,
-    email: row.email,
-  });
+  const access = await signAccessToken(keys, env, { email: row.email });
   return {
     access_token: access.token,
     refresh_token: newRefresh,
     expires_in: access.expiresIn,
     token_type: "Bearer" as const,
-    google_sub: row.google_sub,
     email: row.email,
   };
 }
@@ -154,12 +160,10 @@ export async function pollDeviceLink(
   const { rows } = await db.query<{
     status: string;
     expires_at: Date;
-    google_sub: string | null;
     email: string | null;
   }>(
-    `SELECT d.status, d.expires_at, d.google_sub, s.email
+    `SELECT d.status, d.expires_at, d.email
      FROM device_links d
-     LEFT JOIN subjects s ON s.google_sub = d.google_sub
      WHERE d.device_code = $1`,
     [deviceCode],
   );
@@ -178,9 +182,8 @@ export async function pollDeviceLink(
   if (row.status === "expired") return { kind: "expired" as const };
   if (row.status === "pending") return { kind: "pending" as const };
 
-  if (row.status === "approved" && row.google_sub) {
+  if (row.status === "approved" && row.email) {
     const tokens = await createSession(db, keys, env, {
-      googleSub: row.google_sub,
       email: row.email,
       deviceName: "device-link",
     });
@@ -198,21 +201,24 @@ export async function approveDeviceLink(
   db: Db,
   input: {
     userCode: string;
-    googleSub: string;
-    email?: string | null;
+    email: string;
+    googleSub?: string | null;
     name?: string | null;
   },
 ) {
-  await upsertSubject(db, {
-    googleSub: input.googleSub,
+  const email = await upsertSubject(db, {
     email: input.email,
+    googleSub: input.googleSub,
     name: input.name,
   });
 
-  const { rows } = await db.query<{ device_code: string; status: string; expires_at: Date }>(
-    `SELECT device_code, status, expires_at FROM device_links WHERE user_code = $1`,
-    [input.userCode.toUpperCase()],
-  );
+  const { rows } = await db.query<{
+    device_code: string;
+    status: string;
+    expires_at: Date;
+  }>(`SELECT device_code, status, expires_at FROM device_links WHERE user_code = $1`, [
+    input.userCode.toUpperCase(),
+  ]);
   const row = rows[0];
   if (!row) return { ok: false as const, reason: "not_found" };
   if (row.expires_at.getTime() < Date.now() || row.status !== "pending") {
@@ -221,11 +227,11 @@ export async function approveDeviceLink(
 
   await db.query(
     `UPDATE device_links
-     SET status = 'approved', google_sub = $1
+     SET status = 'approved', email = $1
      WHERE device_code = $2`,
-    [input.googleSub, row.device_code],
+    [email, row.device_code],
   );
-  return { ok: true as const };
+  return { ok: true as const, email };
 }
 
 export function googleAuthUrl(env: Env, state: string): string {
@@ -242,7 +248,18 @@ export function googleAuthUrl(env: Env, state: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-export async function exchangeGoogleCode(env: Env, code: string) {
+export type GoogleProfile = {
+  sub: string;
+  email: string;
+  email_verified?: boolean;
+  name?: string;
+  picture?: string;
+};
+
+export async function exchangeGoogleCode(
+  env: Env,
+  code: string,
+): Promise<GoogleProfile> {
   const body = new URLSearchParams({
     code,
     client_id: env.GOOGLE_CLIENT_ID,
@@ -259,20 +276,39 @@ export async function exchangeGoogleCode(env: Env, code: string) {
     const text = await tokenRes.text();
     throw new Error(`Google token exchange failed: ${tokenRes.status} ${text}`);
   }
-  const tokens = (await tokenRes.json()) as { access_token: string; id_token?: string };
-  const userRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-    headers: { authorization: `Bearer ${tokens.access_token}` },
-  });
+  const tokens = (await tokenRes.json()) as {
+    access_token: string;
+    id_token?: string;
+  };
+  const userRes = await fetch(
+    "https://openidconnect.googleapis.com/v1/userinfo",
+    {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    },
+  );
   if (!userRes.ok) {
     throw new Error(`Google userinfo failed: ${userRes.status}`);
   }
   const profile = (await userRes.json()) as {
     sub: string;
     email?: string;
+    email_verified?: boolean;
     name?: string;
     picture?: string;
   };
-  return profile;
+  if (!profile.email || !isValidEmail(profile.email)) {
+    throw new Error("Google account has no usable email");
+  }
+  if (profile.email_verified === false) {
+    throw new Error("Google email is not verified");
+  }
+  return {
+    sub: profile.sub,
+    email: normalizeEmail(profile.email),
+    email_verified: profile.email_verified,
+    name: profile.name,
+    picture: profile.picture,
+  };
 }
 
 /** Opaque state for OIDC round-trip (user_code optional). */
@@ -284,7 +320,9 @@ export function encodeOAuthState(userCode?: string): string {
 
 export function decodeOAuthState(state: string): { user_code: string | null } {
   try {
-    const parsed = JSON.parse(Buffer.from(state, "base64url").toString("utf8")) as {
+    const parsed = JSON.parse(
+      Buffer.from(state, "base64url").toString("utf8"),
+    ) as {
       user_code?: string | null;
     };
     return { user_code: parsed.user_code ?? null };

@@ -19,7 +19,6 @@ class MockSoupIdentityClient implements SoupIdentityClient {
              refreshToken: 'mock-refresh',
              expiresIn: 900,
              tokenType: 'Bearer',
-             googleSub: 'mock-google-sub',
              email: 'dev@example.com',
            ),
        _servers =
@@ -111,7 +110,6 @@ class MockSoupIdentityClient implements SoupIdentityClient {
       refreshToken: 'mock-refresh-${_seq + 1}',
       expiresIn: 900,
       tokenType: 'Bearer',
-      googleSub: _tokens.googleSub,
       email: _tokens.email,
     );
     return _tokens;

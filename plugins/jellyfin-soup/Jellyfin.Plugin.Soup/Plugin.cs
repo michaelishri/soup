@@ -46,15 +46,32 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
+        var ns = GetType().Namespace;
         return
         [
+            // Day-to-day: Dashboard drawer → Soup Invites.
+            // Note: Plugins → Settings also opens this page (jellyfin-web prefers EnableInMainMenu).
+            // Connection settings are reached via the in-page Settings link (top right).
+            new PluginPageInfo
+            {
+                Name = "SoupInvites",
+                DisplayName = "Soup Invites",
+                EnableInMainMenu = true,
+                MenuIcon = "people",
+                EmbeddedResourcePath = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}.Configuration.invitesPage.html",
+                    ns)
+            },
+            // Connection / Tailscale — linked from Invites (not EnableInMainMenu).
             new PluginPageInfo
             {
                 Name = Name,
+                DisplayName = "Soup settings",
                 EmbeddedResourcePath = string.Format(
                     CultureInfo.InvariantCulture,
                     "{0}.Configuration.configPage.html",
-                    GetType().Namespace)
+                    ns)
             }
         ];
     }

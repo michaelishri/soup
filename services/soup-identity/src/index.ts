@@ -48,11 +48,16 @@ async function main() {
   const db = createPool(env.DATABASE_URL);
   const keys = await loadSigningKeys(env);
 
-  try {
-    await applyMigrations(db);
-    await ensureBootstrapPlugin(db, env);
-  } catch (err) {
-    console.warn("Auto-migrate skipped or failed:", err);
+  for (let attempt = 1; attempt <= 10; attempt++) {
+    try {
+      await applyMigrations(db);
+      await ensureBootstrapPlugin(db, env);
+      break;
+    } catch (err) {
+      if (attempt === 10) throw err;
+      console.warn(`Migrate attempt ${attempt}/10 failed; retrying…`, err);
+      await new Promise((r) => setTimeout(r, 500 * attempt));
+    }
   }
 
   const app = createApp({ db, env, keys });

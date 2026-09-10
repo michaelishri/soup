@@ -98,15 +98,16 @@ export async function loadSigningKeys(
 export async function signAccessToken(
   keys: SigningKeys,
   env: Env,
-  claims: { sub: string; email?: string | null },
+  claims: { email: string },
 ): Promise<{ token: string; expiresIn: number }> {
   const expiresIn = env.ACCESS_TOKEN_TTL_SECONDS;
+  const email = claims.email.trim().toLowerCase();
   const token = await new SignJWT({
     typ: "soup_access",
-    email: claims.email ?? undefined,
+    email,
   })
     .setProtectedHeader({ alg: keys.alg, kid: keys.kid, typ: "JWT" })
-    .setSubject(claims.sub)
+    .setSubject(email)
     .setIssuer(env.ASSERTION_ISSUER)
     .setAudience("soup-app")
     .setIssuedAt()
@@ -119,40 +120,85 @@ export async function verifyAccessToken(
   keys: SigningKeys,
   env: Env,
   token: string,
-): Promise<{ sub: string; email?: string }> {
+): Promise<{ email: string }> {
   const { payload } = await jwtVerify(token, keys.publicKey, {
     issuer: env.ASSERTION_ISSUER,
     audience: "soup-app",
   });
-  if (!payload.sub) throw new Error("missing sub");
-  return {
-    sub: payload.sub,
-    email: typeof payload.email === "string" ? payload.email : undefined,
-  };
+  const email =
+    (typeof payload.email === "string" && payload.email) || payload.sub;
+  if (!email) throw new Error("missing email");
+  return { email: email.trim().toLowerCase() };
 }
 
 export async function signAssertion(
   keys: SigningKeys,
   env: Env,
   input: {
-    googleSub: string;
-    email?: string | null;
+    email: string;
     audience: string;
     serverId: string;
   },
 ): Promise<{ assertion: string; expiresIn: number }> {
   const expiresIn = env.ASSERTION_TTL_SECONDS;
+  const email = input.email.trim().toLowerCase();
   const assertion = await new SignJWT({
     typ: "soup_assertion",
-    email: input.email ?? undefined,
+    email,
     server_id: input.serverId,
   })
     .setProtectedHeader({ alg: keys.alg, kid: keys.kid, typ: "JWT" })
-    .setSubject(input.googleSub)
+    .setSubject(email)
     .setIssuer(env.ASSERTION_ISSUER)
     .setAudience(input.audience)
     .setIssuedAt()
     .setExpirationTime(`${expiresIn}s`)
     .sign(keys.privateKey);
   return { assertion, expiresIn };
+}
+
+/** Short-lived proof that Google SSO already verified this email (for TV code entry). */
+export async function signDeviceLinkProof(
+  keys: SigningKeys,
+  env: Env,
+  claims: { email: string; googleSub?: string | null; name?: string | null },
+): Promise<string> {
+  const email = claims.email.trim().toLowerCase();
+  return new SignJWT({
+    typ: "soup_device_link_proof",
+    email,
+    google_sub: claims.googleSub ?? null,
+    name: claims.name ?? null,
+  })
+    .setProtectedHeader({ alg: keys.alg, kid: keys.kid, typ: "JWT" })
+    .setSubject(email)
+    .setIssuer(env.ASSERTION_ISSUER)
+    .setAudience("soup-device-link")
+    .setIssuedAt()
+    .setExpirationTime("10m")
+    .sign(keys.privateKey);
+}
+
+export async function verifyDeviceLinkProof(
+  keys: SigningKeys,
+  env: Env,
+  token: string,
+): Promise<{ email: string; googleSub: string | null; name: string | null }> {
+  const { payload } = await jwtVerify(token, keys.publicKey, {
+    issuer: env.ASSERTION_ISSUER,
+    audience: "soup-device-link",
+  });
+  if (payload.typ !== "soup_device_link_proof") {
+    throw new Error("invalid device-link proof");
+  }
+  const email =
+    (typeof payload.email === "string" && payload.email) ||
+    (typeof payload.sub === "string" ? payload.sub : null);
+  if (!email) throw new Error("missing email");
+  return {
+    email: email.trim().toLowerCase(),
+    googleSub:
+      typeof payload.google_sub === "string" ? payload.google_sub : null,
+    name: typeof payload.name === "string" ? payload.name : null,
+  };
 }

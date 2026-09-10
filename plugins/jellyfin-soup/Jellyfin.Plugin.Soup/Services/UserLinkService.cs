@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.Soup.Services;
 
 /// <summary>
-/// Maps Google subjects to Jellyfin users (create or link).
+/// Maps Google emails to Jellyfin users (create or link).
 /// </summary>
 public sealed class UserLinkService
 {
@@ -30,7 +30,7 @@ public sealed class UserLinkService
     }
 
     /// <summary>
-    /// Resolve or create a Jellyfin user for an entitled Google subject.
+    /// Resolve or create a Jellyfin user for an entitled Google email.
     /// </summary>
     /// <param name="entry">Local entitlement.</param>
     /// <param name="claims">Verified assertion claims.</param>
@@ -54,7 +54,7 @@ public sealed class UserLinkService
             entry.JellyfinUserHint,
             entry.DisplayName,
             claims.Email?.Split('@')[0],
-            config.UsernamePrefix + ShortHash(claims.GoogleSub));
+            config.UsernamePrefix + ShortHash(claims.Email));
 
         preferredName = SanitizeUsername(preferredName!);
 
@@ -65,7 +65,7 @@ public sealed class UserLinkService
         }
 
         // Prefer an exact prior username from the prefix+hash scheme.
-        var hashed = SanitizeUsername(config.UsernamePrefix + ShortHash(claims.GoogleSub));
+        var hashed = SanitizeUsername(config.UsernamePrefix + ShortHash(claims.Email));
         existing = _userManager.GetUserByName(hashed);
         if (existing is not null)
         {
@@ -75,15 +75,15 @@ public sealed class UserLinkService
         if (!config.CreateMissingUsers)
         {
             throw new InvalidOperationException(
-                $"No Jellyfin user linked for Google sub {claims.GoogleSub} and CreateMissingUsers is false");
+                $"No Jellyfin user linked for Google email {claims.Email} and CreateMissingUsers is false");
         }
 
         var username = EnsureUniqueUsername(preferredName);
 
         _logger.LogInformation(
-            "Creating Jellyfin user {Username} for Google sub {GoogleSub}",
+            "Creating Jellyfin user {Username} for Google email {Email}",
             username,
-            claims.GoogleSub);
+            claims.Email);
 
         var user = await _userManager.CreateUserAsync(username).ConfigureAwait(false);
         return user;

@@ -88,11 +88,11 @@ public sealed class TailscaleApiClient
     /// <summary>
     /// Mint a single-use, ephemeral, preauthorized, tagged auth key.
     /// </summary>
-    /// <param name="googleSub">Google subject used for description / audit.</param>
+    /// <param name="email">Google email used for description / audit.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Mint result including one-time key material.</returns>
     public async Task<TailscaleAuthKeyMintResult> MintGuestAuthKeyAsync(
-        string googleSub,
+        string email,
         CancellationToken cancellationToken = default)
     {
         var config = RequireConfig();
@@ -116,7 +116,7 @@ public sealed class TailscaleApiClient
 
         var accessToken = await ResolveAccessTokenAsync(config, cancellationToken).ConfigureAwait(false);
         var tailnet = string.IsNullOrWhiteSpace(config.TailscaleTailnet) ? "-" : config.TailscaleTailnet.Trim();
-        var description = BuildDescription(googleSub);
+        var description = BuildDescription(email);
 
         var body = new Dictionary<string, object?>
         {
@@ -165,9 +165,9 @@ public sealed class TailscaleApiClient
             ?? throw new InvalidOperationException("Tailscale mint response missing key");
 
         _logger.LogInformation(
-            "Minted Tailscale auth key {KeyId} for Google sub {GoogleSub} (expiry {Expiry}s)",
+            "Minted Tailscale auth key {KeyId} for Google email {Email} (expiry {Expiry}s)",
             id,
-            googleSub,
+            email,
             expirySeconds);
 
         return new TailscaleAuthKeyMintResult
@@ -300,9 +300,9 @@ public sealed class TailscaleApiClient
             .ToList();
     }
 
-    private static string BuildDescription(string googleSub)
+    private static string BuildDescription(string email)
     {
-        var shortSub = DescriptionSafe.Replace(googleSub, string.Empty);
+        var shortSub = DescriptionSafe.Replace(email, string.Empty);
         if (shortSub.Length > 24)
         {
             shortSub = shortSub[..24];

@@ -36,10 +36,18 @@ Optional Netflix-style Soup invite path **beside** legacy direct / interactive
 Tailscale + password/Quick Connect. Off by default
 (`SOUP_IDENTITY_AUTH=true` to enable).
 
-When enabled: Google device-link → roster auto-select → optional
-`connectWithAuthKey` → `POST /v1/assertions` → `POST /SoupAuth/Exchange` →
-library. Cold start restores Soup session and silently re-exchanges Jellyfin
-tokens; Google UI returns only if Soup refresh is dead.
+When enabled: TV QR / user code → phone Google SSO (or enter TV code after Google) →
+roster auto-select → optional `connectWithAuthKey` → `POST /v1/assertions` →
+`POST /SoupAuth/Exchange` → library. Cold start restores Soup session and silently
+re-exchanges Jellyfin tokens; Google UI returns only if Soup refresh is dead.
+
+Invite guests by **Google email** in the Jellyfin Soup Invites page. Identity setup:
+[services/soup-identity/README.md](../../services/soup-identity/README.md#google-oidc-setup).
+
+**Direct Jellyfin login (opt-in, not default):** on the Soup device-link screen choose
+**Sign in with Jellyfin instead**. That opens the legacy connection flow where you can
+toggle **Use Tailscale** on or off, then sign in with username/password or Quick Connect.
+**Use Soup invite instead** returns to device-link. Preference is stored as `auth.path.v1`.
 
 ```sh
 flutter run --dart-define=SOUP_IDENTITY_AUTH=true \

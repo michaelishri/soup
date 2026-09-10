@@ -69,18 +69,20 @@ class SoupSessionTokens {
     required this.refreshToken,
     required this.expiresIn,
     required this.tokenType,
-    required this.googleSub,
-    this.email,
+    required this.email,
   });
 
   factory SoupSessionTokens.fromJson(Map<String, Object?> json) {
+    final email = (json['email'] as String?)?.trim().toLowerCase();
+    if (email == null || email.isEmpty || !email.contains('@')) {
+      throw const FormatException('Soup session tokens missing email');
+    }
     return SoupSessionTokens(
       accessToken: json['access_token'] as String,
       refreshToken: json['refresh_token'] as String,
-      expiresIn: json['expires_in'] as int,
+      expiresIn: (json['expires_in'] as num).toInt(),
       tokenType: json['token_type'] as String? ?? 'Bearer',
-      googleSub: json['google_sub'] as String,
-      email: json['email'] as String?,
+      email: email,
     );
   }
 
@@ -88,15 +90,13 @@ class SoupSessionTokens {
   final String refreshToken;
   final int expiresIn;
   final String tokenType;
-  final String googleSub;
-  final String? email;
+  final String email;
 
   Map<String, Object?> toJson() => {
     'access_token': accessToken,
     'refresh_token': refreshToken,
     'expires_in': expiresIn,
     'token_type': tokenType,
-    'google_sub': googleSub,
     'email': email,
   };
 }

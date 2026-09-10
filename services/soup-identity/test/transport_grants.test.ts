@@ -15,7 +15,7 @@ import { createSession, upsertSubject } from "../src/auth/sessions.js";
 
 const PLUGIN_ID = "test-plugin-tg";
 const PLUGIN_SECRET = "test-plugin-secret";
-const GOOGLE_SUB = "test-google-sub-tg";
+const EMAIL = "tg@example.com";
 const SERVER_ID = "test-jf-tg";
 
 describe("secret_box", () => {
@@ -60,13 +60,11 @@ describe("transport grants", () => {
     app = createApp({ db, env, keys });
 
     await upsertSubject(db, {
-      googleSub: GOOGLE_SUB,
-      email: "tg@example.com",
+      email: EMAIL,
       name: "TG Tester",
     });
     const session = await createSession(db, keys, env, {
-      googleSub: GOOGLE_SUB,
-      email: "tg@example.com",
+      email: EMAIL,
     });
     accessToken = session.access_token;
 
@@ -81,12 +79,12 @@ describe("transport grants", () => {
       [SERVER_ID, "Test JF", "jellyfin:test-jf-tg", PLUGIN_ID],
     );
     await db.query(
-      `INSERT INTO entitlements (server_id, google_sub, display_name)
+      `INSERT INTO entitlements (server_id, email, display_name)
        VALUES ($1, $2, $3)
-       ON CONFLICT (server_id, google_sub) DO UPDATE SET
+       ON CONFLICT (server_id, email) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          updated_at = now()`,
-      [SERVER_ID, GOOGLE_SUB, "Tester"],
+      [SERVER_ID, EMAIL, "Tester"],
     );
   });
 
@@ -96,8 +94,8 @@ describe("transport grants", () => {
     ]);
     await db.query(`DELETE FROM entitlements WHERE server_id = $1`, [SERVER_ID]);
     await db.query(`DELETE FROM servers WHERE server_id = $1`, [SERVER_ID]);
-    await db.query(`DELETE FROM sessions WHERE google_sub = $1`, [GOOGLE_SUB]);
-    await db.query(`DELETE FROM subjects WHERE google_sub = $1`, [GOOGLE_SUB]);
+    await db.query(`DELETE FROM sessions WHERE email = $1`, [EMAIL]);
+    await db.query(`DELETE FROM subjects WHERE email = $1`, [EMAIL]);
     await db.query(`DELETE FROM plugin_credentials WHERE plugin_id = $1`, [
       PLUGIN_ID,
     ]);
@@ -119,7 +117,7 @@ describe("transport grants", () => {
     const material = `tskey-auth-${randomBytes(8).toString("hex")}`;
 
     const depositRes = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants`,
       {
         method: "POST",
         headers: {
@@ -146,7 +144,7 @@ describe("transport grants", () => {
     assert.equal(deposited.tailscale_key_id, "kTESTCNTRL");
 
     const listRes = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants`,
       { headers: { authorization: pluginAuth() } },
     );
     assert.equal(listRes.status, 200);
@@ -157,7 +155,7 @@ describe("transport grants", () => {
     assert.equal(listed.grants[0]!.material, undefined);
 
     const delRes = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants/${deposited.id}`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants/${deposited.id}`,
       { method: "DELETE", headers: { authorization: pluginAuth() } },
     );
     assert.equal(delRes.status, 204);
@@ -177,7 +175,7 @@ describe("transport grants", () => {
     const material = `tskey-auth-expired-${randomBytes(4).toString("hex")}`;
     const row = await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 120,
@@ -192,7 +190,7 @@ describe("transport grants", () => {
       db,
       encryptionKey,
       SERVER_ID,
-      GOOGLE_SUB,
+      EMAIL,
     );
     assert.equal(claimed, null);
 
@@ -222,7 +220,7 @@ describe("transport grants", () => {
     const material = `tskey-auth-race-${randomBytes(8).toString("hex")}`;
     await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 600,
@@ -230,7 +228,7 @@ describe("transport grants", () => {
 
     const attempts = await Promise.all(
       Array.from({ length: 12 }, () =>
-        claimTransportGrant(db, encryptionKey, SERVER_ID, GOOGLE_SUB),
+        claimTransportGrant(db, encryptionKey, SERVER_ID, EMAIL),
       ),
     );
 
@@ -260,7 +258,7 @@ describe("transport grants", () => {
     const material = `tskey-auth-roster-${randomBytes(6).toString("hex")}`;
     await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 900,
@@ -295,14 +293,14 @@ describe("transport grants", () => {
     await cleanupGrants();
     const first = await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material: "tskey-auth-old",
       ttlSeconds: 900,
     });
     const second = await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material: "tskey-auth-new",
       ttlSeconds: 900,
@@ -318,7 +316,7 @@ describe("transport grants", () => {
       db,
       encryptionKey,
       SERVER_ID,
-      GOOGLE_SUB,
+      EMAIL,
     );
     assert.equal(claimed?.id, second.id);
     assert.equal(claimed?.material, "tskey-auth-new");
@@ -327,7 +325,7 @@ describe("transport grants", () => {
   it("rejects ttl_seconds outside 60–86400", async () => {
     await cleanupGrants();
     const tooShort = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants`,
       {
         method: "POST",
         headers: {
@@ -344,7 +342,7 @@ describe("transport grants", () => {
     assert.equal(tooShort.status, 400);
 
     const tooLong = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants`,
       {
         method: "POST",
         headers: {
@@ -366,22 +364,22 @@ describe("transport grants", () => {
     const material = `tskey-auth-revoke-${randomBytes(6).toString("hex")}`;
     await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 900,
     });
 
     const del = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}`,
       { method: "DELETE", headers: { authorization: pluginAuth() } },
     );
     assert.equal(del.status, 204);
 
     const { rows: grants } = await db.query<{ revoked_at: Date | null }>(
       `SELECT revoked_at FROM transport_grants
-       WHERE server_id = $1 AND google_sub = $2`,
-      [SERVER_ID, GOOGLE_SUB],
+       WHERE server_id = $1 AND email = $2`,
+      [SERVER_ID, EMAIL],
     );
     assert.ok(grants.length >= 1);
     assert.ok(grants.every((g) => g.revoked_at != null));
@@ -419,12 +417,12 @@ describe("transport grants", () => {
 
     // Restore entitlement for subsequent tests in this suite.
     await db.query(
-      `INSERT INTO entitlements (server_id, google_sub, display_name)
+      `INSERT INTO entitlements (server_id, email, display_name)
        VALUES ($1, $2, $3)
-       ON CONFLICT (server_id, google_sub) DO UPDATE SET
+       ON CONFLICT (server_id, email) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          updated_at = now()`,
-      [SERVER_ID, GOOGLE_SUB, "Tester"],
+      [SERVER_ID, EMAIL, "Tester"],
     );
   });
 
@@ -433,7 +431,7 @@ describe("transport grants", () => {
     const material = `tskey-auth-race-revoke-${randomBytes(6).toString("hex")}`;
     await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 900,
@@ -444,13 +442,13 @@ describe("transport grants", () => {
     );
 
     const outcomes = await Promise.all([
-      claimTransportGrant(db, encryptionKey, SERVER_ID, GOOGLE_SUB),
+      claimTransportGrant(db, encryptionKey, SERVER_ID, EMAIL),
       revokeEntitlementWithGrants(db, {
         serverId: SERVER_ID,
-        googleSub: GOOGLE_SUB,
+        email: EMAIL,
         pluginId: PLUGIN_ID,
       }),
-      claimTransportGrant(db, encryptionKey, SERVER_ID, GOOGLE_SUB),
+      claimTransportGrant(db, encryptionKey, SERVER_ID, EMAIL),
     ]);
 
     const claims = outcomes.filter(
@@ -468,18 +466,18 @@ describe("transport grants", () => {
       revoked_at: Date | null;
     }>(
       `SELECT claimed_at, revoked_at FROM transport_grants
-       WHERE server_id = $1 AND google_sub = $2`,
-      [SERVER_ID, GOOGLE_SUB],
+       WHERE server_id = $1 AND email = $2`,
+      [SERVER_ID, EMAIL],
     );
     assert.ok(grants.every((g) => g.revoked_at != null));
 
     await db.query(
-      `INSERT INTO entitlements (server_id, google_sub, display_name)
+      `INSERT INTO entitlements (server_id, email, display_name)
        VALUES ($1, $2, $3)
-       ON CONFLICT (server_id, google_sub) DO UPDATE SET
+       ON CONFLICT (server_id, email) DO UPDATE SET
          display_name = EXCLUDED.display_name,
          updated_at = now()`,
-      [SERVER_ID, GOOGLE_SUB, "Tester"],
+      [SERVER_ID, EMAIL, "Tester"],
     );
   });
 
@@ -488,14 +486,14 @@ describe("transport grants", () => {
     const material = `tskey-auth-soft-${randomBytes(4).toString("hex")}`;
     const row = await depositTransportGrant(db, encryptionKey, {
       serverId: SERVER_ID,
-      googleSub: GOOGLE_SUB,
+      email: EMAIL,
       grantType: "tailscale_auth_key",
       material,
       ttlSeconds: 900,
     });
 
     const del = await app.request(
-      `/v1/servers/${SERVER_ID}/entitlements/${GOOGLE_SUB}/transport-grants/${row.id}`,
+      `/v1/servers/${SERVER_ID}/entitlements/${encodeURIComponent(EMAIL)}/transport-grants/${row.id}`,
       { method: "DELETE", headers: { authorization: pluginAuth() } },
     );
     assert.equal(del.status, 204);
@@ -504,7 +502,7 @@ describe("transport grants", () => {
       db,
       encryptionKey,
       SERVER_ID,
-      GOOGLE_SUB,
+      EMAIL,
     );
     assert.equal(claimed, null);
   });

@@ -128,6 +128,10 @@ paths:
     get:
       tags: [auth]
       summary: Google OIDC callback
+      description: >
+        On success, auto-approves when OAuth state carries user_code; otherwise
+        returns an HTML form to enter the TV code (signed link_token proof).
+        Never returns Soup session tokens in the browser.
       security: []
       parameters:
         - name: code
@@ -144,9 +148,35 @@ paths:
             type: string
       responses:
         "200":
-          description: HTML success page for phone browser
+          description: HTML success or enter-TV-code form
         "400":
-          description: OAuth error
+          description: OAuth error or expired TV code (may still show enter-code form)
+
+  /auth/google/link-device:
+    post:
+      tags: [auth]
+      summary: Finish Google device-link with the TV user code
+      description: >
+        Browser form post after Google SSO. Requires link_token (short-lived
+        signed proof from the callback) and user_code from the TV.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [link_token, user_code]
+              properties:
+                link_token:
+                  type: string
+                user_code:
+                  type: string
+      responses:
+        "200":
+          description: HTML success — TV can poll for tokens
+        "400":
+          description: Invalid/expired proof or TV code (re-shows form)
 
   /auth/dev/complete:
     post:
@@ -163,13 +193,11 @@ paths:
               properties:
                 user_code:
                   type: string
-                google_sub:
-                  type: string
                 email:
                   type: string
       responses:
         "200":
-          description: Approved via DEV_GOOGLE_* defaults or body overrides
+          description: Approved via DEV_GOOGLE_EMAIL default or body override
         "403":
           description: Dev login disabled
 
@@ -315,15 +343,15 @@ paths:
         "404":
           description: Not found
 
-  /v1/servers/{serverId}/entitlements/{googleSub}:
+  /v1/servers/{serverId}/entitlements/{email}:
     put:
       tags: [plugin]
-      summary: Entitle a Google subject to this server
+      summary: Entitle a Google email to this server
       security:
         - PluginBasic: []
       parameters:
         - $ref: "#/components/parameters/serverId"
-        - $ref: "#/components/parameters/googleSub"
+        - $ref: "#/components/parameters/email"
       requestBody:
         required: false
         content:
@@ -348,7 +376,7 @@ paths:
         - PluginBasic: []
       parameters:
         - $ref: "#/components/parameters/serverId"
-        - $ref: "#/components/parameters/googleSub"
+        - $ref: "#/components/parameters/email"
       responses:
         "204":
           description: Revoked
@@ -357,18 +385,18 @@ paths:
         "404":
           description: Not found
 
-  /v1/servers/{serverId}/entitlements/{googleSub}/transport-grants:
+  /v1/servers/{serverId}/entitlements/{email}/transport-grants:
     post:
       tags: [plugin]
       summary: Deposit one-time transport grant (Tailscale auth-key blob)
       description: >
         Encrypts material at rest, applies TTL, and invalidates prior unclaimed
-        grants for the same (server_id, google_sub). Plugin list omits material.
+        grants for the same (server_id, email). Plugin list omits material.
       security:
         - PluginBasic: []
       parameters:
         - $ref: "#/components/parameters/serverId"
-        - $ref: "#/components/parameters/googleSub"
+        - $ref: "#/components/parameters/email"
       requestBody:
         required: true
         content:
@@ -399,7 +427,7 @@ paths:
         - PluginBasic: []
       parameters:
         - $ref: "#/components/parameters/serverId"
-        - $ref: "#/components/parameters/googleSub"
+        - $ref: "#/components/parameters/email"
       responses:
         "200":
           description: Grants without material
@@ -418,7 +446,7 @@ paths:
         "404":
           description: Unknown server
 
-  /v1/servers/{serverId}/entitlements/{googleSub}/transport-grants/{grantId}:
+  /v1/servers/{serverId}/entitlements/{email}/transport-grants/{grantId}:
     delete:
       tags: [plugin]
       summary: Revoke a transport grant
@@ -426,7 +454,7 @@ paths:
         - PluginBasic: []
       parameters:
         - $ref: "#/components/parameters/serverId"
-        - $ref: "#/components/parameters/googleSub"
+        - $ref: "#/components/parameters/email"
         - name: grantId
           in: path
           required: true
@@ -493,8 +521,8 @@ components:
       required: true
       schema:
         type: string
-    googleSub:
-      name: googleSub
+    email:
+      name: email
       in: path
       required: true
       schema:
@@ -564,20 +592,19 @@ components:
 
     DeviceLinkApprove:
       type: object
-      required: [user_code, google_sub]
+      required: [user_code, email]
       properties:
         user_code:
           type: string
-        google_sub:
-          type: string
         email:
           type: string
+          description: Normalized Google account email
         name:
           type: string
 
     SessionTokens:
       type: object
-      required: [access_token, refresh_token, expires_in, token_type, google_sub]
+      required: [access_token, refresh_token, expires_in, token_type, email]
       properties:
         access_token:
           type: string
@@ -588,21 +615,17 @@ components:
         token_type:
           type: string
           enum: [Bearer]
-        google_sub:
-          type: string
         email:
           type: string
-          nullable: true
+          description: Normalized Google account email
 
     Subject:
       type: object
-      required: [google_sub]
+      required: [email]
       properties:
-        google_sub:
-          type: string
         email:
           type: string
-          nullable: true
+          description: Normalized Google account email
         name:
           type: string
           nullable: true
@@ -652,7 +675,7 @@ components:
       properties:
         assertion:
           type: string
-          description: Compact JWT (sub=Google sub, aud=server audience, exp 2–5m)
+          description: Compact JWT (sub=Google email, aud=server audience, exp 2–5m)
         expires_in:
           type: integer
         server_id:
@@ -712,11 +735,11 @@ components:
 
     EntitlementRecord:
       type: object
-      required: [server_id, google_sub]
+      required: [server_id, email]
       properties:
         server_id:
           type: string
-        google_sub:
+        email:
           type: string
         display_name:
           type: string

@@ -18,8 +18,7 @@ void main() {
         refreshToken: 'refresh',
         expiresIn: 900,
         tokenType: 'Bearer',
-        googleSub: 'sub-1',
-        email: 'a@b.c',
+        email: 'a@example.com',
       ),
       lastServerId: 'home-jf',
       issuedAt: DateTime.utc(2026, 9, 10, 6),
@@ -28,7 +27,7 @@ void main() {
     final reopened = await const SecureSoupSessionStore().read();
     expect(reopened?.accessToken, 'access');
     expect(reopened?.refreshToken, 'refresh');
-    expect(reopened?.googleSub, 'sub-1');
+    expect(reopened?.email, 'a@example.com');
     expect(reopened?.lastServerId, 'home-jf');
     expect(reopened?.accessExpiresAt, DateTime.utc(2026, 9, 10, 6, 15));
   });

@@ -43,7 +43,7 @@ public sealed class SoupEntitlementsController : ControllerBase
         => Ok(_entitlementService.List());
 
     /// <summary>
-    /// Invite by Google sub and/or email. Email-only stays Pending until sub is known.
+    /// Invite by Google email. Creates/updates an Active entitlement and syncs to Soup.
     /// </summary>
     /// <param name="request">Invite payload.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -56,15 +56,14 @@ public sealed class SoupEntitlementsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (request is null
-            || (string.IsNullOrWhiteSpace(request.GoogleSub) && string.IsNullOrWhiteSpace(request.Email)))
+            || string.IsNullOrWhiteSpace(request.Email))
         {
-            return BadRequest(new { error = "bad_request", message = "googleSub or email is required" });
+            return BadRequest(new { error = "bad_request", message = "email is required" });
         }
 
         try
         {
             var entry = await _entitlementService.InviteAsync(
-                    request.GoogleSub,
                     request.Email,
                     request.DisplayName,
                     request.JellyfinUserHint,
@@ -84,19 +83,19 @@ public sealed class SoupEntitlementsController : ControllerBase
     }
 
     /// <summary>
-    /// Revoke by local id or Google sub (also DELETEs on Soup when sub is known).
+    /// Revoke by local id or Google email (also DELETEs on Soup when email is known).
     /// </summary>
-    /// <param name="idOrGoogleSub">Local entitlement id or Google sub.</param>
+    /// <param name="idOrEmail">Local entitlement id or Google email.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>No content when revoked.</returns>
-    [HttpDelete("Entitlements/{idOrGoogleSub}")]
+    [HttpDelete("Entitlements/{idOrEmail}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Revoke(
-        [FromRoute] string idOrGoogleSub,
+        [FromRoute] string idOrEmail,
         CancellationToken cancellationToken)
     {
-        var ok = await _entitlementService.RevokeAsync(idOrGoogleSub, cancellationToken).ConfigureAwait(false);
+        var ok = await _entitlementService.RevokeAsync(idOrEmail, cancellationToken).ConfigureAwait(false);
         if (!ok)
         {
             return NotFound(new { error = "not_found", message = "Entitlement not found" });
@@ -150,21 +149,21 @@ public sealed class SoupEntitlementsController : ControllerBase
     /// <summary>
     /// Mint a Tailscale auth key and deposit it as a Soup transport grant (remint).
     /// </summary>
-    /// <param name="idOrGoogleSub">Local entitlement id or Google sub.</param>
+    /// <param name="idOrEmail">Local entitlement id or Google email.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Updated entitlement.</returns>
-    [HttpPost("Entitlements/{idOrGoogleSub}/TransportGrant")]
+    [HttpPost("Entitlements/{idOrEmail}/TransportGrant")]
     [ProducesResponseType(typeof(EntitlementEntry), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<EntitlementEntry>> DepositTransportGrant(
-        [FromRoute] string idOrGoogleSub,
+        [FromRoute] string idOrEmail,
         CancellationToken cancellationToken)
     {
         try
         {
             var entry = await _entitlementService
-                .DepositTransportGrantAsync(idOrGoogleSub, cancellationToken)
+                .DepositTransportGrantAsync(idOrEmail, cancellationToken)
                 .ConfigureAwait(false);
             return Ok(entry);
         }

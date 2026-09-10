@@ -648,7 +648,10 @@ class SoupDeviceLinkViewModel extends ChangeNotifier {
 
   String _friendlyError(Object error) {
     if (error is SoupIdentityException) {
-      return 'Soup Identity is unavailable right now. Check the service, or enable SOUP_IDENTITY_MOCK.';
+      final detail = error.statusCode == null
+          ? error.message
+          : '${error.message} (HTTP ${error.statusCode})';
+      return 'Soup Identity error: ${redactSecrets(detail)}';
     }
     if (error is TailscaleException) {
       return redactSecrets(error.message);
@@ -656,7 +659,17 @@ class SoupDeviceLinkViewModel extends ChangeNotifier {
     if (error is JellyfinApiException) {
       return redactSecrets(error.message);
     }
-    return 'Something went wrong talking to Soup Identity. Please try again.';
+    final raw = error.toString();
+    if (raw.contains('SocketException') ||
+        raw.contains('ClientException') ||
+        raw.contains('Failed host lookup') ||
+        raw.contains('Connection refused') ||
+        raw.contains('Connection timed out')) {
+      return 'Could not reach Soup Identity at the configured URL. '
+          'Check Wi‑Fi/VPN and SOUP_IDENTITY_BASE_URL. (${redactSecrets(raw)})';
+    }
+    return 'Something went wrong talking to Soup Identity. '
+        '${redactSecrets(raw)}';
   }
 
   void _notify() {

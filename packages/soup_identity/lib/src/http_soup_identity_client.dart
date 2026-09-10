@@ -39,17 +39,27 @@ class HttpSoupIdentityClient implements SoupIdentityClient {
     return Map<String, Object?>.from(decoded);
   }
 
+  Future<T> _guard<T>(Future<T> Function() run) async {
+    try {
+      return await run();
+    } on SoupIdentityException {
+      rethrow;
+    } on Object catch (error) {
+      throw SoupIdentityException(error.toString());
+    }
+  }
+
   @override
-  Future<DeviceLinkStart> startDeviceLink() async {
+  Future<DeviceLinkStart> startDeviceLink() => _guard(() async {
     final response = await _client.post(
       _uri('/auth/device/link'),
       headers: const {'accept': 'application/json'},
     );
     return DeviceLinkStart.fromJson(_decodeObject(response));
-  }
+  });
 
   @override
-  Future<DeviceLinkPoll> pollDeviceLink(String deviceCode) async {
+  Future<DeviceLinkPoll> pollDeviceLink(String deviceCode) => _guard(() async {
     final response = await _client.get(
       _uri('/auth/device/link/${Uri.encodeComponent(deviceCode)}'),
       headers: const {'accept': 'application/json'},
@@ -61,10 +71,11 @@ class HttpSoupIdentityClient implements SoupIdentityClient {
       );
     }
     return DeviceLinkPoll.fromJson(_decodeObject(response));
-  }
+  });
 
   @override
-  Future<SoupSessionTokens> refreshSession(String refreshToken) async {
+  Future<SoupSessionTokens> refreshSession(String refreshToken) =>
+      _guard(() async {
     final response = await _client.post(
       _uri('/v1/sessions/refresh'),
       headers: const {
@@ -74,10 +85,10 @@ class HttpSoupIdentityClient implements SoupIdentityClient {
       body: jsonEncode({'refresh_token': refreshToken}),
     );
     return SoupSessionTokens.fromJson(_decodeObject(response));
-  }
+  });
 
   @override
-  Future<ServerRoster> listServers(String accessToken) async {
+  Future<ServerRoster> listServers(String accessToken) => _guard(() async {
     final response = await _client.get(
       _uri('/v1/me/servers'),
       headers: {
@@ -86,13 +97,13 @@ class HttpSoupIdentityClient implements SoupIdentityClient {
       },
     );
     return ServerRoster.fromJson(_decodeObject(response));
-  }
+  });
 
   @override
   Future<AssertionResponse> mintAssertion({
     required String accessToken,
     required String serverId,
-  }) async {
+  }) => _guard(() async {
     final response = await _client.post(
       _uri('/v1/assertions'),
       headers: {
@@ -103,7 +114,7 @@ class HttpSoupIdentityClient implements SoupIdentityClient {
       body: jsonEncode({'server_id': serverId}),
     );
     return AssertionResponse.fromJson(_decodeObject(response));
-  }
+  });
 
   @override
   void close() {

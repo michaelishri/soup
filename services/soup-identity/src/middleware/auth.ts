@@ -5,8 +5,7 @@ import { verifyAccessToken, sha256, safeEqual } from "../lib/crypto.js";
 import type { Db } from "../db/client.js";
 
 export type AppVariables = {
-  googleSub: string;
-  email?: string;
+  email: string;
   pluginId: string;
 };
 
@@ -30,8 +29,7 @@ export function createSoupAuth(deps: {
         deps.env,
         header.slice("Bearer ".length),
       );
-      c.set("googleSub", claims.sub);
-      if (claims.email) c.set("email", claims.email);
+      c.set("email", claims.email);
       await next();
     } catch {
       return c.json({ error: "unauthorized", message: "Invalid access token" }, 401);

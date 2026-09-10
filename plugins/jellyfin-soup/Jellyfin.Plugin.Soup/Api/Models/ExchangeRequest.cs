@@ -37,12 +37,7 @@ public sealed class ExchangeRequest
 public sealed class InviteRequest
 {
     /// <summary>
-    /// Gets or sets the Google OIDC subject. Optional when <see cref="Email"/> is set.
-    /// </summary>
-    public string? GoogleSub { get; set; }
-
-    /// <summary>
-    /// Gets or sets an email invite. Remains Pending until a Google sub is known.
+    /// Gets or sets the Google account email (required).
     /// </summary>
     public string? Email { get; set; }
 

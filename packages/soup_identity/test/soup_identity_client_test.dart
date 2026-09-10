@@ -53,8 +53,7 @@ void main() {
               'refresh_token': 'refresh',
               'expires_in': 900,
               'token_type': 'Bearer',
-              'google_sub': 'sub-1',
-              'email': 'a@b.c',
+              'email': 'a@example.com',
             }),
             200,
             headers: {'content-type': 'application/json'},
@@ -66,7 +65,7 @@ void main() {
       final poll = await client.pollDeviceLink('dc-1');
       expect(poll.status, DeviceLinkStatus.approved);
       expect(poll.tokens?.accessToken, 'access');
-      expect(poll.tokens?.googleSub, 'sub-1');
+      expect(poll.tokens?.email, 'a@example.com');
     });
 
     test('refreshSession posts refresh_token', () async {
@@ -82,8 +81,7 @@ void main() {
               'refresh_token': 'new-refresh',
               'expires_in': 900,
               'token_type': 'Bearer',
-              'google_sub': 'sub-1',
-              'email': null,
+              'email': 'a@example.com',
             }),
             200,
             headers: {'content-type': 'application/json'},

@@ -98,16 +98,16 @@ public sealed class SoupAuthController : ControllerBase
             .ConfigureAwait(false);
         if (entitlement is null)
         {
-            _logger.LogWarning("No local entitlement for Google sub {GoogleSub}", claims.GoogleSub);
+            _logger.LogWarning("No local entitlement for Google email {Email}", claims.Email);
             return StatusCode(StatusCodes.Status403Forbidden, new
             {
                 error = "not_entitled",
-                message = "Google subject is not invited on this Jellyfin server"
+                message = "Google email is not invited on this Jellyfin server"
             });
         }
 
         var user = await _userLinkService.ResolveOrCreateAsync(entitlement, claims).ConfigureAwait(false);
-        _entitlementService.AttachJellyfinUser(claims.GoogleSub, user.Id);
+        _entitlementService.AttachJellyfinUser(claims.Email, user.Id);
 
         var authRequest = new AuthenticationRequest
         {

@@ -10,6 +10,7 @@ import 'package:soup/src/data/jellyfin/jellyfin_discovery.dart';
 import 'package:soup/src/data/jellyfin/jellyfin_metadata_repository.dart';
 import 'package:soup/src/data/session/session_store.dart';
 import 'package:soup/src/data/session/connection_preferences_store.dart';
+import 'package:soup/src/data/session/auth_path_preferences_store.dart';
 import 'package:soup/src/data/soup/soup_identity_flags.dart';
 import 'package:soup/src/data/soup/soup_session_store.dart';
 import 'package:soup/src/features/connectivity/connectivity_screen.dart';
@@ -35,6 +36,7 @@ class SoupApp extends StatefulWidget {
     this.soupIdentityFlags = SoupIdentityFlags.fromEnvironment,
     this.soupIdentityClient,
     this.connectionStore,
+    this.authPathStore,
     this.appearanceStore,
     this.database,
     this.discoveryService,
@@ -48,6 +50,7 @@ class SoupApp extends StatefulWidget {
   final SoupIdentityFlags soupIdentityFlags;
   final SoupIdentityClient? soupIdentityClient;
   final ConnectionPreferencesStore? connectionStore;
+  final AuthPathPreferencesStore? authPathStore;
   final AppearanceStore? appearanceStore;
   final SoupDatabase? database;
   final JellyfinDiscoveryService? discoveryService;
@@ -59,6 +62,7 @@ class SoupApp extends StatefulWidget {
 class _SoupAppState extends State<SoupApp> {
   late final ConnectivityViewModel _viewModel;
   late final AppearanceController _appearanceController;
+  late final AuthPathPreferencesStore _authPathStore;
   SoupDeviceLinkViewModel? _soupAuth;
   SoupDatabase? _database;
   late final bool _ownsDatabase;
@@ -66,12 +70,16 @@ class _SoupAppState extends State<SoupApp> {
   GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   bool _adoptedSoupTransport = false;
   bool _adoptedSoupJellyfin = false;
+  AuthPath _authPath = AuthPath.soup;
+  bool _authPathReady = false;
 
   @override
   void initState() {
     super.initState();
     _database = widget.database;
     _ownsDatabase = widget.database == null;
+    _authPathStore =
+        widget.authPathStore ?? SharedPreferencesAuthPathStore();
     _viewModel = ConnectivityViewModel(
       widget.tailscaleClient,
       jellyfinClientFactory: widget.jellyfinClientFactory,
@@ -100,6 +108,37 @@ class _SoupAppState extends State<SoupApp> {
         connectTransportGrants:
             widget.soupIdentityFlags.connectTransportGrants,
       )..initialize();
+      unawaited(_loadAuthPath());
+    } else {
+      _authPathReady = true;
+    }
+  }
+
+  Future<void> _loadAuthPath() async {
+    final saved = await _authPathStore.read();
+    if (!mounted) return;
+    setState(() {
+      _authPath = saved ?? AuthPath.soup;
+      _authPathReady = true;
+    });
+  }
+
+  Future<void> _chooseDirectLogin() async {
+    await _authPathStore.write(AuthPath.direct);
+    if (!mounted) return;
+    setState(() => _authPath = AuthPath.direct);
+  }
+
+  Future<void> _chooseSoupInvite() async {
+    await _authPathStore.write(AuthPath.soup);
+    if (!mounted) return;
+    setState(() => _authPath = AuthPath.soup);
+    final soupAuth = _soupAuth;
+    if (soupAuth != null &&
+        soupAuth.session == null &&
+        soupAuth.phase != SoupDeviceLinkPhase.waiting &&
+        soupAuth.phase != SoupDeviceLinkPhase.starting) {
+      unawaited(soupAuth.startDeviceLink());
     }
   }
 
@@ -147,7 +186,8 @@ class _SoupAppState extends State<SoupApp> {
             builder: (context) {
               if (!_viewModel.initialized ||
                   !_appearanceController.initialized ||
-                  (soupAuth != null && !soupAuth.initialized)) {
+                  (soupAuth != null && !soupAuth.initialized) ||
+                  (soupAuth != null && !_authPathReady)) {
                 final error =
                     _viewModel.initializationError ??
                     _appearanceController.loadError ??
@@ -164,12 +204,18 @@ class _SoupAppState extends State<SoupApp> {
                           _viewModel.initialize();
                           _appearanceController.initialize();
                           unawaited(soupAuth?.initialize());
+                          unawaited(_loadAuthPath());
                         },
                 );
               }
-              // Wave 3: Soup Identity gate beside legacy onboarding.
-              if (soupAuth != null && soupAuth.showsAuthShell) {
-                return SoupDeviceLinkScreen(viewModel: soupAuth);
+              // Soup Identity gate (default). Direct Jellyfin login is opt-in.
+              if (soupAuth != null &&
+                  soupAuth.showsAuthShell &&
+                  _authPath != AuthPath.direct) {
+                return SoupDeviceLinkScreen(
+                  viewModel: soupAuth,
+                  onUseDirectLogin: () => unawaited(_chooseDirectLogin()),
+                );
               }
               if (soupAuth != null &&
                   soupAuth.transportConnected &&
@@ -243,7 +289,12 @@ class _SoupAppState extends State<SoupApp> {
                   },
                 );
               }
-              return ConnectivityScreen(viewModel: _viewModel);
+              return ConnectivityScreen(
+                viewModel: _viewModel,
+                onUseSoupInvite: soupAuth != null
+                    ? () => unawaited(_chooseSoupInvite())
+                    : null,
+              );
             },
           ),
         );

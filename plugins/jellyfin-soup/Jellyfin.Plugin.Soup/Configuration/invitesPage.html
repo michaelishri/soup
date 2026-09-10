@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Soup Invites</title>
+</head>
+<body>
+<div id="SoupInvitesPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+    <div data-role="content">
+        <div class="content-primary">
+            <div class="sectionTitleContainer flex align-items-center justify-content-space-between" style="display:flex; align-items:center; justify-content:space-between; gap:1em; flex-wrap:wrap;">
+                <h1 class="sectionTitle" style="margin:0;">Soup Invites</h1>
+                <a is="emby-linkbutton" class="raised emby-button" href="#/configurationpage?name=Soup%20Auth" id="SoupSettingsLink">
+                    <span>Settings</span>
+                </a>
+            </div>
+            <p>
+                Invite family to this Jellyfin via Soup (Google email + optional Tailscale guest key).
+                Connection and Tailscale credentials are under <strong>Settings</strong> (top right).
+            </p>
+
+            <div class="fieldDescription" id="SoupInviteStatus"></div>
+            <div style="display:flex; gap:0.5em; flex-wrap:wrap; margin:0.75em 0 1.5em;">
+                <button is="emby-button" type="button" class="raised block emby-button" id="RegisterServerBtn"><span>Register server</span></button>
+                <button is="emby-button" type="button" class="raised block emby-button" id="SyncBtn"><span>Sync entitlements</span></button>
+                <button is="emby-button" type="button" class="raised block emby-button" id="RefreshListBtn"><span>Refresh list</span></button>
+            </div>
+
+            <div class="sectionTitleContainer flex align-items-center">
+                <h2 class="sectionTitle">Invite</h2>
+            </div>
+            <p class="fieldDescription">
+                Invite by Google email. Guests sign in with that Google account on the Soup device-link page.
+            </p>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteEmail">Google email</label>
+                <input id="InviteEmail" type="email" is="emby-input" />
+            </div>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteDisplayName">Display name</label>
+                <input id="InviteDisplayName" type="text" is="emby-input" />
+            </div>
+            <div class="inputContainer">
+                <label class="inputLabel" for="InviteUserHint">Jellyfin username hint</label>
+                <input id="InviteUserHint" type="text" is="emby-input" />
+            </div>
+            <button is="emby-button" type="button" class="raised button-submit block emby-button" id="InviteBtn">
+                <span>Invite</span>
+            </button>
+
+            <div class="sectionTitleContainer flex align-items-center" style="margin-top:2em;">
+                <h2 class="sectionTitle">Entitlements</h2>
+            </div>
+            <div id="EntitlementList"></div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        function setStatus(msg) {
+            var el = document.querySelector('#SoupInviteStatus');
+            if (el) el.textContent = msg || '';
+        }
+
+        /** ApiClient.ajax rejects with a Response; surface body.message when present. */
+        function alertAjaxError(prefix, err) {
+            function show(msg) {
+                Dashboard.alert(prefix + (msg || 'unknown error'));
+            }
+            if (!err) {
+                show(null);
+                return;
+            }
+            if (typeof err.json === 'function') {
+                err.clone().json().then(function (body) {
+                    show((body && (body.message || body.Message || body.error)) || ('HTTP ' + err.status));
+                }).catch(function () {
+                    return err.clone().text().then(function (t) {
+                        show((t && t.slice(0, 200)) || ('HTTP ' + err.status));
+                    });
+                }).catch(function () {
+                    show('HTTP ' + (err.status || '?'));
+                });
+                return;
+            }
+            if (err.message) {
+                show(err.message);
+                return;
+            }
+            show(String(err));
+        }
+
+        function loadEntitlements() {
+            ApiClient.ajax({
+                type: 'GET',
+                url: ApiClient.getUrl('SoupAuth/Entitlements'),
+                dataType: 'json'
+            }).then(function (rows) {
+                var root = document.querySelector('#EntitlementList');
+                if (!rows || !rows.length) {
+                    root.innerHTML = '<p class="fieldDescription">No entitlements yet.</p>';
+                    return;
+                }
+                var html = '<table class="detailTable" style="width:100%"><thead><tr>' +
+                    '<th>Status</th><th>Email</th><th>Name</th><th>Synced</th><th>TS key</th><th></th>' +
+                    '</tr></thead><tbody>';
+                rows.forEach(function (row) {
+                    var id = row.Id || row.id;
+                    html += '<tr>' +
+                        '<td>' + (row.Status || row.status || '') + '</td>' +
+                        '<td><code>' + (row.Email || row.email || '') + '</code></td>' +
+                        '<td>' + (row.DisplayName || row.displayName || '') + '</td>' +
+                        '<td>' + ((row.SyncedToSoup || row.syncedToSoup) ? 'yes' : 'no') + '</td>' +
+                        '<td><code>' + (row.TailscaleKeyId || row.tailscaleKeyId || '') + '</code></td>' +
+                        '<td style="white-space:nowrap;">' +
+                        '<button type="button" class="raised emby-button soup-remint" data-id="' + id + '">Remint</button> ' +
+                        '<button type="button" class="raised emby-button soup-revoke" data-id="' + id + '">Revoke</button>' +
+                        '</td>' +
+                        '</tr>';
+                });
+                html += '</tbody></table>';
+                root.innerHTML = html;
+                root.querySelectorAll('.soup-revoke').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var id = btn.getAttribute('data-id');
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({
+                            type: 'DELETE',
+                            url: ApiClient.getUrl('SoupAuth/Entitlements/' + encodeURIComponent(id))
+                        }).then(function () {
+                            Dashboard.hideLoadingMsg();
+                            loadEntitlements();
+                        }).catch(function (err) {
+                            Dashboard.hideLoadingMsg();
+                            alertAjaxError('Revoke failed: ', err);
+                        });
+                    });
+                });
+                root.querySelectorAll('.soup-remint').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        var id = btn.getAttribute('data-id');
+                        Dashboard.showLoadingMsg();
+                        ApiClient.ajax({
+                            type: 'POST',
+                            url: ApiClient.getUrl('SoupAuth/Entitlements/' + encodeURIComponent(id) + '/TransportGrant'),
+                            dataType: 'json'
+                        }).then(function () {
+                            Dashboard.hideLoadingMsg();
+                            loadEntitlements();
+                        }).catch(function (err) {
+                            Dashboard.hideLoadingMsg();
+                            alertAjaxError('Remint failed: ', err);
+                        });
+                    });
+                });
+            }).catch(function () {
+                setStatus('Failed to load entitlements (open Settings and save Soup credentials; ensure you are admin).');
+            });
+        }
+
+        document.querySelector('#SoupInvitesPage')
+            .addEventListener('pageshow', function () {
+                setStatus('');
+                loadEntitlements();
+            });
+
+        document.querySelector('#RefreshListBtn').addEventListener('click', function () {
+            loadEntitlements();
+        });
+
+        document.querySelector('#InviteBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/Entitlements/Invite'),
+                data: JSON.stringify({
+                    Email: document.querySelector('#InviteEmail').value || null,
+                    DisplayName: document.querySelector('#InviteDisplayName').value || null,
+                    JellyfinUserHint: document.querySelector('#InviteUserHint').value || null
+                }),
+                contentType: 'application/json',
+                dataType: 'json'
+            }).then(function () {
+                Dashboard.hideLoadingMsg();
+                document.querySelector('#InviteEmail').value = '';
+                document.querySelector('#InviteDisplayName').value = '';
+                document.querySelector('#InviteUserHint').value = '';
+                setStatus('Invite saved.');
+                loadEntitlements();
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                alertAjaxError('Invite failed: ', err);
+            });
+        });
+
+        document.querySelector('#RegisterServerBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/RegisterServer'),
+                dataType: 'json'
+            }).then(function () {
+                Dashboard.hideLoadingMsg();
+                setStatus('Server registered with Soup.');
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Register failed.');
+                alertAjaxError('Register failed: ', err);
+            });
+        });
+
+        document.querySelector('#SyncBtn').addEventListener('click', function () {
+            Dashboard.showLoadingMsg();
+            ApiClient.ajax({
+                type: 'POST',
+                url: ApiClient.getUrl('SoupAuth/Sync'),
+                dataType: 'json'
+            }).then(function (res) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Synced ' + (res.synced || res.Synced || 0) + ' entitlement(s).');
+                loadEntitlements();
+            }).catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                setStatus('Sync failed.');
+                alertAjaxError('Sync failed: ', err);
+            });
+        });
+    </script>
+</div>
+</body>
+</html>

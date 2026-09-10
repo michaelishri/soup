@@ -46,27 +46,23 @@ public sealed class EntitlementService
     }
 
     /// <summary>
-    /// Invite by Google sub and/or email. Email-only invites stay Pending until a sub is known.
-    /// When a Google sub is present, upserts Soup entitlement and optionally mints/deposits a Tailscale grant.
+    /// Invite by Google email. Upserts Soup entitlement and optionally mints/deposits a Tailscale grant.
     /// </summary>
-    /// <param name="googleSub">Google subject (optional if email provided).</param>
-    /// <param name="email">Invite email (optional if googleSub provided).</param>
+    /// <param name="email">Google account email.</param>
     /// <param name="displayName">Display name.</param>
     /// <param name="jellyfinUserHint">Optional Jellyfin username hint.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Created or updated entry.</returns>
     public async Task<EntitlementEntry> InviteAsync(
-        string? googleSub,
         string? email,
         string? displayName,
         string? jellyfinUserHint,
         CancellationToken cancellationToken = default)
     {
-        googleSub = Normalize(googleSub);
-        email = Normalize(email);
-        if (googleSub is null && email is null)
+        email = NormalizeEmail(email);
+        if (email is null)
         {
-            throw new ArgumentException("googleSub or email is required");
+            throw new ArgumentException("email is required");
         }
 
         var plugin = RequirePlugin();
@@ -75,11 +71,8 @@ public sealed class EntitlementService
         {
             var config = plugin.Configuration;
             entry = config.Entitlements.FirstOrDefault(e =>
-                        (googleSub is not null
-                         && string.Equals(e.GoogleSub, googleSub, StringComparison.Ordinal))
-                        || (email is not null
-                            && !string.IsNullOrWhiteSpace(e.Email)
-                            && string.Equals(e.Email, email, StringComparison.OrdinalIgnoreCase)))
+                        !string.IsNullOrWhiteSpace(e.Email)
+                        && string.Equals(e.Email, email, StringComparison.OrdinalIgnoreCase))
                     ?? new EntitlementEntry();
 
             if (!config.Entitlements.Contains(entry))
@@ -87,61 +80,42 @@ public sealed class EntitlementService
                 config.Entitlements.Add(entry);
             }
 
-            if (googleSub is not null)
-            {
-                entry.GoogleSub = googleSub;
-            }
-
-            if (email is not null)
-            {
-                entry.Email = email;
-            }
-
+            entry.Email = email;
             entry.DisplayName = displayName ?? entry.DisplayName;
             entry.JellyfinUserHint = jellyfinUserHint ?? entry.JellyfinUserHint;
-            entry.Status = string.IsNullOrWhiteSpace(entry.GoogleSub) ? "Pending" : "Active";
+            entry.Status = "Active";
             entry.SyncedToSoup = false;
             plugin.Save();
         }
 
-        if (!string.IsNullOrWhiteSpace(entry.GoogleSub))
-        {
-            await SyncOneAsync(entry, depositTransport: true, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            _logger.LogInformation(
-                "Email invite pending until Google sub is known: {Email}",
-                entry.Email);
-        }
-
+        await SyncOneAsync(entry, depositTransport: true, cancellationToken).ConfigureAwait(false);
         return Clone(entry);
     }
 
     /// <summary>
     /// Revoke a local entitlement: best-effort Tailscale key DELETE, then Soup entitlement DELETE.
     /// </summary>
-    /// <param name="idOrGoogleSub">Local id or Google sub.</param>
+    /// <param name="idOrEmail">Local id or Google email.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True when an entry was found.</returns>
-    public async Task<bool> RevokeAsync(string idOrGoogleSub, CancellationToken cancellationToken = default)
+    public async Task<bool> RevokeAsync(string idOrEmail, CancellationToken cancellationToken = default)
     {
         var plugin = RequirePlugin();
         EntitlementEntry? entry;
-        string? googleSub;
+        string? email;
         string? tailscaleKeyId;
         lock (_gate)
         {
             var config = plugin.Configuration;
             entry = config.Entitlements.FirstOrDefault(e =>
-                string.Equals(e.Id, idOrGoogleSub, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(e.GoogleSub, idOrGoogleSub, StringComparison.Ordinal));
+                string.Equals(e.Id, idOrEmail, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(e.Email, idOrEmail, StringComparison.OrdinalIgnoreCase));
             if (entry is null)
             {
                 return false;
             }
 
-            googleSub = Normalize(entry.GoogleSub);
+            email = NormalizeEmail(entry.Email);
             tailscaleKeyId = Normalize(entry.TailscaleKeyId);
             entry.Status = "Revoked";
             entry.SyncedToSoup = false;
@@ -166,15 +140,15 @@ public sealed class EntitlementService
             }
         }
 
-        if (googleSub is not null)
+        if (email is not null)
         {
             try
             {
-                await _soupApiClient.RevokeEntitlementAsync(googleSub, cancellationToken).ConfigureAwait(false);
+                await _soupApiClient.RevokeEntitlementAsync(email, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Soup revoke failed for {GoogleSub}; local revoke kept", googleSub);
+                _logger.LogWarning(ex, "Soup revoke failed for {Email}; local revoke kept", email);
             }
         }
 
@@ -182,7 +156,7 @@ public sealed class EntitlementService
     }
 
     /// <summary>
-    /// Resolve an entitled local row for a verified assertion subject (activates pending email matches).
+    /// Resolve a local entitlement for a verified Soup assertion (match by email).
     /// </summary>
     /// <param name="claims">Verified assertion claims.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -193,29 +167,12 @@ public sealed class EntitlementService
     {
         var plugin = RequirePlugin();
         EntitlementEntry? entry;
-        var activatedPending = false;
         lock (_gate)
         {
             var config = plugin.Configuration;
             entry = config.Entitlements.FirstOrDefault(e =>
                 !string.Equals(e.Status, "Revoked", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(e.GoogleSub, claims.GoogleSub, StringComparison.Ordinal));
-
-            if (entry is null && !string.IsNullOrWhiteSpace(claims.Email))
-            {
-                entry = config.Entitlements.FirstOrDefault(e =>
-                    !string.Equals(e.Status, "Revoked", StringComparison.OrdinalIgnoreCase)
-                    && string.IsNullOrWhiteSpace(e.GoogleSub)
-                    && string.Equals(e.Email, claims.Email, StringComparison.OrdinalIgnoreCase));
-                if (entry is not null)
-                {
-                    entry.GoogleSub = claims.GoogleSub;
-                    entry.Status = "Active";
-                    entry.SyncedToSoup = false;
-                    plugin.Save();
-                    activatedPending = true;
-                }
-            }
+                && string.Equals(e.Email, claims.Email, StringComparison.OrdinalIgnoreCase));
         }
 
         if (entry is null)
@@ -223,10 +180,9 @@ public sealed class EntitlementService
             return null;
         }
 
-        if ((!entry.SyncedToSoup || activatedPending) && !string.IsNullOrWhiteSpace(entry.GoogleSub))
+        if (!entry.SyncedToSoup)
         {
-            // First activation of a pending email invite should mint+deposit like Invite.
-            await SyncOneAsync(entry, depositTransport: activatedPending, cancellationToken)
+            await SyncOneAsync(entry, depositTransport: true, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -242,7 +198,7 @@ public sealed class EntitlementService
         => _soupApiClient.RegisterServerAsync(cancellationToken);
 
     /// <summary>
-    /// Upsert all Active local entitlements that have a Google sub (does not remint Tailscale keys).
+    /// Upsert all Active local entitlements that have an email (does not remint Tailscale keys).
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of synced rows.</returns>
@@ -254,7 +210,7 @@ public sealed class EntitlementService
         {
             snapshot = RequirePlugin().Configuration.Entitlements
                 .Where(e => string.Equals(e.Status, "Active", StringComparison.OrdinalIgnoreCase)
-                            && !string.IsNullOrWhiteSpace(e.GoogleSub))
+                            && !string.IsNullOrWhiteSpace(e.Email))
                 .ToList();
         }
 
@@ -271,11 +227,11 @@ public sealed class EntitlementService
     /// <summary>
     /// Mint a fresh Tailscale auth key and deposit it as a Soup transport grant for an existing entitlement.
     /// </summary>
-    /// <param name="idOrGoogleSub">Local id or Google sub.</param>
+    /// <param name="idOrEmail">Local id or Google email.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Updated entry.</returns>
     public async Task<EntitlementEntry> DepositTransportGrantAsync(
-        string idOrGoogleSub,
+        string idOrEmail,
         CancellationToken cancellationToken = default)
     {
         var plugin = RequirePlugin();
@@ -283,14 +239,14 @@ public sealed class EntitlementService
         lock (_gate)
         {
             entry = plugin.Configuration.Entitlements.FirstOrDefault(e =>
-                        string.Equals(e.Id, idOrGoogleSub, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(e.GoogleSub, idOrGoogleSub, StringComparison.Ordinal))
+                        string.Equals(e.Id, idOrEmail, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(e.Email, idOrEmail, StringComparison.Ordinal))
                     ?? throw new InvalidOperationException("Entitlement not found");
 
-            if (string.IsNullOrWhiteSpace(entry.GoogleSub)
+            if (string.IsNullOrWhiteSpace(entry.Email)
                 || string.Equals(entry.Status, "Revoked", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("Entitlement must be Active with a Google sub to deposit a grant");
+                throw new InvalidOperationException("Entitlement must be Active with a Google email to deposit a grant");
             }
         }
 
@@ -302,15 +258,15 @@ public sealed class EntitlementService
     /// <summary>
     /// Persist a Jellyfin user link onto the entitlement row.
     /// </summary>
-    /// <param name="googleSub">Google subject.</param>
+    /// <param name="email">Google email.</param>
     /// <param name="jellyfinUserId">Jellyfin user id.</param>
-    public void AttachJellyfinUser(string googleSub, Guid jellyfinUserId)
+    public void AttachJellyfinUser(string email, Guid jellyfinUserId)
     {
         var plugin = RequirePlugin();
         lock (_gate)
         {
             var entry = plugin.Configuration.Entitlements.FirstOrDefault(e =>
-                string.Equals(e.GoogleSub, googleSub, StringComparison.Ordinal));
+                string.Equals(e.Email, email, StringComparison.Ordinal));
             if (entry is null)
             {
                 return;
@@ -328,7 +284,7 @@ public sealed class EntitlementService
         bool forceMint = false)
     {
         await _soupApiClient.UpsertEntitlementAsync(
-                entry.GoogleSub,
+                entry.Email,
                 entry.DisplayName,
                 entry.JellyfinUserHint,
                 cancellationToken)
@@ -348,8 +304,8 @@ public sealed class EntitlementService
                  && !TailscaleApiClient.IsConfigured(config))
         {
             _logger.LogInformation(
-                "Skipping Tailscale mint for {GoogleSub}: credentials not configured",
-                entry.GoogleSub);
+                "Skipping Tailscale mint for {Email}: credentials not configured",
+                entry.Email);
         }
 
         lock (_gate)
@@ -383,8 +339,8 @@ public sealed class EntitlementService
                 && !string.IsNullOrWhiteSpace(live.TransportGrantDepositedAtUtc))
             {
                 _logger.LogInformation(
-                    "Transport grant already deposited for {GoogleSub} (key {KeyId}); skip remint",
-                    live.GoogleSub,
+                    "Transport grant already deposited for {Email} (key {KeyId}); skip remint",
+                    live.Email,
                     live.TailscaleKeyId);
                 return;
             }
@@ -404,7 +360,7 @@ public sealed class EntitlementService
         }
 
         var mint = await _tailscaleApiClient
-            .MintGuestAuthKeyAsync(entry.GoogleSub, cancellationToken)
+            .MintGuestAuthKeyAsync(entry.Email, cancellationToken)
             .ConfigureAwait(false);
 
         // Soup TTL expires slightly before the Tailscale key so the mailbox closes first.
@@ -425,7 +381,7 @@ public sealed class EntitlementService
         try
         {
             await _soupApiClient.DepositTransportGrantAsync(
-                    entry.GoogleSub,
+                    entry.Email,
                     "tailscale_auth_key",
                     mint.Key,
                     ttlSeconds,
@@ -438,8 +394,8 @@ public sealed class EntitlementService
         {
             _logger.LogError(
                 ex,
-                "Soup transport-grant deposit failed for {GoogleSub}; revoking minted key {KeyId}",
-                entry.GoogleSub,
+                "Soup transport-grant deposit failed for {Email}; revoking minted key {KeyId}",
+                entry.Email,
                 mint.Id);
             try
             {
@@ -465,8 +421,8 @@ public sealed class EntitlementService
         }
 
         _logger.LogInformation(
-            "Deposited Tailscale transport grant for {GoogleSub} (key {KeyId}, ttl {Ttl}s)",
-            entry.GoogleSub,
+            "Deposited Tailscale transport grant for {Email} (key {KeyId}, ttl {Ttl}s)",
+            entry.Email,
             mint.Id,
             ttlSeconds);
     }
@@ -486,10 +442,15 @@ public sealed class EntitlementService
     private static string? Normalize(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string? NormalizeEmail(string? value)
+    {
+        var trimmed = Normalize(value);
+        return trimmed?.ToLowerInvariant();
+    }
+
     private static EntitlementEntry Clone(EntitlementEntry e) => new()
     {
         Id = e.Id,
-        GoogleSub = e.GoogleSub,
         Email = e.Email,
         DisplayName = e.DisplayName,
         JellyfinUserHint = e.JellyfinUserHint,

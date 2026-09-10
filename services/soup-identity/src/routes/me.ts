@@ -16,22 +16,20 @@ export function buildMeRoutes(deps: {
   const encryptionKey = parseEncryptionKey(deps.env.TRANSPORT_GRANT_ENCRYPTION_KEY);
 
   app.get("/v1/me", requireSoup, async (c) => {
-    const googleSub = c.get("googleSub");
+    const email = c.get("email");
     const { rows } = await deps.db.query<{
-      google_sub: string;
-      email: string | null;
+      email: string;
       name: string | null;
       picture_url: string | null;
     }>(
-      `SELECT google_sub, email, name, picture_url FROM subjects WHERE google_sub = $1`,
-      [googleSub],
+      `SELECT email, name, picture_url FROM subjects WHERE email = $1`,
+      [email],
     );
     const row = rows[0];
     if (!row) {
-      return c.json({ google_sub: googleSub, email: c.get("email") ?? null });
+      return c.json({ email });
     }
     return c.json({
-      google_sub: row.google_sub,
       email: row.email,
       name: row.name,
       picture_url: row.picture_url,
@@ -39,7 +37,7 @@ export function buildMeRoutes(deps: {
   });
 
   app.get("/v1/me/servers", requireSoup, async (c) => {
-    const googleSub = c.get("googleSub");
+    const email = c.get("email");
     const { rows } = await deps.db.query<{
       server_id: string;
       name: string;
@@ -54,19 +52,18 @@ export function buildMeRoutes(deps: {
               e.display_name, e.jellyfin_user_hint, e.metadata
        FROM entitlements e
        JOIN servers s ON s.server_id = e.server_id
-       WHERE e.google_sub = $1
+       WHERE e.email = $1
        ORDER BY s.name ASC`,
-      [googleSub],
+      [email],
     );
 
-    // Single-claim: first successful roster read returns material once.
     const servers = [];
     for (const r of rows) {
       const transportGrant = await claimTransportGrant(
         deps.db,
         encryptionKey,
         r.server_id,
-        googleSub,
+        email,
       );
       servers.push({
         id: r.server_id,
@@ -86,17 +83,16 @@ export function buildMeRoutes(deps: {
     return c.json({ servers });
   });
 
-  /** Explicit claim for one server (same single-claim semantics as roster). */
   app.post(
     "/v1/me/servers/:serverId/transport-grant/claim",
     requireSoup,
     async (c) => {
-      const googleSub = c.get("googleSub");
+      const email = c.get("email");
       const serverId = c.req.param("serverId")!;
 
       const { rows: entRows } = await deps.db.query(
-        `SELECT 1 FROM entitlements WHERE server_id = $1 AND google_sub = $2`,
-        [serverId, googleSub],
+        `SELECT 1 FROM entitlements WHERE server_id = $1 AND email = $2`,
+        [serverId, email],
       );
       if (!entRows[0]) {
         return c.json(
@@ -109,7 +105,7 @@ export function buildMeRoutes(deps: {
         deps.db,
         encryptionKey,
         serverId,
-        googleSub,
+        email,
       );
       if (!grant) {
         return c.json(
@@ -125,7 +121,7 @@ export function buildMeRoutes(deps: {
   );
 
   app.post("/v1/assertions", requireSoup, async (c) => {
-    const googleSub = c.get("googleSub");
+    const email = c.get("email");
     const body = await c.req.json<{ server_id: string }>();
     if (!body.server_id) {
       return c.json({ error: "bad_request", message: "server_id required" }, 400);
@@ -143,8 +139,8 @@ export function buildMeRoutes(deps: {
     }
 
     const { rows: entRows } = await deps.db.query(
-      `SELECT 1 FROM entitlements WHERE server_id = $1 AND google_sub = $2`,
-      [body.server_id, googleSub],
+      `SELECT 1 FROM entitlements WHERE server_id = $1 AND email = $2`,
+      [body.server_id, email],
     );
     if (!entRows[0]) {
       return c.json(
@@ -153,14 +149,8 @@ export function buildMeRoutes(deps: {
       );
     }
 
-    const { rows: subjectRows } = await deps.db.query<{ email: string | null }>(
-      `SELECT email FROM subjects WHERE google_sub = $1`,
-      [googleSub],
-    );
-
     const minted = await signAssertion(deps.keys, deps.env, {
-      googleSub,
-      email: subjectRows[0]?.email ?? c.get("email"),
+      email,
       audience: server.audience,
       serverId: server.server_id,
     });
